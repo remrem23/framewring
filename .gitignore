@@ -1,0 +1,32 @@
+# Личные данные пользователя: пути к видео, настройки
+settings.json
+queue.json
+history.json
+probe_cache.json
+*.tmp
+
+# Python
+__pycache__/
+*.pyc
+
+# Сторонние бинарники (FFmpeg кладут рядом, но в репозиторий не коммитим)
+ffmpeg/
+ffmpeg.exe
+ffprobe.exe
+
+# Результаты и тесты сжатия, если программу запускали на видео внутри проекта
+compressed/
+_tests/
+*.part.mp4
+
+# Сборка (PyInstaller, установщик)
+build/
+dist/
+*.zip
+
+# Редакторы и ОС
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
