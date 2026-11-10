@@ -24,6 +24,10 @@ from pathlib import Path
 
 __version__ = "0.9.0"
 APP_NAME = "Framewring Жмых"
+REPO_URL = "https://github.com/remrem23/framewring"  # официальная страница программы
+DONATE_URL = REPO_URL + "/blob/main/DONATE.md"
+EVERYTHING_URL = "https://www.voidtools.com/"
+OPEN_URLS = (REPO_URL, DONATE_URL, EVERYTHING_URL)  # только эти ссылки интерфейс может открыть
 
 FROZEN = bool(getattr(sys, "frozen", False))  # собрано в .exe (PyInstaller)
 APP_DIR = Path(__file__).resolve().parent  # код (в сборке — внутренняя папка)
@@ -558,7 +562,7 @@ EFFICIENT = {"hevc", "av1", "vp9", "vvc"}
 
 SCAN = {"running": False, "cancel": False, "phase": "", "dirs": 0, "cur": "", "candidates": 0, "probed": 0,
         "results": [], "ver": 0, "error": "", "finished": False, "skipped_cloud": 0, "method": "", "t0": 0,
-        "took": 0}
+        "took": 0, "ev_missing": False}
 PROBE_CACHE = {}
 
 
@@ -1015,6 +1019,7 @@ def scan_thread(roots, min_bytes, use_ev=True):
             if ev_roots:
                 items = everything_search(min_bytes)
                 if items is None:
+                    SCAN["ev_missing"] = IS_WIN  # Everything нет или он не отвечает
                     walk_roots += ev_roots
                 else:
                     SCAN["method"] = "индекс Everything"
@@ -1069,7 +1074,8 @@ def start_scan(roots, min_mb, use_ev=True):
         if SCAN["running"]:
             raise RuntimeError("Поиск уже идёт")
         SCAN.update(running=True, cancel=False, phase="Ищу большие видео", dirs=0, cur="", candidates=0,
-                    probed=0, results=[], error="", finished=False, skipped_cloud=0, method="", t0=time.time())
+                    probed=0, results=[], error="", finished=False, skipped_cloud=0, method="", t0=time.time(),
+                    ev_missing=False)
         SCAN["ver"] += 1
     threading.Thread(target=scan_thread, args=(roots, min_bytes, bool(use_ev)), daemon=True).start()
 
@@ -1739,7 +1745,7 @@ def snapshot(scan_ver=None):
             target = Path(os.path.expanduser(settings["outdir"]))
     return {"caps": caps, "jobs": jobs, "running": running, "settings": settings, "disk": disk_info(target),
             "presets": {k: {"title": v[0], "desc": v[1]} for k, v in PRESETS.items()},
-            "quality": QUALITY, "scan": scan_public(scan_ver), "hist_ver": HISTORY["ver"], "version": __version__, "window": WINDOW["w"] is not None,
+            "quality": QUALITY, "scan": scan_public(scan_ver), "hist_ver": HISTORY["ver"], "version": __version__, "repo": REPO_URL, "donate": DONATE_URL, "window": WINDOW["w"] is not None,
             "hist_count": len(HISTORY["items"])}
 
 
@@ -1878,6 +1884,12 @@ class H(BaseHTTPRequestHandler):
             with LOCK:
                 JOBS[:] = [j for j in JOBS if j["status"] not in ("done", "skipped")]
             return None
+        if path == "/api/url":
+            url = b.get("url")
+            if url not in OPEN_URLS:
+                raise RuntimeError("ссылка не разрешена")
+            webbrowser.open(url)
+            return {"ok": True}
         if path == "/api/open":
             which = b.get("which")
             with LOCK:
@@ -2027,10 +2039,11 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
  </div>
 </div></div></div>
 <div class="modal" id="donate" onclick="if(event.target===this)donate(false)"><div class="mbox" role="dialog" aria-label="Поддержать автора">
- <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap"><div><h3>Поддержать автора</h3><div class="meta">Жмых бесплатный. Если он сэкономил тебе место и время, можно закинуть автору на чай.</div></div><button class="btn sm" onclick="donate(false)" aria-label="Закрыть">✕</button></div>
- <div class="wal"><b>USDT · сеть TRON (TRC-20)</b><div class="addr"><code id="w_trc">TFErFyPtTm5BmqweJmKPih9Pi8AmduTP5W</code><button class="btn sm" onclick="copyW('w_trc')">Скопировать</button></div></div>
- <div class="wal"><b>USDT · сеть TON</b><div class="addr"><code id="w_ton">UQCgtBdSZmBPzoNKofub1EI7pIt9eqwNHBMycopPazr0MR1G</code><button class="btn sm" onclick="copyW('w_ton')">Скопировать</button></div></div>
- <p class="hint" style="margin:12px 0 0">Отправляй только USDT и только в указанной сети: перевод в другой сети или другой монетой потеряется. Спасибо! ♥</p>
+ <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap"><div><h3>Поддержать автора</h3><div class="meta">Framewring бесплатный. Если он сэкономил тебе место и время, можно поддержать автора.</div></div><button class="btn sm" onclick="donate(false)" aria-label="Закрыть">✕</button></div>
+  <p style="margin:14px 0 10px">Способы поддержки (карта, USDT) — на официальной странице программы на GitHub.</p>
+ <button class="btn pri" onclick="openUrl(S.donate)">♥ Открыть страницу поддержки</button>
+ <p class="hint" style="margin:14px 0 0">Официальная страница: <b id="repoUrl">github.com/remrem23/framewring</b>. Скачивай Framewring только оттуда.
+ Если программа скачана в другом месте и здесь указан другой адрес — это изменённая копия.</p>
 </div></div>
 <div class="toast" id="toast"></div>
 <script>
@@ -2042,6 +2055,7 @@ function setHTML(el,h){if(el._h!==h){el.innerHTML=h;el._h=h}}
 async function api(p,b){try{const r=await fetch(p,{method:"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:JSON.stringify(b||{})});const j=await r.json().catch(()=>({}));if(!r.ok)toast(j.error||"Ошибка");return j}catch(e){toast("Сервер Жмыха не отвечает");return {}}}
 function donate(on){$("donate").classList.toggle("on",on)}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")donate(false)});
+async function openUrl(u){if(u)await api("/api/url",{url:u})}
 async function copyW(id){const t=$(id).textContent.trim();try{await navigator.clipboard.writeText(t);toast("Адрес скопирован: "+t)}catch(e){const r=document.createRange();r.selectNodeContents($(id));const s=getSelection();s.removeAllRanges();s.addRange(r);toast("Выделил адрес: нажми Ctrl+C")}}
 function toast(m){const t=$("toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",5000)}
 const gb=b=>b>=1e9?(b/1e9).toFixed(2)+" ГБ":b>=1e7?(b/1e6).toFixed(0)+" МБ":(b/1e6).toFixed(1)+" МБ";
@@ -2165,6 +2179,7 @@ function renderScan(sc){
  else if(sc.finished){const tot=scanRes.reduce((a,r)=>a+r.size,0),sv=scanRes.reduce((a,r)=>a+r.save,0);
   info=sc.error?`<span style="color:var(--err)">Ошибка поиска: ${esc(sc.error)}</span>`:scanRes.length?`Найдено ${scanRes.length} видео на ${gb(tot)} за ${tm(sc.took)}${sc.method?" ("+esc(sc.method)+")":""}. Если сжать все, освободится примерно <b style="color:var(--acc2)">${gb(sv)}</b>. Оценка грубая, точный прогноз покажет «Тест».`:`Подходящих видео не нашлось. Попробуй порог поменьше или другой диск.`;
   if(sc.cancel&&!sc.error)info="Поиск остановлен. "+info;
+  if(sc.ev_missing&&sc.took>20&&!sc.error&&localStorage.getItem("fw_noev")!=="1")info+=`<div class="hint" style="margin-top:8px">Совет: с бесплатной программой <b>Everything</b> поиск займёт секунды вместо ${tm(sc.took)} — Framewring сам воспользуется её индексом. <a href="#" onclick="openUrl('https://www.voidtools.com/');return false">voidtools.com</a> · <a href="#" onclick="localStorage.setItem('fw_noev','1');renderScan({...S.scan,results:null});return false">больше не показывать</a></div>`;
   const dk={};scanRes.forEach(r=>{const k=r.name.toLowerCase()+"|"+r.size;dk[k]=(dk[k]||0)+1});const dupB=Object.entries(dk).filter(([k,n])=>n>1).reduce((a,[k,n])=>a+(+k.split("|").pop())*(n-1),0);
   if(dupB>1e9)info+=`<br>Ещё одинаковые копии одних и тех же видео в разных местах занимают <b style="color:var(--warn)">${gb(dupB)}</b> (помечены «копий: N»). Лишние копии Жмых не удаляет: проверь и удали сам.`;
   if(sc.skipped_cloud)info+=`<br>Пропущено файлов «только в облаке» OneDrive: ${sc.skipped_cloud}.`}
