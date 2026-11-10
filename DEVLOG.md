@@ -6,7 +6,6 @@ A chronological record of the development: what was done, why, and what the meas
 Dates are YYYY-MM-DD. All measurements were taken on the author's machine:
 16-thread CPU, 31 GB RAM (page file disabled), RTX 5070 Ti,
 FFmpeg 8.1.1 (Gyan build), Windows 11, 3 NVMe SSDs + 4 HDDs.
-(The project was called *Жмых* — "oilcake", what's left after pressing — before it got its English name.)
 
 ---
 
@@ -97,10 +96,9 @@ Confirmed with experiments on small clips, then fixed:
 - "📂 Compressed" and "📂 Original" buttons on finished files and in the history.
 - A "♥ Support the author" button with USDT wallets (TRC-20, TON).
 
-### Name for the English version
+### Name
 
-**Framewring** was chosen (*wring* — to squeeze out): a nod to *Жмых*, free in search results and on GitHub.
-The Russian version is called **Framewring Жмых**, the English one **Framewring**.
+**Framewring** was chosen (*wring* — to squeeze out: "wringing the frames"): short, and free in search results and on GitHub.
 
 ### Summary of the day
 
@@ -155,7 +153,6 @@ Before the release the code was reviewed by several independent automated review
 
 ### 6. English interface
 - The whole interface is available in English and Russian; an **RU | EN** switch in the header, by default following the Windows language.
-  English window title: **Framewring**; Russian: **Framewring Жмых**.
 - **Drag & drop:** files and folders can be dropped onto the window.
 - All public documents are now in English first, with the full Russian text below.
 

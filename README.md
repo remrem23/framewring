@@ -5,7 +5,7 @@
 **Finds videos that waste space on your drives and shrinks them several times over with no visible loss of quality.**
 Free, local, no limits: your files never leave your computer.
 
-Framewring (Russian name: *Framewring Жмых*) is a Windows app built on top of FFmpeg. It finds heavy videos on all your drives,
+Framewring is a Windows app built on top of FFmpeg. It finds heavy videos on all your drives,
 estimates how much space each one would free, lets you test the result on a short piece, and re-encodes on an
 Nvidia GPU (NVENC AV1 / H.265) or on the CPU (x265, SVT-AV1). The interface is in English and Russian
 (switch **RU | EN** in the header; the default follows your Windows language).

@@ -21,7 +21,7 @@ First public release.
 - The queue and the compression **history** survive restarts; **↻ Retry** for failed files; **📂 Compressed / 📂 Original**.
 - "Finishing the file" stage with progress; warnings about a disabled page file and low free space.
 - **English interface** alongside Russian, with an **RU | EN** switch (defaults to the Windows language).
-  Names: **Framewring** (English), **Framewring Жмых** (Russian); version number in the interface.
+  Name **Framewring**; version number in the interface.
 - **Own app window** (Edge WebView2) instead of a console and a browser tab; closing during compression asks
   "Stop and quit?". Without WebView2 the app opens in the browser and says so. Starting it again brings up the open window.
 - **Drag & drop** files and folders onto the window.

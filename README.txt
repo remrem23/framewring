@@ -11,7 +11,7 @@ Full guide:  https://github.com/remrem23/framewring/blob/main/docs/USER-GUIDE.md
 
 
 START
-  Installed version: Start menu -> "Framewring Жмых".
+  Installed version: Start menu -> "Framewring".
   Portable version:  run Framewring.exe; settings and history are kept in
                      the "data" folder next to it.
   If Windows says "Windows protected your PC" (the app is not code-signed
