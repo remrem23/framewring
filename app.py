@@ -1610,24 +1610,54 @@ def worker():
 
 # ------------------------------------------------------------- Pickers ----
 
-PICK_TK = r'''
-import sys, json
-import tkinter as tk
-from tkinter import filedialog
-r = tk.Tk(); r.withdraw()
-try:
-    r.attributes("-topmost", True)
-except Exception:
-    pass
-r.update()
-if sys.argv[1] == "files":
-    res = list(filedialog.askopenfilenames(parent=r, title="Выбери видео",
-          filetypes=[("Видео", "*.mp4 *.mkv *.mov *.avi *.webm *.flv *.ts *.m2ts *.m4v *.wmv *.mts"), ("Все файлы", "*.*")]))
-else:
-    d = filedialog.askdirectory(parent=r, title="Выбери папку с видео")
-    res = [d] if d else []
-print(json.dumps(res))
-'''
+VIDEO_MASK = "*.mp4 *.mkv *.mov *.avi *.webm *.flv *.ts *.m2ts *.m4v *.wmv *.mts"
+WINDOW = {"w": None}  # окно программы (pywebview), если запущено в своём окне
+_PICK_LOCK = threading.Lock()
+
+
+def _pick_webview(win, kind):
+    import webview
+    fd = getattr(webview, "FileDialog", None)
+    if kind == "files":
+        r = win.create_file_dialog(fd.OPEN if fd else webview.OPEN_DIALOG, allow_multiple=True, file_types=(
+            "Видео (%s)" % VIDEO_MASK.replace(" ", ";"), "Все файлы (*.*)"))
+    else:
+        r = win.create_file_dialog(fd.FOLDER if fd else webview.FOLDER_DIALOG)
+    return [str(x) for x in (r or [])]
+
+
+def _pick_tk(kind):
+    """tkinter в отдельном потоке этого же процесса (в exe нельзя запускать sys.executable -c)."""
+    out, err = [], []
+
+    def run():
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            r = tk.Tk()
+            r.withdraw()
+            try:
+                r.attributes("-topmost", True)
+            except Exception:
+                pass
+            r.update()
+            if kind == "files":
+                out.extend(filedialog.askopenfilenames(parent=r, title="Выбери видео", filetypes=[
+                    ("Видео", VIDEO_MASK), ("Все файлы", "*.*")]))
+            else:
+                d = filedialog.askdirectory(parent=r, title="Выбери папку с видео")
+                if d:
+                    out.append(d)
+            r.destroy()
+        except Exception as e:
+            err.append(e)
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join()
+    if err:
+        raise RuntimeError("Не удалось открыть окно выбора файлов (%s). Вставь путь вручную." % err[0])
+    return [str(x) for x in out]
 
 
 def pick(kind):
@@ -1648,11 +1678,14 @@ def pick(kind):
             ["zenity", "--file-selection", "--directory"]
         r = run_quiet(a, timeout=3600)
         return [l for l in r.stdout.splitlines() if l.strip()] if r.returncode == 0 else []
-    r = run_quiet([sys.executable, "-c", PICK_TK, kind], timeout=3600)
-    try:
-        return json.loads(r.stdout.strip().splitlines()[-1])
-    except Exception:
-        raise RuntimeError("Не удалось открыть окно выбора файлов. Вставь путь вручную.")
+    with _PICK_LOCK:  # одно окно выбора за раз
+        win = WINDOW["w"]
+        if win is not None:
+            try:
+                return _pick_webview(win, kind)
+            except Exception:
+                pass
+        return _pick_tk(kind)
 
 
 def open_folder(path):
@@ -1706,7 +1739,7 @@ def snapshot(scan_ver=None):
             target = Path(os.path.expanduser(settings["outdir"]))
     return {"caps": caps, "jobs": jobs, "running": running, "settings": settings, "disk": disk_info(target),
             "presets": {k: {"title": v[0], "desc": v[1]} for k, v in PRESETS.items()},
-            "quality": QUALITY, "scan": scan_public(scan_ver), "hist_ver": HISTORY["ver"], "version": __version__,
+            "quality": QUALITY, "scan": scan_public(scan_ver), "hist_ver": HISTORY["ver"], "version": __version__, "window": WINDOW["w"] is not None,
             "hist_count": len(HISTORY["items"])}
 
 
@@ -2016,7 +2049,7 @@ const tm=s=>{if(s==null||!isFinite(s))return"—";s=Math.round(s);const h=Math.f
 const dur=s=>{s=Math.round(s||0);return`${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`};
 let pending=0,sver=0;
 async function setS(k,v){S.settings[k]=v;sver++;pending++;renderSettings();try{await api("/api/settings",{[k]:v})}finally{pending--}}
-async function pick(kind){toast("Открываю окно выбора… (может появиться за браузером)");const r=await api("/api/pick",{kind});(r.errors||[]).forEach(toast);refresh()}
+async function pick(kind){toast(S.window?"Открываю окно выбора…":"Открываю окно выбора… (может появиться за браузером)");const r=await api("/api/pick",{kind});(r.errors||[]).forEach(toast);refresh()}
 async function addManual(){const el=$("manual");if(!el.value.trim())return;const v=el.value;el.value="";toast("Добавляю…");const r=await api("/api/add",{paths:v.split(/\r?\n/)});(r.errors||[]).forEach(toast);refresh()}
 $("manual").addEventListener("keydown",e=>{if(e.key==="Enter")addManual()});
 async function start(mode){const r=await api("/api/start",{mode});if(r.queued===0)toast("Нечего запускать: добавь файлы (готовые и уже стоящие в очереди не трогаю)");refresh()}
@@ -2194,7 +2227,80 @@ def zhmyh_at(port):
         return False
 
 
+def _win_msg(text, title, flags):
+    """Системное окно сообщения (MessageBoxW) поверх всего; возвращает код кнопки."""
+    try:
+        return ctypes.windll.user32.MessageBoxW(None, text, title, flags | 0x40000)  # MB_TOPMOST
+    except Exception:
+        return 0
+
+
+def _focus_existing():
+    """Второй запуск: поднять уже открытое окно программы. True, если нашли."""
+    if not IS_WIN:
+        return False
+    try:
+        u = ctypes.windll.user32
+        h = u.FindWindowW(None, APP_NAME)
+        if not h:
+            return False
+        u.ShowWindow(h, 9)  # SW_RESTORE
+        u.SetForegroundWindow(h)
+        return True
+    except Exception:
+        return False
+
+
+def _setup_log():
+    """В сборке без консоли print некуда выводить: пишем в framewring.log в папке данных."""
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    try:
+        log = DATA_DIR / "framewring.log"
+        if log.exists() and log.stat().st_size > 1_000_000:
+            log.unlink()
+        f = open(log, "a", encoding="utf-8", buffering=1)
+        print("\n--- %s ---" % time.strftime("%Y-%m-%d %H:%M:%S"), file=f)
+        sys.stdout = sys.stderr = f
+    except Exception:
+        pass
+
+
+def run_window(url):
+    """Своё окно программы на движке Edge (WebView2). False — не вышло, откроем браузер."""
+    if "--browser" in sys.argv or not IS_WIN:
+        return False
+    try:
+        import webview
+    except Exception as e:
+        print(" Своё окно недоступно (%s), открываю в браузере." % e)
+        return False
+
+    def on_closing():
+        if any(j["status"] == "running" for j in JOBS):
+            r = _win_msg("Сейчас идёт сжатие. Остановить его и закрыть программу?\n\n"
+                         "Список файлов сохранится, текущий файл потом начнётся заново.",
+                         APP_NAME, 0x4 | 0x30 | 0x100)  # MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2
+            if r != 6:  # IDYES
+                return False
+        return True
+
+    try:
+        win = webview.create_window(APP_NAME, url, width=1180, height=860, min_size=(760, 560),
+                                    background_color="#0f1115", text_select=True)
+        win.events.closing += on_closing
+        WINDOW["w"] = win
+        webview.start(gui="edgechromium", private_mode=False,
+                      storage_path=str(DATA_DIR / "webview"))
+        return True
+    except Exception as e:
+        WINDOW["w"] = None
+        print(" Своё окно не запустилось (%s), открываю в браузере." % e)
+        return False
+
+
 def main():
+    _setup_log()
     srv = None
     for port in range(8765, 8800):
         try:
@@ -2204,7 +2310,7 @@ def main():
             if zhmyh_at(port):
                 url = "http://127.0.0.1:%d/" % port
                 print("Жмых уже запущен: " + url + "  (открываю его, второй экземпляр не нужен)")
-                if "--no-browser" not in sys.argv:
+                if "--no-browser" not in sys.argv and not _focus_existing():
                     webbrowser.open(url)
                     time.sleep(2)
                 return
@@ -2224,13 +2330,18 @@ def main():
     print(" FFmpeg: " + (FFMPEG or "НЕ НАЙДЕН"))
     if n:
         print(" Восстановил список прошлого сеанса: %d файлов." % n)
-    print(" Не закрывай это окно, пока идёт сжатие.")
-    print(" Чтобы выключить, закрой окно или нажми Ctrl+C.")
     print("=" * 60)
-    if "--no-browser" not in sys.argv:
-        threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     try:
-        srv.serve_forever()
+        if "--no-browser" in sys.argv:
+            srv.serve_forever()
+        else:
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            if not run_window(url):
+                print(" Не закрывай это окно, пока идёт сжатие.")
+                print(" Чтобы выключить, закрой окно или нажми Ctrl+C.")
+                webbrowser.open(url)
+                while True:
+                    time.sleep(3600)
     except KeyboardInterrupt:
         pass
     finally:
