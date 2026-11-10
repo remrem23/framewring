@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Жмых — локальный компрессор видео с веб-интерфейсом.
+Framewring Жмых — локальный компрессор видео с веб-интерфейсом.
 Обёртка над FFmpeg. Работает только на твоём компьютере, файлы никуда не уходят.
 Требования: Python 3.8+ и FFmpeg (в PATH или в папке ffmpeg рядом со скриптом).
 """
@@ -22,8 +22,37 @@ from ctypes import wintypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-APP_DIR = Path(__file__).resolve().parent
-SETTINGS_FILE = APP_DIR / "settings.json"
+__version__ = "0.9.0"
+APP_NAME = "Framewring Жмых"
+
+FROZEN = bool(getattr(sys, "frozen", False))  # собрано в .exe (PyInstaller)
+APP_DIR = Path(__file__).resolve().parent  # код (в сборке — внутренняя папка)
+# Папка программы: рядом с exe в сборке, рядом с app.py при запуске из исходников
+BASE_DIR = Path(sys.executable).resolve().parent if FROZEN else APP_DIR
+
+
+def _data_dir():
+    """Где хранить настройки, очередь, историю и кэш.
+    - запуск из исходников: рядом с app.py (как раньше, ничего не теряется);
+    - портабл-сборка (рядом с exe лежит portable.txt): папка data рядом с exe;
+    - установленная сборка: %APPDATA%\\Framewring (в Program Files писать нельзя)."""
+    if not FROZEN:
+        return APP_DIR
+    if (BASE_DIR / "portable.txt").exists():
+        return BASE_DIR / "data"
+    if os.name == "nt":
+        return Path(os.environ.get("APPDATA") or Path.home()) / "Framewring"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Framewring"
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "framewring"
+
+
+DATA_DIR = _data_dir()
+try:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
+SETTINGS_FILE = DATA_DIR / "settings.json"
 VIDEO_EXT = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".flv", ".ts", ".m2ts", ".m4v", ".wmv", ".mts"}
 COPYABLE_AUDIO = {"aac", "mp3", "opus", "ac3", "eac3", "alac", "flac"}
 TOKEN = secrets.token_hex(16)
@@ -34,9 +63,10 @@ IS_MAC = sys.platform == "darwin"
 
 def find_tool(name):
     exe = name + (".exe" if IS_WIN else "")
-    for cand in (APP_DIR / "ffmpeg" / "bin" / exe, APP_DIR / "ffmpeg" / exe, APP_DIR / exe):
-        if cand.is_file():
-            return str(cand)
+    for d in dict.fromkeys((BASE_DIR, APP_DIR)):  # рядом с exe/app.py, затем внутри сборки
+        for cand in (d / "ffmpeg" / "bin" / exe, d / "ffmpeg" / exe, d / exe):
+            if cand.is_file():
+                return str(cand)
     return shutil.which(name)
 
 
@@ -855,7 +885,7 @@ def is_ssd(root):
         return None
 
 
-_PROBE_FILE = APP_DIR / "probe_cache.json"
+_PROBE_FILE = DATA_DIR / "probe_cache.json"
 
 
 def load_probe_cache():
@@ -1431,7 +1461,7 @@ def do_test(job, s):
         job["test"], job["status"], job["pct"] = res, "tested", 100
 
 
-HISTORY_FILE = APP_DIR / "history.json"
+HISTORY_FILE = DATA_DIR / "history.json"
 HISTORY = {"items": [], "ver": 0}
 
 
@@ -1458,7 +1488,7 @@ def add_history(entry):
         pass
 
 
-QUEUE_FILE = APP_DIR / "queue.json"
+QUEUE_FILE = DATA_DIR / "queue.json"
 KEEP = ("id", "path", "name", "size", "status", "info", "error", "note", "out_path", "out_size", "test", "mode")
 
 
@@ -1676,7 +1706,7 @@ def snapshot(scan_ver=None):
             target = Path(os.path.expanduser(settings["outdir"]))
     return {"caps": caps, "jobs": jobs, "running": running, "settings": settings, "disk": disk_info(target),
             "presets": {k: {"title": v[0], "desc": v[1]} for k, v in PRESETS.items()},
-            "quality": QUALITY, "scan": scan_public(scan_ver), "hist_ver": HISTORY["ver"],
+            "quality": QUALITY, "scan": scan_public(scan_ver), "hist_ver": HISTORY["ver"], "version": __version__,
             "hist_count": len(HISTORY["items"])}
 
 
@@ -1842,7 +1872,7 @@ class H(BaseHTTPRequestHandler):
 
 HTML = r"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Жмых — компрессор видео</title>
+<title>Framewring Жмых — компрессор видео</title>
 <style>
 :root{--bg:#0f1115;--card:#171a21;--line:#262b36;--fg:#e8eaf0;--mut:#8b93a7;--acc:#7c5cff;--acc2:#2bd9a8;--warn:#ffb347;--err:#ff5d6c}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -1906,7 +1936,7 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 .drv.on{border-color:var(--acc);background:#7c5cff14}.drv input{margin:0}
 .vm{font-weight:700}.vm.g{color:var(--acc2)}.vm.y{color:var(--warn)}.vm.r{color:var(--err)}
 </style></head><body><div class="wrap">
-<div class="top"><div><h1><span>Жмых</span> — компрессор видео</h1>
+<div class="top"><div><h1><span>Framewring</span> Жмых <small id="appver" style="font-size:12px;color:var(--mut);font-weight:400"></small></h1>
 <div class="sub">Жмёт локально через FFmpeg. Файлы никуда не уходят, лимитов нет.</div></div>
 <div class="row" style="align-items:center"><button class="btn sm don" onclick="donate(true)" title="Поддержать автора Жмыха">♥ Поддержать автора</button><div class="pill" id="ver">проверяю FFmpeg…</div></div></div>
 <div id="warn"></div>
@@ -2070,7 +2100,8 @@ function render(){
  const left=q.reduce((a,j)=>a+(j.info?j.info.duration:0),0);
  $("qinfo").textContent=q.length?`В очереди ещё ${q.length} (${dur(left)} видео)`:"";
  $("disk").textContent=S.disk?`Свободно на диске для результата: ${gb(S.disk.free)}`:"";
- document.title=S.running?`${(S.jobs.find(j=>j.status==="running")||{pct:0}).pct.toFixed(0)}% · Жмых`:"Жмых — компрессор видео";
+ document.title=S.running?`${(S.jobs.find(j=>j.status==="running")||{pct:0}).pct.toFixed(0)}% · Framewring`:"Framewring Жмых — компрессор видео";
+ if(S.version)$("appver").textContent="v"+S.version;
 }
 // ---------------- поиск тяжёлых видео
 let scanVer=-1,scanRes=[],scanRows=[],drives=null,driveSel=new Set(),minMb=500;
@@ -2157,7 +2188,8 @@ def zhmyh_at(port):
     try:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         with opener.open("http://127.0.0.1:%d/" % port, timeout=2) as r:
-            return "Жмых" in r.read(4000).decode("utf-8", "replace")
+            page = r.read(4000).decode("utf-8", "replace")
+            return "Framewring" in page or "Жмых" in page
     except Exception:
         return False
 
@@ -2187,7 +2219,8 @@ def main():
         sys.exit(1)
     url = "http://127.0.0.1:%d/" % srv.server_address[1]
     print("=" * 60)
-    print(" Жмых запущен: " + url)
+    print(" %s v%s запущен: %s" % (APP_NAME, __version__, url))
+    print(" Данные (настройки, очередь, история): " + str(DATA_DIR))
     print(" FFmpeg: " + (FFMPEG or "НЕ НАЙДЕН"))
     if n:
         print(" Восстановил список прошлого сеанса: %d файлов." % n)
