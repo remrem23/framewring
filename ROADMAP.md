@@ -7,7 +7,7 @@ Ideas and requests are welcome in [Issues](https://github.com/remrem23/framewrin
 ## Done in 0.9.0
 
 - Windows installer and portable zip with FFmpeg bundled, own app window (WebView2).
-- **English interface** (RU | EN switch).
+- **Interface in 7 languages** (English, Russian, German, French, Spanish, Portuguese and Simplified Chinese).
 - Everything is optional: without it the multi-threaded folder walk is used automatically.
 
 ## Planned
@@ -39,7 +39,7 @@ Ideas and requests are welcome in [Issues](https://github.com/remrem23/framewrin
 ### Сделано в 0.9.0
 
 - Установщик и портабл-архив для Windows с FFmpeg внутри, своё окно программы (WebView2).
-- **Английский интерфейс** (переключатель RU | EN).
+- **Интерфейс на 7 языках** (русский, английский, немецкий, французский, испанский, португальский и китайский (упрощённый)).
 - Everything необязателен: без него автоматически работает многопоточный обход папок.
 
 ### В планах

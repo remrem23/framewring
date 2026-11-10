@@ -1,18 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Строки интерфейса Framewring: русский и английский.
+"""Строки интерфейса Framewring. Русский и английский — здесь, остальные языки — в locales/<код>.py.
 
 Ключи одинаковые в обоих языках. Параметры пишутся как {name}. Бэкенд отдаёт в интерфейс
 не готовый текст, а {"k": ключ, "p": {параметры}}; переводит страница (тот же словарь
 встраивается в неё как JSON). Python сам переводит только системные окна и консоль.
 
-To add a language: copy the "en" block, translate the values, keep keys and {params} intact,
-and add the language code to LANGS (plus a button in the header in app.py).
+To add a language: copy locales/de.py to locales/<code>.py, translate the values (keep keys and
+{params} intact), then add the code to LANGS / LANG_NAMES and an import block in _load_locales() below.
 """
 import os
 import re
 
-LANGS = ("ru", "en")
-APP_NAMES = {"ru": "Framewring Жмых", "en": "Framewring"}
+LANGS = ("en", "ru", "de", "fr", "es", "pt", "zh")
+LANG_NAMES = {"en": "English", "ru": "Русский", "de": "Deutsch", "fr": "Français", "es": "Español",
+              "pt": "Português", "zh": "简体中文"}
+APP_NAMES = {"ru": "Framewring Жмых"}  # остальные языки — просто «Framewring»
 
 RU = {
     # ---- шапка, общее
@@ -574,6 +576,43 @@ EN = {
 
 CATALOG = {"ru": RU, "en": EN}
 
+
+def _load_locales():
+    # явные импорты, чтобы PyInstaller положил их в сборку; нет файла — язык просто не появится
+    try:
+        from locales import de
+        CATALOG["de"] = de.STRINGS
+    except ImportError:
+        pass
+    try:
+        from locales import fr
+        CATALOG["fr"] = fr.STRINGS
+    except ImportError:
+        pass
+    try:
+        from locales import es
+        CATALOG["es"] = es.STRINGS
+    except ImportError:
+        pass
+    try:
+        from locales import pt
+        CATALOG["pt"] = pt.STRINGS
+    except ImportError:
+        pass
+    try:
+        from locales import zh
+        CATALOG["zh"] = zh.STRINGS
+    except ImportError:
+        pass
+
+
+_load_locales()
+LANGS = tuple(x for x in LANGS if x in CATALOG)
+
+
+def app_name(lang):
+    return APP_NAMES.get(lang, "Framewring")
+
 _PARAM = re.compile(r"\{(\w+)\}")
 
 
@@ -588,8 +627,10 @@ def _fmt_param(lang, v):
 
 
 def t(lang, key, **p):
-    """Перевод ключа. Нет перевода — русский, нет и его — сам ключ."""
-    s = CATALOG.get(lang, RU).get(key)
+    """Перевод ключа. Нет перевода — английский (для русского — русский), нет и его — сам ключ."""
+    s = CATALOG.get(lang, EN).get(key)
+    if s is None:
+        s = EN.get(key) if lang != "ru" else None
     if s is None:
         s = RU.get(key, key)
     if not p:
@@ -611,15 +652,21 @@ def text(lang, m):
 
 
 def sys_lang():
-    """Язык системы: ru/uk/be/kk -> русский интерфейс, остальное -> английский."""
+    """Язык системы: ru/uk/be/kk -> русский; de/fr/es/pt/zh -> свой; остальное -> английский."""
+    by_id = {0x19: "ru", 0x22: "ru", 0x23: "ru", 0x3F: "ru", 0x07: "de", 0x0C: "fr", 0x0A: "es",
+             0x16: "pt", 0x04: "zh"}
+    by_code = {"ru": "ru", "uk": "ru", "be": "ru", "kk": "ru", "de": "de", "fr": "fr", "es": "es",
+               "pt": "pt", "zh": "zh"}
     try:
         if os.name == "nt":
             import ctypes
             lid = ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF
-            return "ru" if lid in (0x19, 0x22, 0x23, 0x3F) else "en"
-        import locale
-        loc = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG")
-               or (locale.getlocale()[0] or ""))
-        return "ru" if loc[:2].lower() in ("ru", "uk", "be", "kk") else "en"
+            code = by_id.get(lid, "en")
+        else:
+            import locale
+            loc = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG")
+                   or (locale.getlocale()[0] or ""))
+            code = by_code.get(loc[:2].lower(), "en")
+        return code if code in CATALOG else "en"
     except Exception:
         return "en"

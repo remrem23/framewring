@@ -35,7 +35,7 @@ app window (WebView2)  or  browser   ──HTTP/JSON──►  server (Threading
 | Queue and history (`queue_saver`, `load_queue`, `add_history`) | survive restarts |
 | `worker` | one thread, takes `queued` jobs in order |
 | HTTP (`H`, `snapshot`) | API, Host and token checks, security headers |
-| `HTML` | the interface (English and Russian): settings, queue, search, history, donate window |
+| `HTML` | the interface (7 languages, strings from `i18n.py` + `locales/`): settings, queue, search, history, donate window |
 | `run_window`, `_setup_log`, `main` | single instance per machine, data loading, threads, own window or browser, log file for the exe |
 
 ## Job lifecycle

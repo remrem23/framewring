@@ -16,7 +16,7 @@ On first launch SmartScreen may say *"Windows protected your PC"* (the app is no
 The app opens in its own window. If the Microsoft Edge WebView2 Runtime is missing, it opens in your browser instead;
 in that case keep the browser tab open while it compresses. Starting the app a second time just brings up the window that is already open.
 
-The interface language follows Windows; switch it with **RU | EN** in the header.
+The interface language follows Windows; change it in the language list in the header (English, Russian, German, French, Spanish, Portuguese and Simplified Chinese).
 
 ## 2. Quick start
 
@@ -151,7 +151,7 @@ Framewring Жмых — бесплатный локальный компресс
 Программа открывается в своём окне. Если нет Microsoft Edge WebView2 Runtime, интерфейс откроется в браузере;
 тогда не закрывай вкладку, пока идёт сжатие. Повторный запуск просто показывает уже открытое окно.
 
-Язык интерфейса — как в Windows; переключить можно кнопками **RU | EN** в шапке.
+Язык интерфейса — как в Windows; поменять можно в списке языков в шапке (русский, английский, немецкий, французский, испанский, португальский и китайский (упрощённый)).
 
 ### 2. Быстрый старт
 

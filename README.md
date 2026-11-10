@@ -7,8 +7,8 @@ Free, local, no limits: your files never leave your computer.
 
 Framewring is a Windows app built on top of FFmpeg. It finds heavy videos on all your drives,
 estimates how much space each one would free, lets you test the result on a short piece, and re-encodes on an
-Nvidia GPU (NVENC AV1 / H.265) or on the CPU (x265, SVT-AV1). The interface is in English and Russian
-(switch **RU | EN** in the header; the default follows your Windows language).
+Nvidia GPU (NVENC AV1 / H.265) or on the CPU (x265, SVT-AV1). The interface is in English, Russian, German, French, Spanish, Portuguese and Simplified Chinese
+(language list in the header; the default follows your Windows language).
 
 <!-- TODO: screenshots of the main window, "Find heavy videos" and a test result with VMAF -->
 
@@ -150,8 +150,8 @@ The builds include [FFmpeg](https://ffmpeg.org) (Gyan build, GPL v3) and other c
 
 Framewring Жмых (английское название — *Framewring*) — программа для Windows, обёртка над FFmpeg. Находит тяжёлые видео
 на всех дисках, оценивает, сколько места освободит каждое, позволяет проверить результат на коротком куске и пережимает
-на видеокарте Nvidia (NVENC AV1 / H.265) или на процессоре (x265, SVT-AV1). Интерфейс на русском и английском
-(переключатель **RU | EN** в шапке; по умолчанию — язык Windows).
+на видеокарте Nvidia (NVENC AV1 / H.265) или на процессоре (x265, SVT-AV1). Интерфейс: русский, английский, немецкий, французский, испанский, португальский и китайский (упрощённый)
+(выбор языка в шапке; по умолчанию — язык Windows).
 
 ### Скачать
 

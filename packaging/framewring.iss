@@ -39,12 +39,19 @@ CloseApplications=yes
 RestartApplications=no
 
 [Languages]
-Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
+; первый — запасной, если язык Windows не из списка
 Name: "en"; MessagesFile: "compiler:Default.isl"
+Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
+Name: "de"; MessagesFile: "compiler:Languages\German.isl"
+Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
+Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "pt"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
+; китайский (упрощённый) — неофициальный перевод Inno Setup, лежит рядом
+Name: "zh"; MessagesFile: "ChineseSimplified.isl"
 
 [CustomMessages]
+AppTitle=Framewring
 ru.AppTitle=Framewring Жмых
-en.AppTitle=Framewring
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"

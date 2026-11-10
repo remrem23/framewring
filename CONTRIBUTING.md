@@ -23,7 +23,7 @@ Use the **Feature request** form. Check [ROADMAP.md](ROADMAP.md) first — the i
 - The whole app is one file, `app.py`, using only the Python standard library (pywebview is optional).
   Please keep it that way: no new required dependencies. Source mode supports Python 3.8+.
 - Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) first.
-- Every interface string exists in **English and Russian** — add both.
+- English and Russian strings live in `i18n.py`, other languages in `locales/<code>.py`. Add new strings to `i18n.py` in English and Russian; missing translations fall back to English. Translation fixes and new languages are very welcome.
 - Never risk user files: originals are read-only; outputs must not overwrite originals or unrelated files.
 - Test on real videos, including odd ones (VFR phone recordings, interlaced `.mts`, MKV with subtitles), and on a GPU and a CPU mode if you can.
 - Building the exe and installer: [packaging/](packaging/) (`build.py`, then `release.py`).
@@ -59,7 +59,7 @@ Security issues: see [SECURITY.md](SECURITY.md) — please do not report them pu
 - Вся программа — один файл `app.py`, только стандартная библиотека Python (pywebview — по желанию).
   Пожалуйста, без новых обязательных зависимостей. Запуск из исходников поддерживает Python 3.8+.
 - Сначала прочитай [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#русский).
-- Каждая строка интерфейса есть **на английском и русском** — добавляй обе.
+- Английские и русские строки — в `i18n.py`, остальные языки — в `locales/<код>.py`. Новые строки добавляй в `i18n.py` на английском и русском; без перевода показывается английский. Исправления переводов и новые языки очень приветствуются.
 - Никакого риска для файлов пользователя: оригиналы только читаются; результат не должен затирать оригиналы или чужие файлы.
 - Проверяй на настоящих видео, в том числе странных (VFR с телефона, черезстрочные `.mts`, MKV с субтитрами), и, если можешь, на видеокарте и процессоре.
 - Сборка exe и установщика: [packaging/](packaging/) (`build.py`, затем `release.py`).

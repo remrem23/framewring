@@ -152,7 +152,7 @@ Before the release the code was reviewed by several independent automated review
   (see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)).
 
 ### 6. English interface
-- The whole interface is available in English and Russian; an **RU | EN** switch in the header, by default following the Windows language.
+- The whole interface is available in 7 languages (English, Russian, German, French, Spanish, Portuguese and Simplified Chinese); a language list in the header, by default following the Windows language.
 - **Drag & drop:** files and folders can be dropped onto the window.
 - All public documents are now in English first, with the full Russian text below.
 
@@ -310,7 +310,7 @@ FFmpeg 8.1.1 (сборка Gyan), Windows 11, 3 NVMe SSD + 4 HDD.
   (см. [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md#русский)).
 
 #### 6. Английский интерфейс
-- Весь интерфейс доступен на английском и русском; переключатель **RU | EN** в шапке, по умолчанию — язык Windows.
+- Весь интерфейс доступен на 7 языках (русский, английский, немецкий, французский, испанский, португальский и китайский (упрощённый)); выбор языка в шапке, по умолчанию — язык Windows.
   Заголовок окна по-английски — **Framewring**, по-русски — **Framewring Жмых**.
 - **Перетаскивание:** файлы и папки можно бросить прямо в окно.
 - Все публичные документы теперь сначала на английском, ниже — полный русский текст.

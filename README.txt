@@ -18,7 +18,7 @@ START
   yet): "More info" -> "Run anyway".
   The app opens in its own window. If the Microsoft Edge WebView2 Runtime is
   missing, it opens in your browser instead - keep the app running while it
-  compresses. Interface language: "RU | EN" in the header.
+  compresses. Interface language: the list in the header (7 languages).
 
 QUICK START
   1. Add videos: "Find heavy videos", "+ Files", "+ Folder", or drag files
@@ -98,7 +98,7 @@ Framewring Жмых находит на дисках тяжёлые видео �
   цифровой подписи): «Подробнее» -> «Выполнить в любом случае».
   Программа открывается в своём окне. Если нет Microsoft Edge WebView2
   Runtime, интерфейс откроется в браузере - тогда не закрывай программу,
-  пока идёт сжатие. Язык интерфейса: «RU | EN» в шапке.
+  пока идёт сжатие. Язык интерфейса: список в шапке (7 языков).
 
 КАК ПОЛЬЗОВАТЬСЯ
   1. Добавь видео: «Найти тяжёлые видео», «+ Файлы», «+ Папка» или

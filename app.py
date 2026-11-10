@@ -283,7 +283,7 @@ def tr(key, **p):
 
 
 def app_name():
-    return APP_NAMES.get(cur_lang(), APP_NAMES["en"])
+    return i18n.app_name(cur_lang())
 
 
 # Пресеты (порядок показа). Названия и описания: i18n.py, ключи preset.<код>.title/.desc
@@ -2137,10 +2137,10 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 .drv{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:6px 10px;cursor:pointer}
 .drv.on{border-color:var(--acc);background:#7c5cff14}.drv input{margin:0}
 .vm{font-weight:700}.vm.g{color:var(--acc2)}.vm.y{color:var(--warn)}.vm.r{color:var(--err)}
-.lng{font-size:12px;font-weight:400;margin-left:8px;color:var(--mut);white-space:nowrap}.lng button{background:none;border:0;color:var(--mut);cursor:pointer;font:inherit;padding:0 3px}
-.lng button:hover{color:var(--fg)}.lng button.on{color:var(--fg);font-weight:700}
+.lng{font-size:12px;font-weight:400;margin-left:10px;vertical-align:middle;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:2px 4px;cursor:pointer}
+.lng:hover{border-color:#3a4152}
 </style></head><body><div class="wrap">
-<div class="top"><div><h1><span>Framewring</span><span data-t="app.suffix"></span> <small id="appver" style="font-size:12px;color:var(--mut);font-weight:400"></small><span class="lng" id="lng" data-tt="lang.title"><button data-l="ru">RU</button>|<button data-l="en">EN</button></span></h1>
+<div class="top"><div><h1><span>Framewring</span><span data-t="app.suffix"></span> <small id="appver" style="font-size:12px;color:var(--mut);font-weight:400"></small><select class="lng" id="lng" data-tt="lang.title">__LANGOPTS__</select></h1>
 <div class="sub" data-t="app.sub"></div></div>
 <div class="row" style="align-items:center"><button class="btn sm don" onclick="donate(true)" data-t="donate.btn" data-tt="donate.btn_title"></button><div class="pill" id="ver" data-t="ver.checking"></div></div></div>
 <div id="warn"></div>
@@ -2208,10 +2208,10 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 const T="__TOKEN__";let S=null;
 // ---------------- язык: словарь из i18n.py (тот же, что у бэкенда)
 const I18N=__I18N__;let LANG="__LANG__";
-const LOC=()=>LANG==="ru"?"ru-RU":"en-US";
+const LOCS={ru:"ru-RU",en:"en-US",de:"de-DE",fr:"fr-FR",es:"es-ES",pt:"pt-BR",zh:"zh-CN"};const LOC=()=>LOCS[LANG]||"en-US";
 const nf=(x,d=0)=>Number(x||0).toLocaleString(LOC(),{minimumFractionDigits:d,maximumFractionDigits:d});
 const nfm=(x,m)=>Number(x||0).toLocaleString(LOC(),{maximumFractionDigits:m});
-function tr(k,p){let s=(I18N[LANG]||{})[k];if(s==null)s=I18N.ru[k];if(s==null)s=k;return p?s.replace(/\{(\w+)\}/g,(m,n)=>n in p?fmtP(p[n]):m):s}
+function tr(k,p){let s=(I18N[LANG]||{})[k];if(s==null&&LANG!=="ru")s=I18N.en[k];if(s==null)s=I18N.ru[k];if(s==null)s=k;return p?s.replace(/\{(\w+)\}/g,(m,n)=>n in p?fmtP(p[n]):m):s}
 function fmtP(v){return v&&typeof v==="object"?msg(v):typeof v==="number"?nfm(v,1):String(v)}
 // сообщение бэкенда: строка (старые записи, сырой текст ffmpeg), {k,p} или список таких
 function msg(x){if(x==null||x==="")return"";if(typeof x==="string")return x;if(Array.isArray(x))return x.map(msg).filter(Boolean).join(" ");if(x.k)return tr(x.k,x.p||{});return String(x)}
@@ -2220,7 +2220,7 @@ function applyStatic(){document.documentElement.lang=LANG;
  document.querySelectorAll("[data-tt]").forEach(e=>e.title=tr(e.dataset.tt));
  document.querySelectorAll("[data-tp]").forEach(e=>e.placeholder=tr(e.dataset.tp));
  document.querySelectorAll("[data-ta]").forEach(e=>e.setAttribute("aria-label",tr(e.dataset.ta)));
- document.querySelectorAll("#lng button").forEach(b=>b.classList.toggle("on",b.dataset.l===LANG));
+ $("lng").value=LANG;
  $("btnTest").textContent=testLabel(S?S.settings.testlen:120);
  if(S){render();renderScan({...S.scan,results:null})}else document.title=tr("app.title");
  if(drives)renderDrives()}
@@ -2236,7 +2236,7 @@ function toasts(a){a=(a||[]).map(msg).filter(Boolean);if(a.length)toast(a.slice(
 ["dragover","drop"].forEach(ev=>window.addEventListener(ev,e=>{e.preventDefault();if(ev==="drop"&&!S?.window)toast(tr("drop.browser"))}));
 function donate(on){$("donate").classList.toggle("on",on)}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")donate(false)});
-$("lng").addEventListener("click",e=>{const l=e.target.dataset&&e.target.dataset.l;if(l)setLang(l)});
+$("lng").addEventListener("change",e=>setLang(e.target.value));
 async function openUrl(u){if(u)await api("/api/url",{url:u})}
 function toast(m){const t=$("toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",5000)}
 const gb=b=>{const n=Math.abs(b||0),sg=b<0?"−":"";return sg+(n>=1e9?nf(n/1e9,2)+" "+tr("unit.gb"):n>=1e7?nf(n/1e6,0)+" "+tr("unit.mb"):nf(n/1e6,1)+" "+tr("unit.mb"))};
@@ -2403,7 +2403,7 @@ async function refresh(){
  const v=sver;
  try{const r=await fetch("/api/status?sv="+scanVer,{headers:{"X-Token":T}});if(r.status===403){stale();return}const d=await r.json();
   if(pending||v!==sver)d.settings=S?S.settings:d.settings; // не откатываем только что выбранную настройку
-  S=d;const lg=(S.settings.lang||S.sys_lang)==="ru"?"ru":"en";
+  S=d;const want=S.settings.lang||S.sys_lang;const lg=I18N[want]?want:"en";
   if(lg!==LANG){LANG=lg;histVer=-1;applyStatic()}else render();
   renderScan(d.scan);if(histOpen&&d.hist_ver!==histVer)loadHist()}
  catch(e){$("ver").textContent=tr("ver.no_response")}
@@ -2418,7 +2418,9 @@ loop();
 def page_html():
     """Страница с ключом доступа, текущим языком и словарём обоих языков (переключение без перезагрузки)."""
     cat = json.dumps(i18n.CATALOG, ensure_ascii=False).replace("</", "<\\/")
-    return HTML.replace("__TOKEN__", TOKEN).replace("__LANG__", cur_lang()).replace("__I18N__", cat)
+    opts = "".join('<option value="%s">%s</option>' % (c, i18n.LANG_NAMES[c]) for c in i18n.LANGS)
+    return HTML.replace("__TOKEN__", TOKEN).replace("__LANG__", cur_lang()).replace("__LANGOPTS__", opts) \
+        .replace("__I18N__", cat)
 
 
 class Server(ThreadingHTTPServer):

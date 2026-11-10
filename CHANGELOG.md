@@ -20,7 +20,7 @@ First public release.
 - **Test** on a piece of the video: forecast of size and time, VMAF.
 - The queue and the compression **history** survive restarts; **↻ Retry** for failed files; **📂 Compressed / 📂 Original**.
 - "Finishing the file" stage with progress; warnings about a disabled page file and low free space.
-- **English interface** alongside Russian, with an **RU | EN** switch (defaults to the Windows language).
+- **Interface in 7 languages:** English, Russian, German, French, Spanish, Portuguese and Simplified Chinese; language list in the header (defaults to the Windows language).
   Name **Framewring**; version number in the interface.
 - **Own app window** (Edge WebView2) instead of a console and a browser tab; closing during compression asks
   "Stop and quit?". Without WebView2 the app opens in the browser and says so. Starting it again brings up the open window.
@@ -64,7 +64,7 @@ First public release.
 - **Тест** на куске видео: прогноз размера и времени, VMAF.
 - Очередь и **история** сжатия сохраняются между запусками; «↻ Повторить» для неудачных файлов; «📂 Сжатый / 📂 Оригинал».
 - Этап «Дописываю файл» с прогрессом; предупреждения о выключенном файле подкачки и свободном месте.
-- **Английский интерфейс** рядом с русским, переключатель **RU | EN** (по умолчанию — язык Windows).
+- **Интерфейс на 7 языках:** русский, английский, немецкий, французский, испанский, португальский и китайский (упрощённый); выбор в шапке (по умолчанию — язык Windows).
   Названия: **Framewring** (англ.), **Framewring Жмых** (рус.); номер версии в интерфейсе.
 - **Своё окно программы** (Edge WebView2) вместо консоли и вкладки браузера; при закрытии во время сжатия — вопрос
   «Остановить и выйти?». Без WebView2 программа открывается в браузере и сообщает об этом. Повторный запуск поднимает открытое окно.
