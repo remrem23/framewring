@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title Zhmyh - video compressor
+title Framewring - video compressor
 cd /d "%~dp0"
 
 set "PY="

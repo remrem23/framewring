@@ -18,6 +18,7 @@ import tempfile
 import threading
 import time
 import webbrowser
+import hmac
 from ctypes import wintypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -71,7 +72,8 @@ def find_tool(name):
         for cand in (d / "ffmpeg" / "bin" / exe, d / "ffmpeg" / exe, d / exe):
             if cand.is_file():
                 return str(cand)
-    return shutil.which(name)
+    w = shutil.which(name)  # на Windows which смотрит и в текущую папку — её не берём
+    return w if w and os.path.isabs(w) and Path(w).parent.resolve() != Path.cwd().resolve() else None
 
 
 FFMPEG = find_tool("ffmpeg")
@@ -406,6 +408,8 @@ def clean_settings(b):
     for k, v in b.items():
         if k not in DEFAULT_SETTINGS:
             continue
+        if k in ("preset", "quality", "speed", "audio", "outdir") and not isinstance(v, str):
+            continue
         if k == "preset" and v not in PRESETS:
             continue
         if k == "quality" and v not in ("high", "balanced", "compact"):
@@ -417,7 +421,9 @@ def clean_settings(b):
         if k in ("lowprio", "nosleep", "skip"):
             v = bool(v)
         if k == "outdir":
-            v = str(v or "").strip().strip('"').strip("'")
+            v = os.path.expandvars(os.path.expanduser(v.strip().strip('"').strip("'")))
+            if v and not os.path.isabs(v):  # «out» или «D:video» ушли бы в папку программы
+                continue
         if k == "testlen":
             try:
                 v = max(10.0, min(1800.0, float(v)))
@@ -501,29 +507,53 @@ def out_dir_for(job, s):
     return Path(job["path"]).parent / "compressed"
 
 
+def _same_dir(a, b):
+    """Та же папка, даже под другим именем (junction, подключённый диск, короткое имя 8.3)."""
+    try:
+        return os.path.samefile(str(a), str(b))
+    except OSError:
+        return _norm(a) == _norm(b)
+
+
+def _same_file(a, b):
+    try:
+        return os.path.samefile(str(a), str(b))
+    except OSError:
+        return _norm(a) == _norm(b)
+
+
 def out_path_for(job, s):
+    """Куда писать результат. Главное правило: никогда не затирать чужой файл и тем более оригинал."""
     d = out_dir_for(job, s)
     src = Path(job["path"])
+    ks = _norm(src)
+    same = _same_dir(d, src.parent)
     stem = src.stem
-    # «клип.mkv» и «клип.mov» в одной папке дали бы один и тот же «клип.mp4»: второй бы затёр
-    # первый или был бы ошибочно «пропущен как уже сжатый». Различаем по расширению.
-    twins = []
-    if _norm(d) != _norm(src.parent):  # если пишем в ту же папку, «близнецом» был бы наш же результат
+    if same:
+        # пишем рядом с оригиналами: «клип.mkv» → «клип.mp4» затёр бы лежащий рядом оригинал «клип.mp4»
+        # (так оставляет файлы OBS после ремукса). Поэтому всегда с суффиксом.
+        stem += "_compressed"
+    else:
+        # «клип.mkv» и «клип.mov» в одной папке дали бы один «клип.mp4». Различаем по расширению.
         try:
-            twins = [f for f in src.parent.iterdir() if f.stem == src.stem and f.suffix.lower() in VIDEO_EXT
-                     and f.suffix.lower() != src.suffix.lower()]
+            low = src.stem.lower()
+            if any(f.stem.lower() == low and f.suffix.lower() in VIDEO_EXT and f.suffix.lower() != src.suffix.lower()
+                   for f in src.parent.iterdir()):
+                stem = "%s_%s" % (src.stem, src.suffix.lstrip(".").lower())
         except OSError:
             pass
-    if twins:
-        stem = "%s_%s" % (src.stem, src.suffix.lstrip(".").lower())
-    o = d / (stem + ".mp4")
-    if _norm(o) == _norm(src):
-        o = d / (stem + "_compressed.mp4")
-    # общая папка вывода: одноимённые файлы из разных папок за этот сеанс
+    # Чужая общая папка (задана в «Куда сохранять»): файл без известного хозяина считаем чужим —
+    # одинаковые имена с разных карт памяти (GH010001.MP4) встречаются постоянно.
+    shared = bool(s.get("outdir")) and not same
+    o = base = d / (stem + ".mp4")
     n = 2
-    base = o
     with LOCK:
-        while OUT_OWNERS.get(_norm(o), _norm(src)) != _norm(src):
+        while True:
+            owner = OUT_OWNERS.get(_norm(o))
+            if owner == ks:
+                break
+            if owner is None and not _same_file(o, src) and not (shared and o.exists()):
+                break
             o = base.with_name("%s (%d).mp4" % (base.stem, n))
             n += 1
     return o
@@ -728,8 +758,40 @@ def _ev_parse(buf):
     return out, totitems
 
 
+_EV_CLASS = {}  # один зарегистрированный класс окна и его обработчик живут до конца процесса
+_EV_CUR = {}
+
+
+def _ev_class(u, k):
+    if not _EV_CLASS:
+        def wndproc(hwnd, msg, wp, lp):
+            if msg == EV_WM_COPYDATA:
+                cds = ctypes.cast(lp, ctypes.POINTER(EV_COPYDATA)).contents
+                if cds.dwData == REPLY_ID and _EV_CUR.get("hwnd") == hwnd:
+                    _EV_CUR["raw"] = ctypes.string_at(cds.lpData, cds.cbData)
+                    _EV_CUR["got"].set()
+                    return 1
+            return u.DefWindowProcW(hwnd, msg, wp, lp)
+        proc = WNDPROC(wndproc)
+        wc = EV_WNDCLASS()
+        wc.lpfnWndProc = proc
+        wc.hInstance = k.GetModuleHandleW(None)
+        wc.lpszClassName = "FramewringEverythingReply"
+        u.RegisterClassW(ctypes.byref(wc))
+        _EV_CLASS.update(proc=proc, wc=wc, name=wc.lpszClassName, hinst=wc.hInstance)
+    return _EV_CLASS
+
+
+_EV_LOCK = threading.Lock()
+
+
 def ev_query(search, timeout=15.0, max_results=200000):
     """Выполняет поиск в Everything. None = Everything не запущен или не ответил."""
+    with _EV_LOCK:
+        return _ev_query(search, timeout, max_results)
+
+
+def _ev_query(search, timeout, max_results):
     result = {}
 
     def run():
@@ -739,26 +801,13 @@ def ev_query(search, timeout=15.0, max_results=200000):
             if not target:
                 return
             got = threading.Event()
-
-            def wndproc(hwnd, msg, wp, lp):
-                if msg == EV_WM_COPYDATA:
-                    cds = ctypes.cast(lp, ctypes.POINTER(EV_COPYDATA)).contents
-                    if cds.dwData == REPLY_ID:
-                        result["raw"] = ctypes.string_at(cds.lpData, cds.cbData)
-                        got.set()
-                        return 1
-                return u.DefWindowProcW(hwnd, msg, wp, lp)
-
-            proc = WNDPROC(wndproc)
-            hinst = k.GetModuleHandleW(None)
-            wc = EV_WNDCLASS()
-            wc.lpfnWndProc = proc
-            wc.hInstance = hinst
-            wc.lpszClassName = "ZhmyhEverythingReply%d" % threading.get_ident()
-            u.RegisterClassW(ctypes.byref(wc))
-            hwnd = u.CreateWindowExW(0, wc.lpszClassName, "zh", 0, 0, 0, 0, 0, None, None, hinst, None)
+            c = _ev_class(u, k)
+            hinst = c["hinst"]
+            hwnd = u.CreateWindowExW(0, c["name"], "fw", 0, 0, 0, 0, 0, None, None, hinst, None)
             if not hwnd:
                 return
+            _EV_CUR.clear()
+            _EV_CUR.update(hwnd=hwnd, got=got)
             try:
                 # если Everything запущен от администратора, разрешаем ему прислать нам ответ
                 u.ChangeWindowMessageFilterEx(hwnd, EV_WM_COPYDATA, 1, None)
@@ -785,7 +834,9 @@ def ev_query(search, timeout=15.0, max_results=200000):
                     u.TranslateMessage(msg)
                     u.DispatchMessageW(msg)
             u.DestroyWindow(hwnd)
-            result["keep"] = proc
+            if "raw" in _EV_CUR:
+                result["raw"] = _EV_CUR["raw"]
+            _EV_CUR.clear()
         except Exception as e:
             result["error"] = repr(e)
 
@@ -992,8 +1043,10 @@ def _scan_one(item):
         SCAN["probed"] += 1
         return
     est = estimate(info, size)
-    with LOCK:
-        has_out = out_path_for({"path": path}, SETTINGS).exists()
+    try:
+        has_out = out_path_for({"path": path}, dict(SETTINGS)).exists()
+    except OSError:
+        has_out = False
     p = Path(path)
     res = {"path": path, "name": p.name, "dir": str(p.parent), "size": size, "codec": info["vcodec"],
            "w": info["width"], "h": info["height"], "fps": info["fps"], "dur": info["duration"],
@@ -1026,8 +1079,9 @@ def scan_thread(roots, min_bytes, use_ev=True):
                     pref = [_norm(r).rstrip("\\/") + os.sep for r in ev_roots]
                     for path, size, attrs in items:
                         k = _norm(path)
-                        parts = k.split(os.sep)[1:-1]
-                        if not any(k.startswith(p) for p in pref) or attrs & FILE_ATTR_CLOUD or \
+                        root = next((p for p in pref if k.startswith(p)), None)
+                        parts = k[len(root):].split(os.sep)[:-1] if root else []
+                        if not root or attrs & FILE_ATTR_CLOUD or \
                                 k.endswith(".part.mp4") or any(x in SKIP_DIRS or x[:1] in "$." for x in parts):
                             continue
                         with LOCK:
@@ -1267,7 +1321,8 @@ def encode(job, s, src, dst, total, phase, extra, subs=False):
         vf = vfilters(info)
         args = pre + ["-i", src, "-map", "0:V:0", "-map", "0:a?"] + (sub_args(info) if subs else []) + \
             (["-vf", ",".join(vf)] if vf else []) + \
-            video_args(s["preset"], s["quality"], s["speed"], lp) + audio_args(job, s) + extra + \
+            video_args(s["preset"], s["quality"], s["speed"], lp) + ["-fps_mode", "passthrough"] + \
+            audio_args(job, s) + extra + \
             ["-progress", "pipe:1", "-nostats", dst]
         t0 = time.time()
         ok, err, _ = run_ffmpeg(args, job, total, phase, s)
@@ -1354,6 +1409,10 @@ def finalize(part, out, job):
 
 def do_full(job, s):
     out = out_path_for(job, s)
+    if _same_file(out, job["path"]):  # не должно случиться, но оригинал дороже всего
+        with LOCK:
+            job["status"], job["error"] = "error", "Отказ: результат совпал бы с оригиналом. Выбери другую папку."
+        return
     out.parent.mkdir(parents=True, exist_ok=True)
     if s.get("skip") and out.exists():
         with LOCK:
@@ -1381,6 +1440,8 @@ def do_full(job, s):
         with LOCK:
             job["phase"], job["fin"] = "Сохраняю файл", None
         out = finalize(part, out, job)
+        with LOCK:
+            OUT_OWNERS[_norm(out)] = _norm(job["path"])
         try:  # дата изменения как у оригинала: сортировка по дате в проводнике не ломается
             st = os.stat(job["path"])
             os.utime(str(out), (st.st_atime, st.st_mtime))
@@ -1478,6 +1539,10 @@ def load_history():
             HISTORY["items"] = [x for x in items if isinstance(x, dict) and x.get("src")]
     except Exception:
         pass
+    with LOCK:  # результаты прошлых сеансов принадлежат своим исходникам
+        for h in HISTORY["items"]:
+            if h.get("out"):
+                OUT_OWNERS.setdefault(_norm(h["out"]), _norm(h["src"]))
 
 
 def add_history(entry):
@@ -1503,7 +1568,15 @@ def _queue_payload():
         return [{k: j.get(k) for k in KEEP} for j in JOBS]
 
 
+_QSAVE = threading.Lock()
+
+
 def save_queue(payload=None):
+    with _QSAVE:
+        return _save_queue(payload)
+
+
+def _save_queue(payload=None):
     try:
         data = json.dumps(payload if payload is not None else _queue_payload(), ensure_ascii=False)
         tmp = QUEUE_FILE.with_suffix(".tmp")
@@ -1759,6 +1832,10 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Content-Security-Policy", "frame-ancestors 'none'")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
         self.end_headers()
         self.wfile.write(data)
 
@@ -1766,22 +1843,42 @@ class H(BaseHTTPRequestHandler):
         host = (self.headers.get("Host") or "").split(":")[0]
         return host in ("127.0.0.1", "localhost")
 
+    def _tok_ok(self, given):
+        return hmac.compare_digest(str(given or "").encode(), TOKEN.encode())
+
     def do_GET(self):
         if not self._host_ok():
             return self._send(403, {"error": "forbidden"})
+        if self.path == "/api/ping":  # для второго запуска: «здесь уже работает Framewring»
+            return self._send(200, {"app": "Framewring"})
         if self.path == "/" or self.path.startswith("/?"):
+            m = re.search(r"[?&]t=([0-9a-f]+)", self.path)
+            if not m or not self._tok_ok(m.group(1)):  # страница с ключом — только по ссылке от самой программы
+                return self._send(403, STALE_HTML.encode("utf-8"), "text/html; charset=utf-8")
             return self._send(200, HTML.replace("__TOKEN__", TOKEN).encode("utf-8"), "text/html; charset=utf-8")
+        if not self._tok_ok(self.headers.get("X-Token")):
+            return self._send(403, {"error": "forbidden"})
         if self.path.split("?")[0] == "/api/status":
             m = re.search(r"[?&]sv=(-?\d+)", self.path)
             return self._send(200, snapshot(int(m.group(1)) if m else None))
         self._send(404, {"error": "not found"})
 
     def do_POST(self):
-        if not self._host_ok() or self.headers.get("X-Token") != TOKEN:
+        if not self._host_ok():
             return self._send(403, {"error": "forbidden"})
-        n = int(self.headers.get("Content-Length") or 0)
+        if self.path == "/api/show":  # второй запуск просит показать уже открытое окно
+            threading.Thread(target=show_self, daemon=True).start()
+            return self._send(200, {"ok": True})
+        if not self._tok_ok(self.headers.get("X-Token")):
+            return self._send(403, {"error": "forbidden"})
+        try:
+            n = max(0, min(int(self.headers.get("Content-Length") or 0), 1 << 20))
+        except ValueError:
+            n = 0
         try:
             body = json.loads(self.rfile.read(n).decode("utf-8") or "{}")
+            if not isinstance(body, dict):
+                body = {}
         except Exception:
             body = {}
         try:
@@ -1807,6 +1904,9 @@ class H(BaseHTTPRequestHandler):
                         errs.append(x["error"])
             return {"errors": errs}
         if path == "/api/settings":
+            global PRESET_CHOSEN
+            if "preset" in b:
+                PRESET_CHOSEN = True
             with LOCK:
                 SETTINGS.update(clean_settings(b))
                 save_settings()
@@ -1826,6 +1926,8 @@ class H(BaseHTTPRequestHandler):
                     if j["info"] and j["status"] in ("ready", "tested", "cancelled", "error"):
                         j["status"], j["mode"], j["settings"] = "queued", mode, dict(SETTINGS)
                         j["error"], j["note"], j["pct"] = "", "", 0
+                        if mode == "test":
+                            j["test"] = None
                         n += 1
             WAKE.set()
             return {"queued": n}
@@ -1852,6 +1954,9 @@ class H(BaseHTTPRequestHandler):
                             pass
                 threading.Thread(target=_kill_later, daemon=True).start()
             return None
+        if path == "/api/quit":  # только для режима в браузере: окна нет, а консоли в exe тоже нет
+            threading.Thread(target=quit_app, daemon=True).start()
+            return None
         if path == "/api/drives":
             return {"drives": list_drives()}
         if path == "/api/scan":
@@ -1874,6 +1979,8 @@ class H(BaseHTTPRequestHandler):
                 j["status"], j["settings"] = "queued", dict(SETTINGS)
                 j["mode"] = j["mode"] if j["mode"] in ("test", "full") else "full"
                 j["error"], j["note"], j["pct"] = "", "", 0
+                if j["mode"] == "test":
+                    j["test"] = None
             WAKE.set()
             return None
         if path == "/api/remove":
@@ -1915,6 +2022,11 @@ class H(BaseHTTPRequestHandler):
         raise RuntimeError("unknown endpoint")
 
 
+STALE_HTML = """<!doctype html><meta charset="utf-8"><title>Framewring</title>
+<body style="font:16px system-ui;background:#0f1115;color:#e8eaf0;padding:40px">
+<h2>Framewring</h2><p>This page is out of date. Open the program from its shortcut.</p>
+<p>Эта вкладка устарела. Открой программу заново через ярлык.</p></body>"""
+
 HTML = r"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Framewring Жмых — компрессор видео</title>
@@ -1926,7 +2038,7 @@ h1{margin:0;font-size:22px;letter-spacing:.2px}h1 span{color:var(--acc)}
 .sub{color:var(--mut);margin-top:2px}
 .top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px;flex-wrap:wrap}
 .pill{font-size:12px;color:var(--mut);border:1px solid var(--line);border-radius:99px;padding:4px 10px}
-.grid{display:grid;grid-template-columns:380px 1fr;gap:16px}@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.grid{display:grid;grid-template-columns:380px 1fr;gap:16px}@media(max-width:1000px){.grid{grid-template-columns:300px minmax(0,1fr)}}@media(max-width:700px){.grid{grid-template-columns:1fr}.grid>:last-child{order:-1}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
 .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:0 0 10px}
 .opt{display:block;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
@@ -1961,7 +2073,8 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 .empty{color:var(--mut);text-align:center;padding:40px 10px;border:1px dashed var(--line);border-radius:12px}
 .warnbox{border:1px solid var(--warn);background:#ffb34714;color:var(--warn);padding:12px;border-radius:12px;margin-bottom:14px}
 .foot{color:var(--mut);font-size:12px;margin-top:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
-.hrow{display:grid;grid-template-columns:96px 1fr 200px 150px auto;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
+@media(max-width:1000px){.hrow{grid-template-columns:minmax(120px,1fr) auto!important}.hrow>:nth-child(1),.hrow>:nth-child(4){display:none}.hrow>:nth-child(3){grid-column:1}}.toast{overflow-wrap:anywhere}
+.hrow{display:grid;grid-template-columns:96px minmax(140px,1fr) 200px 150px auto;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
 .hrow:last-child{border-bottom:0}.hrow .meta{margin:0;word-break:break-all}
 .don{border-color:#ff6b9a55;color:#ff9abb}.don:hover{border-color:#ff6b9a;background:#ff6b9a14}
 .modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
@@ -2052,7 +2165,11 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 // innerHTML только при реальном изменении: иначе каждую секунду пересоздаются кнопки и клик «теряется»
 function setHTML(el,h){if(el._h!==h){el.innerHTML=h;el._h=h}}
-async function api(p,b){try{const r=await fetch(p,{method:"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:JSON.stringify(b||{})});const j=await r.json().catch(()=>({}));if(!r.ok)toast(j.error||"Ошибка");return j}catch(e){toast("Сервер Жмыха не отвечает");return {}}}
+async function api(p,b){try{const r=await fetch(p,{method:"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:JSON.stringify(b||{})});const j=await r.json().catch(()=>({}));if(r.status===403){stale();return {}}if(!r.ok)toast(j.error||"Ошибка");return j}catch(e){toast("Программа не отвечает");return {}}}
+function stale(){document.body.innerHTML='<div style="padding:40px;font-size:16px">Программа была перезапущена или закрыта — эта вкладка устарела. Открой программу заново.<br><br>The program was restarted or closed — this tab is out of date.</div>'}
+function toasts(a){if(a&&a.length)toast(a.slice(0,4).join(" · ")+(a.length>4?` (+${a.length-4})`:""))}
+// перетаскивание: без этого окно открыло бы само видео вместо программы
+["dragover","drop"].forEach(ev=>window.addEventListener(ev,e=>{e.preventDefault();if(ev==="drop"&&!S?.window)toast("Перетаскивание работает в окне программы. Здесь — кнопки «+ Файлы» / «+ Папка».")}));
 function donate(on){$("donate").classList.toggle("on",on)}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")donate(false)});
 async function openUrl(u){if(u)await api("/api/url",{url:u})}
@@ -2063,11 +2180,13 @@ const tm=s=>{if(s==null||!isFinite(s))return"—";s=Math.round(s);const h=Math.f
 const dur=s=>{s=Math.round(s||0);return`${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`};
 let pending=0,sver=0;
 async function setS(k,v){S.settings[k]=v;sver++;pending++;renderSettings();try{await api("/api/settings",{[k]:v})}finally{pending--}}
-async function pick(kind){toast(S.window?"Открываю окно выбора…":"Открываю окно выбора… (может появиться за браузером)");const r=await api("/api/pick",{kind});(r.errors||[]).forEach(toast);refresh()}
-async function addManual(){const el=$("manual");if(!el.value.trim())return;const v=el.value;el.value="";toast("Добавляю…");const r=await api("/api/add",{paths:v.split(/\r?\n/)});(r.errors||[]).forEach(toast);refresh()}
+async function pick(kind){toast(S.window?"Открываю окно выбора…":"Открываю окно выбора… (может появиться за браузером)");const r=await api("/api/pick",{kind});toasts(r.errors);refresh()}
+async function addManual(){const el=$("manual");if(!el.value.trim())return;const v=el.value;el.value="";toast("Добавляю…");
+ const paths=[...v.matchAll(/"([^"]+)"|([^"\r\n]+)/g)].map(m=>(m[1]||m[2]).trim()).filter(Boolean); // «Копировать как путь» из проводника: "a" "b"
+ const r=await api("/api/add",{paths});toasts(r.errors);refresh()}
 $("manual").addEventListener("keydown",e=>{if(e.key==="Enter")addManual()});
-async function start(mode){const r=await api("/api/start",{mode});if(r.queued===0)toast("Нечего запускать: добавь файлы (готовые и уже стоящие в очереди не трогаю)");refresh()}
-async function cancel(){await api("/api/cancel");refresh()}
+async function start(mode){const r=await api("/api/start",{mode});if(r.queued===0)toast(S.jobs.some(j=>j.status==="probing")?"Ещё читаю параметры файлов, подожди секунду":"Нечего запускать: добавь файлы (готовые и уже стоящие в очереди не трогаю)");refresh()}
+async function cancel(){const j=S&&S.jobs.find(x=>x.status==="running");if(j&&j.mode!=="test"&&j.pct>2&&!confirm(`Остановить сжатие «${j.name}»? Сделано ${j.pct.toFixed(0)}%, файл потом начнётся сначала.`))return;await api("/api/cancel");refresh()}
 // ---------------- история
 let histVer=-1,histOpen=false;
 async function toggleHist(show){const c=$("histCard");histOpen=show==null?c.style.display==="none":show;c.style.display=histOpen?"block":"none";if(histOpen){histVer=-1;await loadHist();c.scrollIntoView({behavior:"smooth",block:"start"})}}
@@ -2202,17 +2321,17 @@ function renderScan(sc){
 }
 $("scanList").addEventListener("change",e=>{const i=e.target.dataset.i;if(i==null)return;const k=pk(scanRows[i].path);e.target.checked?sel.add(k):sel.delete(k);renderScan({...S.scan,results:null})});
 function scanPick(m){sel.clear();const taken=new Set();if(m!=="none")for(const r of scanRows)if(m==="all"||(good(r)&&!taken.has(dkey(r)))){sel.add(pk(r.path));taken.add(dkey(r))}renderScan({...S.scan,results:null})}
-async function scanAdd(){const inQ=new Set(S.jobs.map(j=>pk(j.path)));const paths=scanRows.filter(r=>sel.has(pk(r.path))&&!inQ.has(pk(r.path))).map(r=>r.path);
- if(!paths.length)return;toast(`Добавляю ${paths.length} файлов…`);const r=await api("/api/add",{paths});(r.errors||[]).slice(0,3).forEach(toast);
+async function scanAdd(){const inQ=new Set(S.jobs.filter(j=>!["done","skipped"].includes(j.status)).map(j=>pk(j.path)));const paths=scanRows.filter(r=>sel.has(pk(r.path))&&!inQ.has(pk(r.path))).map(r=>r.path);
+ if(!paths.length)return;toast(`Добавляю ${paths.length} файлов…`);const r=await api("/api/add",{paths});toasts(r.errors);
  await refresh();toast(`Добавлено в очередь: ${paths.length}. Можно жать «Тест» или «Сжать всё».`)}
 async function refresh(){
  const v=sver;
- try{const r=await fetch("/api/status?sv="+scanVer);const d=await r.json();
+ try{const r=await fetch("/api/status?sv="+scanVer,{headers:{"X-Token":T}});if(r.status===403){stale();return}const d=await r.json();
   if(pending||v!==sver)d.settings=S?S.settings:d.settings; // не откатываем только что выбранную настройку
   S=d;render();renderScan(d.scan);if(histOpen&&d.hist_ver!==histVer)loadHist()}
- catch(e){$("ver").textContent="сервер Жмыха не отвечает (закрыл окно консоли?)"}
+ catch(e){$("ver").textContent="программа не отвечает (закрыта?)"}
 }
-async function loop(){await refresh();setTimeout(loop,document.hidden?3000:1000)}
+async function loop(){await refresh();if(document.body.querySelector("#jobs"))setTimeout(loop,document.hidden?3000:1000)}
 loop();
 </script></body></html>
 """
@@ -2231,15 +2350,80 @@ class Server(ThreadingHTTPServer):
 
 
 def zhmyh_at(port):
-    """Отвечает ли на этом порту уже запущенный Жмых."""
+    """Отвечает ли на этом порту уже запущенный Framewring."""
     import urllib.request
     try:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        with opener.open("http://127.0.0.1:%d/" % port, timeout=2) as r:
-            page = r.read(4000).decode("utf-8", "replace")
-            return "Framewring" in page or "Жмых" in page
+        with opener.open("http://127.0.0.1:%d/api/ping" % port, timeout=2) as r:
+            return json.loads(r.read(200).decode("utf-8", "replace")).get("app") == "Framewring"
     except Exception:
         return False
+
+
+def ask_show(port):
+    """Второй запуск: просим уже работающий экземпляр показать себя (ключ доступа знает только он)."""
+    import urllib.request
+    try:
+        if IS_WIN:
+            ctypes.windll.user32.AllowSetForegroundWindow(-1)  # ASFW_ANY: разрешаем ему выйти на передний план
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        req = urllib.request.Request("http://127.0.0.1:%d/api/show" % port, data=b"{}", method="POST")
+        opener.open(req, timeout=3).read()
+        return True
+    except Exception:
+        return False
+
+
+APP_URL = {"url": None}
+
+
+def _own_windows():
+    """Видимые окна нашего процесса (окно программы pywebview)."""
+    found = []
+    if not IS_WIN:
+        return found
+    from ctypes import wintypes
+    u = ctypes.windll.user32
+    pid = os.getpid()
+    proto = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+
+    def cb(h, _):
+        p = wintypes.DWORD()
+        u.GetWindowThreadProcessId(h, ctypes.byref(p))
+        if p.value == pid and u.IsWindowVisible(h) and u.GetWindowTextLengthW(h):
+            found.append(h)
+        return True
+    u.EnumWindows(proto(cb), 0)
+    return found
+
+
+def show_self():
+    win = WINDOW["w"]
+    if win is not None:
+        try:
+            win.restore()
+        except Exception:
+            pass
+        for h in _own_windows():
+            try:
+                ctypes.windll.user32.ShowWindow(h, 9)  # SW_RESTORE
+                ctypes.windll.user32.SetForegroundWindow(h)
+            except Exception:
+                pass
+        return
+    if APP_URL["url"]:
+        webbrowser.open(APP_URL["url"])
+
+
+def quit_app():
+    time.sleep(0.3)
+    try:
+        save_queue()
+        p = CUR.get("proc")
+        if p:
+            p.terminate()
+    finally:
+        os._exit(0)
 
 
 def _win_msg(text, title, flags):
@@ -2250,20 +2434,16 @@ def _win_msg(text, title, flags):
         return 0
 
 
-def _focus_existing():
-    """Второй запуск: поднять уже открытое окно программы. True, если нашли."""
-    if not IS_WIN:
-        return False
-    try:
-        u = ctypes.windll.user32
-        h = u.FindWindowW(None, APP_NAME)
-        if not h:
-            return False
-        u.ShowWindow(h, 9)  # SW_RESTORE
-        u.SetForegroundWindow(h)
-        return True
-    except Exception:
-        return False
+_MUTEX = []
+
+
+def _hold_mutex():
+    """Именованный мьютекс: по нему установщик понимает, что программа запущена (AppMutex)."""
+    if IS_WIN:
+        try:
+            _MUTEX.append(ctypes.windll.kernel32.CreateMutexW(None, False, "FramewringRunning"))
+        except Exception:
+            pass
 
 
 def _setup_log():
@@ -2287,9 +2467,33 @@ def run_window(url):
         return False
     try:
         import webview
+        from webview.platforms import winforms as _wf
+        if not _wf._is_chromium():
+            _win_msg("Для окна программы нужен компонент Microsoft Edge WebView2 — его нет на этом компьютере.\n\n"
+                     "Framewring откроется в браузере. Чтобы было своё окно, установи WebView2 Runtime:\n"
+                     "https://developer.microsoft.com/microsoft-edge/webview2/\n\n"
+                     "Microsoft Edge WebView2 is missing, so Framewring will open in your browser.",
+                     APP_NAME, 0x40)
+            return False
     except Exception as e:
         print(" Своё окно недоступно (%s), открываю в браузере." % e)
         return False
+
+    def on_drop(e):  # перетащили файлы или папки в окно
+        try:
+            for f in e.get("dataTransfer", {}).get("files", []):
+                fp = f.get("pywebviewFullPath")
+                if fp:
+                    add_path(fp)
+        except Exception as ex:
+            print(" drop: %s" % ex)
+
+    def on_loaded():
+        try:
+            from webview.dom import DOMEventHandler
+            win.dom.document.events.drop += DOMEventHandler(on_drop, True, True)
+        except Exception as ex:
+            print(" drag&drop недоступен: %s" % ex)
 
     def on_closing():
         if any(j["status"] == "running" for j in JOBS):
@@ -2304,6 +2508,7 @@ def run_window(url):
         win = webview.create_window(APP_NAME, url, width=1180, height=860, min_size=(760, 560),
                                     background_color="#0f1115", text_select=True)
         win.events.closing += on_closing
+        win.events.loaded += on_loaded
         WINDOW["w"] = win
         webview.start(gui="edgechromium", private_mode=False,
                       storage_path=str(DATA_DIR / "webview"))
@@ -2324,9 +2529,9 @@ def main():
         except OSError:
             if zhmyh_at(port):
                 url = "http://127.0.0.1:%d/" % port
-                print("Жмых уже запущен: " + url + "  (открываю его, второй экземпляр не нужен)")
-                if "--no-browser" not in sys.argv and not _focus_existing():
-                    webbrowser.open(url)
+                print("Framewring уже запущен: " + url + "  (показываю его, второй экземпляр не нужен)")
+                if "--no-browser" not in sys.argv:
+                    ask_show(port)
                     time.sleep(2)
                 return
             continue
@@ -2338,9 +2543,11 @@ def main():
     if not srv:
         print("Не нашёл свободный порт 8765–8799")
         sys.exit(1)
-    url = "http://127.0.0.1:%d/" % srv.server_address[1]
+    url = "http://127.0.0.1:%d/?t=%s" % (srv.server_address[1], TOKEN)
+    APP_URL["url"] = url
+    _hold_mutex()
     print("=" * 60)
-    print(" %s v%s запущен: %s" % (APP_NAME, __version__, url))
+    print(" %s v%s запущен: %s" % (APP_NAME, __version__, url.split("?")[0]))
     print(" Данные (настройки, очередь, история): " + str(DATA_DIR))
     print(" FFmpeg: " + (FFMPEG or "НЕ НАЙДЕН"))
     if n:
