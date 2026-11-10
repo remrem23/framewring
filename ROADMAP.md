@@ -1,46 +1,62 @@
-# План
+**English** · [Русский](#русский)
 
-## Название
+# Roadmap
 
-- Русская версия — **Framewring Жмых**, английская — **Framewring** (*wring* — «отжимать»: «отжимаем кадры»).
-- Во вторник: заменить название в интерфейсе (заголовок, вкладка браузера, консоль), в README и в именах сборок (`Framewring.exe`).
-- Проверено 2026-11-08: программ и репозиториев с таким именем нет; `github.com/framewring` свободен;
-  у `framewring.com/.app/.io` нет DNS-записей. **Занять до релиза:** аккаунт/организацию на GitHub и домен.
-- Отклонены как занятые: Pomace, Reelpress, Framepress, всё с Squeeze, Oilcake.
+Ideas and requests are welcome in [Issues](https://github.com/remrem23/framewring/issues).
 
-## Вторник: подготовка к релизу
+## Done in 0.9.0
 
-1. ✅ **Версия и подготовка кода** (2026-11-10): `__version__`, название в интерфейсе, `CHANGELOG.md`, папка данных для установки/портабл.
-2. ✅ **Сборка в .exe** (2026-11-10): `packaging/build.py`, PyInstaller onedir, своё окно (WebView2, откат в браузер), значок, FFmpeg в сборке с GPL-лицензией и ссылками на исходники.
-   - Размер: 486 МБ без сжатия, из них ~454 МБ — FFmpeg full build (ffmpeg.exe + ffprobe.exe по 227 МБ). Сократить: shared-сборка FFmpeg (общие DLL на двоих) или essentials — проверить, что в ней есть libvmaf, SVT-AV1, x265, NVENC.
-3. ✅ **Две версии** (2026-11-10): `packaging/release.py` → установщик 126 МБ, портабл-zip 188 МБ, SHA256SUMS. Проверено: тихая установка, запуск, удаление (данные остаются), портабл пишет в `data\`.
-   - **Установщик** (Inno Setup): установка для текущего пользователя, ярлыки, удаление.
-     Данные (`settings/queue/history/probe_cache`) — в `%APPDATA%\Framewring`, потому что в `Program Files` писать нельзя.
-   - **Портабл** (zip): данные рядом с exe (признак — файл `portable.txt` рядом).
-4. **Everything необязателен.** Уже сейчас без него автоматически работает многопоточный обход папок.
-   Проверить на чистой машине без Everything; в интерфейсе понятно показать, каким способом идёт поиск, и дать ссылку на Everything как «ускоритель».
-5. ✅ **Защита реквизитов** (2026-11-10): адресов в программе нет — кнопка ведёт на [DONATE.md](DONATE.md) в официальном репозитории (менять может только владелец); в окне доната виден официальный адрес. Лицензия GPL v3. Подсказка про Everything после долгого поиска.
-   Было в плане:
-   - официальная ссылка (GitHub) в окне доната и в README;
-   - лицензия, запрещающая распространять изменённые версии с другими реквизитами;
-   - проверка целостности адресов в программе: при подмене — предупреждение «копия изменена, официальная версия: …»;
-   - exe вместо открытого текста.
-6. **Ko-fi:** кнопка «Задонатить картой» в окне доната (ссылка — когда будет страница).
-7. **GitHub** (репозиторий `remrem23/framewring` создан приватным 2026-11-10; открыть — при релизе): репозиторий, README со скриншотами, релиз с exe/zip и контрольными суммами SHA-256.
+- Windows installer and portable zip with FFmpeg bundled, own app window (WebView2).
+- **English interface** (RU | EN switch).
+- Everything is optional: without it the multi-threaded folder walk is used automatically.
 
-## После релиза (бэклог)
+## Planned
+
+- **AMD (AMF)** and **Intel (QSV)** GPU encoding — owners of those cards can only use the CPU for now.
+- **Auto quality:** pick the compression level for a target VMAF (like ab-av1).
+- Resume an interrupted file from where it stopped (it currently starts over).
+- Explicit HDR support.
+- Testing and builds for macOS / Linux.
+- Card payments on the support page (Ko-fi).
+- Smaller download (a leaner FFmpeg build).
+
+## Known limitations
+
+- Tested mainly on one machine (Windows 11, RTX 5070 Ti). Reports from other hardware are very welcome.
+- The savings estimate in the search assumes H.265 *Balanced*; the **Test** gives the exact forecast.
+- The search skips folders named `games` (so as not to touch installed games) — videos inside such folders are not found.
+- With the Windows page file disabled, memory errors are possible (the app retries and warns).
+- Picture subtitles (PGS) cannot be stored in MP4 and are dropped with a warning.
+- The app is not code-signed yet, so SmartScreen warns on first launch.
+
+---
+
+<a id="русский"></a>
+## Русский
+
+Идеи и пожелания — в [Issues](https://github.com/remrem23/framewring/issues).
+
+### Сделано в 0.9.0
+
+- Установщик и портабл-архив для Windows с FFmpeg внутри, своё окно программы (WebView2).
+- **Английский интерфейс** (переключатель RU | EN).
+- Everything необязателен: без него автоматически работает многопоточный обход папок.
+
+### В планах
 
 - Видеокарты **AMD (AMF)** и **Intel (QSV)** — сейчас их владельцам доступен только процессор.
 - **Авто-качество:** подбор уровня сжатия под целевой VMAF (как ab-av1).
 - Продолжение прерванного файла с места остановки (сейчас — с начала).
 - Явная поддержка HDR.
-- Тестирование macOS / Linux.
-- Английский интерфейс.
-- QR-коды кошельков (без внешних библиотек).
+- Тестирование и сборки для macOS / Linux.
+- Оплата картой на странице поддержки (Ko-fi).
+- Меньший размер загрузки (более компактная сборка FFmpeg).
 
-## Известные ограничения
+### Известные ограничения
 
-- Проверено фактически на одной машине (Windows 11, RTX 5070 Ti).
+- Проверено в основном на одной машине (Windows 11, RTX 5070 Ti). Отчёты с другого железа очень помогут.
 - Оценка экономии в поиске рассчитана на H.265 «Баланс»; точный прогноз даёт «Тест».
-- В поиске пропускаются папки с именем `games` (чтобы не трогать установленные игры) — записи в такой папке не найдутся.
+- В поиске пропускаются папки с именем `games` (чтобы не трогать установленные игры) — видео в такой папке не найдутся.
 - При выключенном файле подкачки возможны сбои памяти (программа повторяет и предупреждает).
+- Субтитры-картинки (PGS) в MP4 не помещаются и отбрасываются с предупреждением.
+- У программы пока нет цифровой подписи, поэтому SmartScreen предупреждает при первом запуске.

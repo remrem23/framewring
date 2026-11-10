@@ -1,15 +1,179 @@
-# Девлог Жмыха
+**English** · [Русский](#русский)
+
+# Framewring devlog
+
+A chronological record of the development: what was done, why, and what the measurements showed.
+Dates are YYYY-MM-DD. All measurements were taken on the author's machine:
+16-thread CPU, 31 GB RAM (page file disabled), RTX 5070 Ti,
+FFmpeg 8.1.1 (Gyan build), Windows 11, 3 NVMe SSDs + 4 HDDs.
+(The project was called *Жмых* — "oilcake", what's left after pressing — before it got its English name.)
+
+---
+
+## 2026-11-08 — the big pass: bugs, speed, search, usability
+
+### 1. Review of the original version and first fixes
+
+**AV1 crashing on 3440×1440.** By default SVT-AV1 reserves ~6.6 GB
+(measured: lp5 6.63 GB, lp4 5.28, lp3 3.91, lp2 2.93). The free commit limit was
+~6.8 GB, so the encoder sometimes worked and sometimes failed with `allocate memory failed`.
+Fix: the `lp` parallelism level is chosen from the free memory
+(`GlobalMemoryStatusEx`); on a memory error the encode is retried automatically with a lower `lp`.
+
+**VMAF was underestimated: ~75 instead of ~96.** The test piece is cut into MKV (timestamps
+rounded to 1 ms), the result is MP4 (exact 1/30 s). libvmaf matched frames by
+time, and every third frame was compared with its neighbour (per frame: 96, 94, **35**, 96, 94,
+**33**…). This pushed users towards unnecessarily high quality and bigger files.
+Fix: frames are matched by number (`setpts=N/(30*TB)`); on the same files VMAF became 95–98.
+
+**NVENC "Normal" was 2–3× slower than necessary.** Measured on 2560×1440:
+
+| Setting | Time | Size | VMAF |
+|---|---|---|---|
+| p7 + fullres | 7.7 s | 26,263 KB | 85.5 |
+| p6 + fullres (old "Normal") | 7.1 s | 26,285 KB | 85.6 |
+| **p5 + qres (new "Normal")** | **3.4 s** | 26,289 KB | 85.6 |
+| p4 + disabled | 3.1 s | 26,286 KB | 85.3 |
+
+On 3440×1440 this is ~58 → ~190 frames/s at the same size and quality.
+Hardware decoding gave no speed-up for CPU codecs (x265: 10.2 s without, 11.2 s with `-hwaccel cuda`), so it is not enabled.
+
+**Other fixes in this pass:**
+- ffmpeg kept running in the background after the console window was closed → Windows Job Object (`KILL_ON_JOB_CLOSE`), `PR_SET_PDEATHSIG` on Linux. Verified by hard-killing the process.
+- "Stop" did not stop a test during cutting and VMAF → all stages go through a shared cancellable launcher.
+- `clip.mkv` and `clip.mov` in one folder were both written to `clip.mp4` → names `clip_mkv.mp4` / `clip_mov.mp4`; same-named files in a common output folder → `(2)`.
+- Odd resolution (1921×1081) crashed the encoder → cropped to even.
+- `-map 0:v:0` could pick cover art instead of the video → `0:V:0`.
+- Garbage in `settings.json` crashed compression → values are validated.
+- The UI re-rendered the whole list every second: clicks got lost and the progress bar did not animate → targeted DOM updates. File names are escaped (XSS via a file name).
+- Files can be queued while compression is running; parallel ffprobe when adding a folder; parallel GPU check at startup.
+
+### 2. Finding heavy videos on the drives
+
+The "Find heavy videos" button: walk the drives, ffprobe the candidates, rough estimate of the size
+after compression, choose with checkboxes, add to the queue.
+- Skipped: system folders, installed games (their videos must not be touched), OneDrive "online-only" files (reading would download them), junctions.
+- Duplicates (same name and size in different places) are flagged; one copy of each group is ticked automatically. On the author's machine duplicates took **395 GB**.
+- Editing codecs (ProRes, DNxHD…) are not ticked automatically.
+- First pass over 7 drives: 435 videos totalling 1.43 TB, expected savings ~880 GB.
+
+**The port bug.** On Windows a second instance bound to the same port 8765 (`SO_REUSEADDR`
+in `HTTPServer`), and the browser reached one instance or the other at random. Fix:
+`SO_EXCLUSIVEADDRUSE`; launching again opens the instance that is already running.
+
+### 3. Second bug pass
+
+Confirmed with experiments on small clips, then fixed:
+- **Interlaced video** (`.mts` camcorders, TV) was compressed with combing → `bwdif` deinterlacing (50i → 50p); the same filter chain is applied to the original for VMAF (result 96.6).
+- **MKV subtitles were silently lost** → text subtitles are carried over as `mov_text`; picture subtitles (PGS) produce a warning.
+- **The finished file was open in a player** → it used to fail after hours of work; now the app waits and saves under another name.
+- **No free-space check** → checked before starting, with a "tight" warning.
+- **File date** → the compressed file gets the original's modification date.
+- "Skip already compressed" did not work when a file was re-added in the same session.
+- A disconnected network drive froze the drive list → 2 s timeout.
+
+**Faster search:**
+
+| Method | Time (7 drives, ~512k folders) |
+|---|---|
+| Original walk, sequential | ~176 s (cold cache ~3 min) |
+| Multi-threaded walk (8 threads SSD, 3 HDD) | 31 s (6 drives, warm cache) |
+| **Everything index via IPC** | **0.04 s per query**, ~5 s for the whole search |
+
+- Everything (voidtools) is queried through `WM_COPYDATA` (QUERY2), without a DLL or es.exe. If it is installed but closed (only the service runs), the app starts it in the tray for the search and closes it. The result matched the full walk: the same 435 files.
+- **Without Everything the multi-threaded walk is used automatically.** A "via Everything" checkbox turns the index off.
+- Drive type (SSD/HDD) is detected without admin rights (`IOCTL_STORAGE_QUERY_PROPERTY`, SeekPenalty).
+- Skipping dot-folders, Unreal caches and Python packages: on a drive with 421k folders a noticeable share were such caches (UE-Cache — 57k, .pnpm-store — 34k).
+- ffprobe cache on disk: a repeated search went from 27 s to 5 s.
+
+### 4. Usability and reliability
+
+- **Mode recommendation:** the GPU by default (Nvidia AV1 → Nvidia H.265 → Mac → CPU). Measured: NVENC AV1 ~205 frames/s vs ~30–35 for x265/SVT-AV1 on 3440×1440; the CPU usually gives a 10–20% smaller file. A choice the user saved is not overridden.
+- **"Finishing the file" stage.** After 100% ffmpeg rewrites the whole file for `+faststart` and stays silent (3.4 GB on an HDD — 17 s, 7 GB — about a minute). Progress is now computed from the process's written-bytes counter (`GetProcessIoCounters`), with percent, time and an animated bar.
+- **Incident:** after an hour of compressing a 76.6 GB → 7.3 GB file, renaming `.part.mp4` failed with `WinError 32` (the file was held by an antivirus or Explorer). The file was intact and was restored by hand. Fix: rename with waiting up to 10 minutes, then a fallback name, then "done, rename it yourself" — work is never lost again.
+- **Incident:** `Failed to transfer data to output frame: -12 / Cannot allocate memory` at minute 21. The file was fine (decoding the same spot again worked). Cause: the page file was disabled — commit limit = RAM (31 GB), 8 GB free while 18 GB of physical memory was free. Fix: up to 3 retries on memory errors (the third with CPU decoding) and a UI warning when the page file is off.
+- **The task list is saved** (`queue.json`, every 2 s): close the window and everything is there on the next launch. A "↻ Retry" button for errors and cancelled tasks.
+- **Compression history** (`history.json`): a separate log independent of the list. At the time of writing: 12 files, 129.8 → 36.7 GB, 93.1 GB freed.
+- "📂 Compressed" and "📂 Original" buttons on finished files and in the history.
+- A "♥ Support the author" button with USDT wallets (TRC-20, TON).
+
+### Name for the English version
+
+**Framewring** was chosen (*wring* — to squeeze out): a nod to *Жмых*, free in search results and on GitHub.
+The Russian version is called **Framewring Жмых**, the English one **Framewring**.
+
+### Summary of the day
+
+The project was prepared for publication: devlog, documentation, local git.
+
+---
+
+## 2026-11-10 — 11-11 — release build, review, English interface
+
+### 1. Version, name and data folder
+- Version **0.9.0**, the name in the interface, `CHANGELOG.md`.
+- The data folder depends on how the app runs: from source — next to `app.py` (as before);
+  portable (a `portable.txt` file next to the exe) — `data\`; installed — `%APPDATA%\Framewring`,
+  because a program cannot write into its own install folder.
+
+### 2. Windows exe and own window
+- `packaging/build.py`: PyInstaller onedir, icon, FFmpeg (Gyan full build) next to the exe together with its GPL license and source links.
+- **Own window** on the Edge engine (WebView2, via pywebview) instead of a console plus a browser tab. Closing during compression asks
+  "Stop and quit?". If WebView2 is missing, the app falls back to the browser and says so. Starting it again brings up the open window.
+- File dialogs now open inside the process: the exe cannot start a separate `python -c` the way the source version did.
+- Without a console, output goes to `framewring.log` in the data folder.
+- Size of the first build: 486 MB uncompressed, of which ~454 MB is FFmpeg full build (ffmpeg.exe and ffprobe.exe, 227 MB each).
+  A shared or "essentials" FFmpeg build could shrink it — only if it still has libvmaf, SVT-AV1, x265 and NVENC.
+
+### 3. Installer and portable
+- `packaging/framewring.iss` (Inno Setup): installs for the current user without admin rights into `%LOCALAPPDATA%\Programs\Framewring`,
+  Start menu shortcut, optional desktop shortcut, uninstall via *Apps*; settings and history are kept on uninstall.
+- `packaging/release.py` builds the installer (126 MB), the portable zip (188 MB) and `SHA256SUMS.txt`.
+  Verified: silent install, launch, uninstall (data stays), portable writes to `data\`.
+
+### 4. Donations via GitHub, Everything hint
+- There are no wallet addresses in the program any more. "♥ Support the author" opens a window with a link to
+  [DONATE.md](DONATE.md) in the official repository, which only the owner can change, and shows the official address
+  of the program. A modified copy cannot quietly swap the addresses. The interface may open only three URLs:
+  the repository, the support page and voidtools.com.
+- After a long search (> 20 s) without Everything an unobtrusive hint suggests installing it; it can be hidden.
+- License: GNU GPL v3.
+
+### 5. Multi-agent review and fixes
+Before the release the code was reviewed by several independent automated reviewers; the findings were checked and fixed:
+- **Never overwrite originals or unrelated files.** A result written into the source folder gets a `_compressed` suffix; "same folder" is detected
+  with `samefile` (works through junctions and different path spellings); which outputs belong to Framewring is remembered
+  across sessions via the history; name collisions are checked case-insensitively.
+- **Variable frame rate.** VFR MKV recordings were losing frames — now `-fps_mode passthrough`; the test VMAF for VFR video is fixed too.
+- **Interface token.** Other local processes could read the token; now the UI is served at a tokenized URL, `/api/status` requires the token,
+  and anti-framing headers are sent.
+- If WebView2 is missing, the browser fallback comes with a notice.
+- **Stop** asks for confirmation; layout fixes for small windows.
+- The installer closes a running copy and removes stale files when upgrading.
+- The build moved to Python 3.12; the exe got version information; third-party license texts are shipped in a `licenses` folder
+  (see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)).
+
+### 6. English interface
+- The whole interface is available in English and Russian; an **RU | EN** switch in the header, by default following the Windows language.
+  English window title: **Framewring**; Russian: **Framewring Жмых**.
+- **Drag & drop:** files and folders can be dropped onto the window.
+- All public documents are now in English first, with the full Russian text below.
+
+---
+
+<a id="русский"></a>
+## Русский
+
+**Девлог Framewring Жмых**
 
 Хронология разработки: что сделано, почему и что показали замеры.
 Даты в формате ГГГГ-ММ-ДД. Все замеры сделаны на машине автора:
 CPU на 16 потоков, 31 ГБ ОЗУ (файл подкачки выключен), RTX 5070 Ti,
 FFmpeg 8.1.1 (сборка Gyan), Windows 11, 3 NVMe SSD + 4 HDD.
 
----
+### 2026-11-08 — большой проход: баги, скорость, поиск, удобство
 
-## 2026-11-08 — большой проход: баги, скорость, поиск, удобство
-
-### 1. Ревью исходной версии и первые исправления
+#### 1. Ревью исходной версии и первые исправления
 
 **Падение AV1 на 3440×1440.** SVT-AV1 по умолчанию резервирует ~6,6 ГБ
 (замер: lp5 6,63 ГБ, lp4 5,28, lp3 3,91, lp2 2,93). Свободного commit-лимита было
@@ -45,7 +209,7 @@ FFmpeg 8.1.1 (сборка Gyan), Windows 11, 3 NVMe SSD + 4 HDD.
 - Интерфейс перерисовывал весь список каждую секунду: клики терялись, полоса прогресса не анимировалась → точечное обновление DOM. Экранирование имён файлов (XSS через имя файла).
 - Файлы можно ставить в очередь во время сжатия; параллельный ffprobe при добавлении папки; параллельная проверка видеокарты при старте.
 
-### 2. Поиск тяжёлых видео на дисках
+#### 2. Поиск тяжёлых видео на дисках
 
 Кнопка «Найти тяжёлые видео»: обход дисков, ffprobe кандидатов, грубая оценка размера
 после сжатия, выбор галочками, добавление в очередь.
@@ -56,9 +220,9 @@ FFmpeg 8.1.1 (сборка Gyan), Windows 11, 3 NVMe SSD + 4 HDD.
 
 **Баг с портом.** На Windows второй экземпляр садился на тот же порт 8765 (`SO_REUSEADDR`
 у `HTTPServer`), и браузер попадал то в один экземпляр, то в другой. Решение:
-`SO_EXCLUSIVEADDRUSE`; повторный запуск открывает уже работающий Жмых.
+`SO_EXCLUSIVEADDRUSE`; повторный запуск открывает уже работающую программу.
 
-### 3. Второй проход по багам
+#### 3. Второй проход по багам
 
 Подтверждено экспериментами на маленьких клипах, затем исправлено:
 - **Черезстрочное видео** (камеры `.mts`, ТВ) жалось с «гребёнкой» → деинтерлейс `bwdif` (50i → 50p), та же цепочка фильтров применяется к оригиналу при VMAF (результат 96,6).
@@ -77,13 +241,13 @@ FFmpeg 8.1.1 (сборка Gyan), Windows 11, 3 NVMe SSD + 4 HDD.
 | Многопоточный обход (8 потоков SSD, 3 HDD) | 31 с (6 дисков, тёплый кэш) |
 | **Индекс Everything через IPC** | **0,04 с запрос**, ~5 с весь поиск |
 
-- Everything (voidtools) опрашивается через `WM_COPYDATA` (QUERY2), без DLL и es.exe. Если установлен, но закрыт (работает только служба), Жмых запускает его в трей на время поиска и закрывает. Результат совпал с полным обходом: те же 435 файлов.
+- Everything (voidtools) опрашивается через `WM_COPYDATA` (QUERY2), без DLL и es.exe. Если установлен, но закрыт (работает только служба), программа запускает его в трей на время поиска и закрывает. Результат совпал с полным обходом: те же 435 файлов.
 - **Если Everything нет — автоматически используется многопоточный обход.** Галочка «через Everything» позволяет отключить индекс.
 - Тип диска (SSD/HDD) определяется без прав администратора (`IOCTL_STORAGE_QUERY_PROPERTY`, SeekPenalty).
 - Пропуск папок с точкой, кэшей Unreal, Python-пакетов: на диске с 421 тыс. папок заметная часть приходилась на такие кэши (UE-Cache — 57 тыс., .pnpm-store — 34 тыс.).
 - Кэш ffprobe на диске: повторный поиск 27 с → 5 с.
 
-### 4. Удобство и надёжность
+#### 4. Удобство и надёжность
 
 - **Рекомендация режима:** видеокарта по умолчанию (Nvidia AV1 → Nvidia H.265 → Mac → процессор). Замер: NVENC AV1 ~205 кадров/с против ~30–35 у x265/SVT-AV1 на 3440×1440; процессор даёт файл обычно на 10–20% меньше. Сохранённый выбор пользователя не перебивается.
 - **Этап «Дописываю файл».** После 100% ffmpeg переписывает весь файл ради `+faststart` и молчит (3,4 ГБ на HDD — 17 с, 7 ГБ — около минуты). Теперь прогресс считается по счётчику записанных процессом байт (`GetProcessIoCounters`), с процентами, временем и анимированной полосой.
@@ -94,12 +258,62 @@ FFmpeg 8.1.1 (сборка Gyan), Windows 11, 3 NVMe SSD + 4 HDD.
 - Кнопки «📂 Сжатый» и «📂 Оригинал» у готовых файлов и в истории.
 - Кнопка «♥ Поддержать автора» с кошельками USDT (TRC-20, TON).
 
-### Название для английской версии
+#### Название для английской версии
 
 Выбрано **Framewring** (*wring* — «отжимать»): отсылка к «жмыху», свободно по поиску и на GitHub.
 Русская версия называется **Framewring Жмых**, английская — **Framewring**.
-Подробности и отклонённые варианты — в [ROADMAP.md](ROADMAP.md).
 
-### Итог дня
+#### Итог дня
 
-Проект подготовлен к публикации: девлог, документация, локальный git. Дальнейший план — в [ROADMAP.md](ROADMAP.md).
+Проект подготовлен к публикации: девлог, документация, локальный git.
+
+### 2026-11-10 — 11-11 — релизная сборка, ревью, английский интерфейс
+
+#### 1. Версия, название и папка данных
+- Версия **0.9.0**, название в интерфейсе, `CHANGELOG.md`.
+- Папка данных зависит от способа запуска: из исходников — рядом с `app.py` (как раньше);
+  портабл (рядом с exe лежит `portable.txt`) — `data\`; установленная — `%APPDATA%\Framewring`,
+  потому что в папку установки программа писать не может.
+
+#### 2. Exe и своё окно
+- `packaging/build.py`: PyInstaller onedir, значок, FFmpeg (сборка Gyan full) рядом с exe вместе с лицензией GPL и ссылками на исходники.
+- **Своё окно** на движке Edge (WebView2, через pywebview) вместо консоли и вкладки браузера. При закрытии во время сжатия —
+  вопрос «Остановить и выйти?». Если WebView2 нет, программа открывается в браузере и сообщает об этом. Повторный запуск поднимает открытое окно.
+- Окна выбора файлов открываются внутри процесса: из exe нельзя запустить отдельный `python -c`, как делала версия из исходников.
+- Без консоли вывод пишется в `framewring.log` в папке данных.
+- Размер первой сборки: 486 МБ без сжатия, из них ~454 МБ — FFmpeg full build (ffmpeg.exe и ffprobe.exe по 227 МБ).
+  Сократить можно shared- или essentials-сборкой FFmpeg — только если в ней есть libvmaf, SVT-AV1, x265 и NVENC.
+
+#### 3. Установщик и портабл
+- `packaging/framewring.iss` (Inno Setup): установка для текущего пользователя без прав администратора в `%LOCALAPPDATA%\Programs\Framewring`,
+  ярлык в «Пуске», по желанию на рабочем столе, удаление через «Приложения»; настройки и история при удалении сохраняются.
+- `packaging/release.py` собирает установщик (126 МБ), портабл-zip (188 МБ) и `SHA256SUMS.txt`.
+  Проверено: тихая установка, запуск, удаление (данные остаются), портабл пишет в `data\`.
+
+#### 4. Донат через GitHub, подсказка про Everything
+- Адресов кошельков в программе больше нет. «♥ Поддержать автора» открывает окно со ссылкой на
+  [DONATE.md](DONATE.md#русский) в официальном репозитории (менять его может только владелец) и показывает официальный адрес программы.
+  Изменённая копия не может незаметно подменить реквизиты. Интерфейс может открыть только три адреса:
+  репозиторий, страницу поддержки и voidtools.com.
+- После долгого поиска (> 20 с) без Everything — ненавязчивая подсказка установить его; её можно скрыть.
+- Лицензия: GNU GPL v3.
+
+#### 5. Ревью несколькими агентами и исправления
+Перед релизом код проверили несколько независимых автоматических ревьюеров; находки проверены и исправлены:
+- **Никогда не перезаписывать оригинал или чужой файл.** Результат в папке оригинала получает суффикс `_compressed`; «та же папка»
+  определяется через `samefile` (работает и через junction-ссылки, и при разном написании пути); какие файлы созданы Framewring,
+  запоминается между сеансами по истории; совпадение имён проверяется без учёта регистра.
+- **Переменная частота кадров.** VFR-записи в MKV теряли кадры — теперь `-fps_mode passthrough`; VMAF теста для таких видео тоже исправлен.
+- **Токен интерфейса.** Другие локальные процессы могли его прочитать; теперь интерфейс открывается по адресу с токеном,
+  `/api/status` требует токен, добавлены заголовки против встраивания в чужие страницы.
+- Если нет WebView2 — переход в браузер с объяснением.
+- **«Стоп»** спрашивает подтверждение; вёрстка исправлена для маленьких окон.
+- Установщик при обновлении закрывает запущенную программу и удаляет устаревшие файлы.
+- Сборка переведена на Python 3.12; у exe появились сведения о версии; тексты лицензий сторонних компонентов лежат в папке `licenses`
+  (см. [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md#русский)).
+
+#### 6. Английский интерфейс
+- Весь интерфейс доступен на английском и русском; переключатель **RU | EN** в шапке, по умолчанию — язык Windows.
+  Заголовок окна по-английски — **Framewring**, по-русски — **Framewring Жмых**.
+- **Перетаскивание:** файлы и папки можно бросить прямо в окно.
+- Все публичные документы теперь сначала на английском, ниже — полный русский текст.

@@ -1,0 +1,26 @@
+name: Feature request / Пожелание
+description: An idea or improvement. / Идея или улучшение.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check ROADMAP.md first — it may already be planned. English or Russian is fine.
+        Сначала загляни в ROADMAP.md — возможно, это уже в планах. Можно писать по-русски или по-английски.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would it solve? / Какую задачу это решит?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How should it work? / Как это должно работать?
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Your GPU, if relevant / Видеокарта, если это важно
+      placeholder: "AMD RX 7800 XT / Intel Arc A770 / …"

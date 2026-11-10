@@ -10,9 +10,9 @@
 
 [Setup]
 AppId={{8F3C2A61-5D7E-4B9A-9C1E-6A2F0D4B7E35}
-AppName=Framewring Жмых
+AppName={cm:AppTitle}
 AppVersion={#AppVer}
-AppVerName=Framewring Жмых {#AppVer}
+AppVerName={cm:AppTitle} {#AppVer}
 AppPublisher=Framewring
 AppPublisherURL=https://github.com/remrem23/framewring
 AppSupportURL=https://github.com/remrem23/framewring
@@ -28,12 +28,13 @@ OutputDir=..\build\release
 OutputBaseFilename=Framewring-{#AppVer}-setup
 SetupIconFile=framewring.ico
 UninstallDisplayIcon={app}\Framewring.exe
-UninstallDisplayName=Framewring Жмых
+UninstallDisplayName={cm:AppTitle}
 Compression=lzma2/ultra64
 SolidCompression=yes
 LZMANumBlockThreads=2
 LZMAUseSeparateProcess=yes
 WizardStyle=modern
+AppMutex=FramewringRunning
 CloseApplications=yes
 RestartApplications=no
 
@@ -41,18 +42,26 @@ RestartApplications=no
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "en"; MessagesFile: "compiler:Default.isl"
 
+[CustomMessages]
+ru.AppTitle=Framewring Жмых
+en.AppTitle=Framewring
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+
+[InstallDelete]
+; при обновлении убираем старые библиотеки, чтобы не смешались с новыми
+Type: filesandordirs; Name: "{app}\_internal"
 
 [Files]
 Source: "{#Src}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Framewring Жмых"; Filename: "{app}\Framewring.exe"
-Name: "{autodesktop}\Framewring Жмых"; Filename: "{app}\Framewring.exe"; Tasks: desktopicon
+Name: "{autoprograms}\{cm:AppTitle}"; Filename: "{app}\Framewring.exe"
+Name: "{autodesktop}\{cm:AppTitle}"; Filename: "{app}\Framewring.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\Framewring.exe"; Description: "{cm:LaunchProgram,Framewring Жмых}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Framewring.exe"; Description: "{cm:LaunchProgram,{cm:AppTitle}}"; Flags: nowait postinstall skipifsilent
 
 ; Настройки, очередь и история (%APPDATA%\Framewring) при удалении не трогаем:
 ; переустановка не должна терять историю сжатия.

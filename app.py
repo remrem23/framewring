@@ -23,8 +23,10 @@ from ctypes import wintypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import i18n
+
 __version__ = "0.9.0"
-APP_NAME = "Framewring Жмых"
+APP_NAMES = i18n.APP_NAMES  # заголовок окна: «Framewring Жмых» / «Framewring»
 REPO_URL = "https://github.com/remrem23/framewring"  # официальная страница программы
 DONATE_URL = REPO_URL + "/blob/main/DONATE.md"
 EVERYTHING_URL = "https://www.voidtools.com/"
@@ -234,18 +236,58 @@ def svt_lp_for(info):
     return 1
 
 
-# Пресеты: код -> (название, описание)
-PRESETS = {
-    "nvenc_av1": ("Видеокарта Nvidia · AV1", "RTX 40xx/50xx. В 5–7 раз быстрее процессора и компактнее, чем H.265. "
-                                             "Лучший выбор для больших архивов. Играется на ПК, новых телефонах и ТВ."),
-    "nvenc_hevc": ("Видеокарта Nvidia · H.265", "Быстро, и открывается почти везде: старые телефоны, ТВ, iPhone. "
-                                                "Файл немного больше, чем у AV1."),
-    "vt_hevc": ("Видеокарта Mac · H.265", "Аппаратный энкодер Mac (VideoToolbox). Быстро, файл больше, "
-                                          "чем на процессоре."),
-    "x265": ("Процессор · H.265", "Файл обычно на 10–20% меньше, чем у видеокарты, но в разы медленнее. "
-                                  "Если видеокарты нет или важен каждый гигабайт."),
-    "av1": ("Процессор · AV1", "Самый маленький файл, но самый медленный режим. Открывается не везде."),
-}
+# ---------------------------------------------------------------- Тексты ----
+# Всё, что видит пользователь, бэкенд отдаёт ключом с параметрами: {"k": ключ, "p": {...}}.
+# Переводит страница (словарь из i18n.py), поэтому заметки и ошибки в queue.json не привязаны
+# к языку и после переключения языка показываются на новом. Сырые тексты ffmpeg/ОС — обычные строки.
+
+def M(key, **p):
+    return {"k": key, "p": p}
+
+
+class UserError(RuntimeError):
+    """Ошибка для пользователя: ключ перевода + параметры."""
+
+    def __init__(self, key, **p):
+        super().__init__(key)
+        self.k, self.p = key, p
+
+    def msg(self):
+        return M(self.k, **self.p)
+
+    def __str__(self):
+        return i18n.t(cur_lang(), self.k, **self.p)
+
+
+def err_msg(e):
+    """Исключение -> то, что кладём в job["error"]."""
+    return e.msg() if isinstance(e, UserError) else str(e)
+
+
+def add_note(job, m):
+    """Добавить заметку к задаче (их может быть несколько)."""
+    cur = job.get("note")
+    job["note"] = m if not cur else (cur if isinstance(cur, list) else [cur]) + [m]
+
+
+SYS_LANG = i18n.sys_lang()
+
+
+def cur_lang():
+    return SETTINGS.get("lang") or SYS_LANG
+
+
+def tr(key, **p):
+    """Перевод на текущий язык: для системных окон и консоли."""
+    return i18n.t(cur_lang(), key, **p)
+
+
+def app_name():
+    return APP_NAMES.get(cur_lang(), APP_NAMES["en"])
+
+
+# Пресеты (порядок показа). Названия и описания: i18n.py, ключи preset.<код>.title/.desc
+PRESETS = ("nvenc_av1", "nvenc_hevc", "vt_hevc", "x265", "av1")
 # Что рекомендовать: видеокарта, если есть. Процессор жмёт чуть плотнее, но на порядок дольше.
 RECOMMEND = ("nvenc_av1", "nvenc_hevc", "vt_hevc", "x265", "av1")
 
@@ -266,7 +308,6 @@ SPEED = {
     "nvenc_av1": {"slow": ("p7", "fullres"), "normal": ("p5", "qres"), "fast": ("p4", "disabled")},
     "vt_hevc": {"slow": None, "normal": None, "fast": None},
 }
-QUALITY_NAMES = {"high": "максимальное", "balanced": "сбалансированное", "compact": "компактное"}
 MEM_ERR = re.compile(r"allocate memory|insufficient resources|cannot allocate memory|out of memory", re.I)
 
 
@@ -312,7 +353,7 @@ def detect_caps():
 
     def check(p, name):
         if not re.search(r"\b%s\b" % name, enc):
-            return {"ok": False, "why": "нет в твоей сборке FFmpeg"}
+            return {"ok": False, "why": M("caps.no_encoder")}
         if p in ("x265", "av1"):
             return {"ok": True, "why": ""}
         # Проверяем, что железо реально умеет, теми же флагами
@@ -321,9 +362,9 @@ def detect_caps():
                            "color=black:s=1280x720:r=60:d=0.5"] + video_args(p, "balanced", "normal")
                           + ["-f", "null", "-"], timeout=30)
             ok = r.returncode == 0
-            return {"ok": ok, "why": "" if ok else "видеокарта или драйвер не поддерживают"}
+            return {"ok": ok, "why": "" if ok else M("caps.hw_unsupported")}
         except Exception:
-            return {"ok": False, "why": "проверка не прошла"}
+            return {"ok": False, "why": M("caps.check_failed")}
 
     # аппаратные проверки параллельно: запуск быстрее
     from concurrent.futures import ThreadPoolExecutor
@@ -341,7 +382,10 @@ def detect_caps():
 def probe(path):
     r = run_quiet([FFPROBE, "-v", "error", "-print_format", "json", "-show_format", "-show_streams", path])
     if r.returncode != 0:
-        raise RuntimeError(r.stderr.strip()[-400:] or "ffprobe не смог прочитать файл")
+        tail = r.stderr.strip()[-400:]
+        if tail:
+            raise RuntimeError(tail)
+        raise UserError("err.probe_failed")
     d = json.loads(r.stdout)
     fmt = d.get("format", {})
     info = {"duration": float(fmt.get("duration") or 0), "bitrate": int(fmt.get("bit_rate") or 0),
@@ -367,7 +411,7 @@ def probe(path):
             info["audio"].append({"codec": s.get("codec_name", ""), "channels": s.get("channels", 0),
                                   "rate": int(s.get("sample_rate") or 0), "bitrate": int(s.get("bit_rate") or 0)})
     if not info["vcodec"]:
-        raise RuntimeError("в файле нет видеодорожки")
+        raise UserError("err.no_video")
     return info
 
 
@@ -378,7 +422,8 @@ JOBS = []
 WAKE = threading.Event()
 CUR = {"proc": None, "cancel": False}
 DEFAULT_SETTINGS = {"preset": "x265", "quality": "balanced", "speed": "normal", "audio": "auto",
-                    "outdir": "", "lowprio": True, "nosleep": True, "skip": True, "testlen": 120}
+                    "outdir": "", "lowprio": True, "nosleep": True, "skip": True, "testlen": 120,
+                    "lang": ""}  # lang: "" = как в системе, иначе "ru" / "en"
 
 
 def load_settings():
@@ -408,7 +453,9 @@ def clean_settings(b):
     for k, v in b.items():
         if k not in DEFAULT_SETTINGS:
             continue
-        if k in ("preset", "quality", "speed", "audio", "outdir") and not isinstance(v, str):
+        if k in ("preset", "quality", "speed", "audio", "outdir", "lang") and not isinstance(v, str):
+            continue
+        if k == "lang" and v not in ("",) + i18n.LANGS:
             continue
         if k == "preset" and v not in PRESETS:
             continue
@@ -461,7 +508,7 @@ def add_path(p):
     elif path.is_file():
         files = [path]
     else:
-        return [{"error": "Не найдено: %s" % p}]
+        return [{"error": M("err.not_found_path", path=p)}]
     new = []
     with LOCK:
         busy = {_norm(j["path"]) for j in JOBS if j["status"] not in ("done", "skipped")}
@@ -491,7 +538,7 @@ def add_path(p):
                     job["status"] = "ready"
         except Exception as e:
             with LOCK:
-                job["status"], job["error"] = "error", str(e)
+                job["status"], job["error"] = "error", err_msg(e)
 
     jobs = [j for j in new if "id" in j]
     if jobs:  # ffprobe параллельно: папка на 100 файлов добавляется за секунды, а не за минуту
@@ -591,7 +638,7 @@ FILE_ATTR_CLOUD = 0x400000 | 0x40000 | 0x1000  # OneDrive «только в об
 EFFICIENT = {"hevc", "av1", "vp9", "vvc"}
 
 SCAN = {"running": False, "cancel": False, "phase": "", "dirs": 0, "cur": "", "candidates": 0, "probed": 0,
-        "results": [], "ver": 0, "error": "", "finished": False, "skipped_cloud": 0, "method": "", "t0": 0,
+        "results": [], "ver": 0, "error": "", "finished": False, "skipped_cloud": 0, "method": [], "t0": 0,
         "took": 0, "ev_missing": False}
 PROBE_CACHE = {}
 
@@ -651,7 +698,7 @@ def list_drives():
                 du = shutil.disk_usage(c)
             except OSError:
                 continue
-            out.append({"path": c, "label": "Домашняя папка" if c == str(Path.home()) else os.path.basename(c),
+            out.append({"path": c, "label": M("drive.home") if c == str(Path.home()) else os.path.basename(c),
                         "total": du.total, "free": du.free, "net": False, "removable": False})
     return out
 
@@ -870,7 +917,7 @@ def everything_search(min_bytes):
             exe = ev_exe()
             if not exe:
                 return None
-            SCAN["phase"] = "Открываю индекс Everything"
+            SCAN["phase"] = "ev_open"
             subprocess.Popen([exe, "-startup"], creationflags=NO_WINDOW)
             started = exe
         q = "file: ext:%s size:>=%d" % (";".join(sorted(e.lstrip(".") for e in VIDEO_EXT)), min_bytes)
@@ -1075,7 +1122,7 @@ def scan_thread(roots, min_bytes, use_ev=True):
                     SCAN["ev_missing"] = IS_WIN  # Everything нет или он не отвечает
                     walk_roots += ev_roots
                 else:
-                    SCAN["method"] = "индекс Everything"
+                    SCAN["method"] = ["everything"]
                     pref = [_norm(r).rstrip("\\/") + os.sep for r in ev_roots]
                     for path, size, attrs in items:
                         k = _norm(path)
@@ -1091,15 +1138,15 @@ def scan_thread(roots, min_bytes, use_ev=True):
                             SCAN["candidates"] += 1
                         submit((path, size))
             if walk_roots:
-                SCAN["phase"] = "Ищу большие видео"
-                SCAN["method"] = (SCAN["method"] + " + " if SCAN["method"] else "") + "обход папок"
+                SCAN["phase"] = "walk"
+                SCAN["method"] = SCAN["method"] + ["walk"]
             walkers = [threading.Thread(target=_scan_walk, daemon=True, args=(r, min_bytes, seen, submit))
                        for r in walk_roots]
             for t in walkers:
                 t.start()
             for t in walkers:
                 t.join()
-            SCAN["phase"] = "Читаю параметры видео"
+            SCAN["phase"] = "probe"
     except Exception as e:
         SCAN["error"] = "%s: %s" % (type(e).__name__, e)
     finally:
@@ -1117,18 +1164,18 @@ def start_scan(roots, min_mb, use_ev=True):
     roots = [r for i, (k, r) in enumerate(nr)
              if not any(k != pk and k.startswith(pk.rstrip("\\/") + os.sep) for pk, _ in nr[:i])]
     if not roots:
-        raise RuntimeError("Выбери хотя бы один диск или существующую папку")
+        raise UserError("err.scan_no_roots")
     if not FFPROBE:
-        raise RuntimeError("FFmpeg не найден")
+        raise UserError("err.no_ffmpeg")
     try:
         min_bytes = max(50, int(float(min_mb))) * 10 ** 6
     except (TypeError, ValueError):
         min_bytes = 500 * 10 ** 6
     with LOCK:
         if SCAN["running"]:
-            raise RuntimeError("Поиск уже идёт")
-        SCAN.update(running=True, cancel=False, phase="Ищу большие видео", dirs=0, cur="", candidates=0,
-                    probed=0, results=[], error="", finished=False, skipped_cloud=0, method="", t0=time.time(),
+            raise UserError("err.scan_running")
+        SCAN.update(running=True, cancel=False, phase="walk", dirs=0, cur="", candidates=0,
+                    probed=0, results=[], error="", finished=False, skipped_cloud=0, method=[], t0=time.time(),
                     ev_missing=False)
         SCAN["ver"] += 1
     threading.Thread(target=scan_thread, args=(roots, min_bytes, bool(use_ev)), daemon=True).start()
@@ -1201,7 +1248,7 @@ def _finish_watch(p, job, base_phase, last):
                 fin["eta"] = max(0.0, (size - done) / rate)
         with LOCK:
             job["fin"] = fin
-            job["phase"] = "Дописываю файл"
+            job["phase"] = M("phase.finish")
 
 
 def run_ffmpeg(args, job, total, phase, s):
@@ -1277,7 +1324,7 @@ def run_ffmpeg(args, job, total, phase, s):
             # убираем болтовню SVT-AV1 и прочий шум, оставляем суть
             lines = [l for l in tail.splitlines() if l.strip() and not l.startswith("Svt[info]")]
             err = "\n".join(lines)[-1500:]
-            return False, err or ("ffmpeg завершился с кодом %s" % p.returncode), tail
+            return False, err or M("err.ffmpeg_code", code=str(p.returncode)), tail
         return True, "", tail
     finally:
         log.close()
@@ -1313,8 +1360,7 @@ def encode(job, s, src, dst, total, phase, extra, subs=False):
     lp = svt_lp_for(info) if s["preset"] == "av1" else None
     if lp:
         with LOCK:
-            job["note"] = ("Мало свободной памяти для AV1: параллельность снижена до lp=%d (чуть медленнее). "
-                           "Поможет закрыть лишние программы или увеличить файл подкачки." % lp)
+            job["note"] = M("note.av1_lp_low", lp=lp)
     pre = ["-hwaccel", "cuda"] if s["preset"].startswith("nvenc") else []
     mem_tries = 0
     while True:
@@ -1327,30 +1373,26 @@ def encode(job, s, src, dst, total, phase, extra, subs=False):
         t0 = time.time()
         ok, err, _ = run_ffmpeg(args, job, total, phase, s)
         took = time.time() - t0
-        if ok or err == "cancel" or not MEM_ERR.search(err):
+        if ok or err == "cancel" or not isinstance(err, str) or not MEM_ERR.search(err):
             return ok, err, took
         if s["preset"] != "av1":
             # «Cannot allocate memory» посреди сжатия: Windows не дала памяти (часто при выключенном файле
             # подкачки). Это разовый сбой: повторяем, со второго раза без декодирования на видеокарте.
             mem_tries += 1
             if mem_tries > 2:
-                return False, ("Трижды не хватило оперативной памяти. Закрой лишние программы и включи файл "
-                               "подкачки (см. предупреждение вверху).\n\n" + err), took
+                return False, M("err.mem3", detail=err), took
             if mem_tries == 2:
                 pre = []
             with LOCK:
-                job["note"] = ("Сбой: Windows не выделила память (попытка %d из 3). Перезапустил сжатие этого "
-                               "файла%s." % (mem_tries + 1, ", декодирую на процессоре" if not pre else ""))
+                job["note"] = M("note.mem_retry" if pre else "note.mem_retry_cpu", n=mem_tries + 1)
             time.sleep(5)
             continue
         cur = lp or 5
         if cur <= 1:
-            return False, ("Не хватает оперативной памяти для AV1 на %dx%d. Закрой лишние программы, увеличь "
-                           "файл подкачки или выбери H.265.\n\n%s" % (info["width"], info["height"], err)), took
+            return False, M("err.av1_mem", res="%dx%d" % (info["width"], info["height"]), detail=err), took
         lp = cur - 1
         with LOCK:
-            job["note"] = ("Не хватило памяти для AV1: перезапустил с параллельностью lp=%d (медленнее). "
-                           "Поможет закрыть лишние программы или увеличить файл подкачки." % lp)
+            job["note"] = M("note.av1_lp_retry", lp=lp)
 
 
 def _rm(p):
@@ -1382,16 +1424,14 @@ def finalize(part, out, job):
             os.replace(str(part), str(target))
             if alt:
                 with LOCK:
-                    job["note"] = ("«%s» занят другой программой (открыт в плеере?), сохранил как «%s»."
-                                   % (out.name, alt.name))
+                    add_note(job, M("note.saved_as", out=out.name, alt=alt.name))
             return target
         except OSError as e:
             if not isinstance(e, PermissionError) and getattr(e, "winerror", None) not in (5, 32, 33):
                 raise
         waited = time.time() - t0
         with LOCK:
-            job["phase"] = ("Сохраняю файл: его сейчас держит другая программа (обычно антивирус проверяет "
-                            "свежий файл или открыт плеер), жду… %d с" % waited)
+            job["phase"] = M("phase.save_wait", secs=int(waited))
         if waited > 60 and alt is None:
             n = 2
             while True:  # возможно, занят именно старый результат: пробуем другое имя
@@ -1401,8 +1441,7 @@ def finalize(part, out, job):
                 n += 1
         if waited > 600:  # 10 минут: сдаёмся, но работу не теряем
             with LOCK:
-                job["note"] = ("Сжатие готово, но файл так и не удалось переименовать (занят другой программой). "
-                               "Готовый результат: «%s» — переименуй его сам, убрав «.part»." % part.name)
+                add_note(job, M("note.rename_failed", name=part.name))
             return part
         time.sleep(2)
 
@@ -1411,7 +1450,7 @@ def do_full(job, s):
     out = out_path_for(job, s)
     if _same_file(out, job["path"]):  # не должно случиться, но оригинал дороже всего
         with LOCK:
-            job["status"], job["error"] = "error", "Отказ: результат совпал бы с оригиналом. Выбери другую папку."
+            job["status"], job["error"] = "error", M("err.same_as_src")
         return
     out.parent.mkdir(parents=True, exist_ok=True)
     if s.get("skip") and out.exists():
@@ -1424,21 +1463,20 @@ def do_full(job, s):
     free = free_bytes(out.parent)
     if free is not None and free < need + 200 * 10 ** 6:
         with LOCK:
-            job["status"], job["error"] = "error", (
-                "Мало места на диске для результата: нужно примерно %.1f ГБ, свободно %.1f ГБ (%s). "
-                "Освободи место или укажи другую папку в «Куда сохранять»." % (need / 1e9, free / 1e9, out.parent))
+            job["status"], job["error"] = "error", M("err.no_space", need=round(need / 1e9, 1),
+                                                     free=round(free / 1e9, 1), dir=str(out.parent))
         return
     if free is not None and free < need * 2:
         with LOCK:
-            job["note"] = "Места на диске впритык (свободно %.1f ГБ): если кончится, сжатие оборвётся." % (free / 1e9)
+            job["note"] = M("note.space_tight", free=round(free / 1e9, 1))
     with LOCK:
         OUT_OWNERS[_norm(out)] = _norm(job["path"])
     part = out.with_name(out.stem + ".part.mp4")
-    ok, err, took = encode(job, s, job["path"], str(part), job["info"]["duration"], "Сжимаю",
+    ok, err, took = encode(job, s, job["path"], str(part), job["info"]["duration"], M("phase.compress"),
                         ["-map_metadata", "0", "-movflags", "+faststart"], subs=True)
     if ok:
         with LOCK:
-            job["phase"], job["fin"] = "Сохраняю файл", None
+            job["phase"], job["fin"] = M("phase.save"), None
         out = finalize(part, out, job)
         with LOCK:
             OUT_OWNERS[_norm(out)] = _norm(job["path"])
@@ -1450,9 +1488,7 @@ def do_full(job, s):
         img = [c for c in (job["info"].get("subs") or []) if c not in TEXT_SUBS]
         if img:
             with LOCK:
-                job["note"] = (job["note"] + " " if job["note"] else "") + (
-                    "В оригинале есть субтитры-картинки (%s): в MP4 они не переносятся. Если нужны, не удаляй "
-                    "оригинал." % ", ".join(sorted(set(img))))
+                add_note(job, M("note.image_subs", codecs=", ".join(sorted(set(img)))))
         with LOCK:
             job["status"], job["pct"], job["out_path"], job["out_size"] = "done", 100, str(out), out.stat().st_size
         add_history({"t": time.time(), "src": job["path"], "out": str(out), "name": job["name"],
@@ -1486,7 +1522,7 @@ def do_test(job, s):
     # 1) вырезаем кусок без пережатия (через run_ffmpeg: виден прогресс и работает «Стоп»)
     ok, err, _ = run_ffmpeg(["-ss", "%.3f" % start, "-i", job["path"], "-t", "%.3f" % length,
                              "-map", "0:V:0", "-map", "0:a?", "-c", "copy",
-                             "-progress", "pipe:1", "-nostats", str(ref)], job, length, "Тест: вырезаю кусок", s)
+                             "-progress", "pipe:1", "-nostats", str(ref)], job, length, M("phase.test_cut"), s)
     if not ok:
         _rm(ref)
         return fail(err)
@@ -1495,14 +1531,14 @@ def do_test(job, s):
     except Exception:
         ref_dur = length
     # 2) жмём кусок теми же настройками
-    ok, err, enc_time = encode(job, s, str(ref), str(test), ref_dur, "Тест: сжимаю кусок",
+    ok, err, enc_time = encode(job, s, str(ref), str(test), ref_dur, M("phase.test_enc"),
                                ["-movflags", "+faststart"])
     if not ok:
         _rm(test)
         return fail(err)
     ts, rs = test.stat().st_size, ref.stat().st_size
     factor = (info["duration"] or ref_dur) / ref_dur
-    res = {"label": "%s · %s" % (PRESETS[s["preset"]][0], QUALITY_NAMES[s["quality"]]),
+    res = {"preset": s["preset"], "quality": s["quality"],  # подпись теста собирает страница на своём языке
            "test_size": ts, "ref_size": rs, "est_size": int(ts * factor), "ratio": ts / rs if rs else 0,
            "est_time": enc_time * factor, "vmaf": None, "test_path": str(test), "ref_path": str(ref)}
     # 3) VMAF, если есть. Выше 1080p сравниваем в 1080p: модель vmaf_v0.6.1 рассчитана на неё,
@@ -1518,7 +1554,7 @@ def do_test(job, s):
         ok, err, tail = run_ffmpeg(["-i", str(test), "-i", str(ref), "-lavfi", lav, "-an", "-sn",
                                     "-progress", "pipe:1", "-nostats", "-f", "null", "-"],
                                    job, ref_dur * (info.get("fps") or 30) * (2 if info.get("interlaced") else 1) / 30,
-                                   "Считаю VMAF (оценка качества)", s)
+                                   M("phase.vmaf"), s)
         if err == "cancel":
             return fail(err)
         m = re.search(r"VMAF score[:=]\s*([\d.]+)", tail)
@@ -1619,10 +1655,10 @@ def load_queue():
         if job["status"] in ("running", "queued", "probing"):
             job["status"] = "cancelled" if job["status"] == "running" else "ready"
             if d.get("status") == "running":
-                job["note"] = "Прошлый сеанс закрылся во время сжатия этого файла: начнётся заново."
+                job["note"] = M("note.interrupted")
         if not os.path.isfile(path):
             if job["status"] not in ("done", "skipped"):
-                job["status"], job["error"] = "error", "Файл не найден (удалён, перемещён или диск отключён)."
+                job["status"], job["error"] = "error", M("err.file_gone")
         else:
             try:
                 size = os.path.getsize(path)
@@ -1650,7 +1686,7 @@ def load_queue():
                     job["status"] = "ready"
         except Exception as e:
             with LOCK:
-                job["status"], job["error"] = "error", str(e)
+                job["status"], job["error"] = "error", err_msg(e)
     for job in restored:
         if job["status"] == "probing":
             threading.Thread(target=reprobe, args=(job,), daemon=True).start()
@@ -1679,12 +1715,13 @@ def worker():
                 do_full(job, s)
         except Exception as e:
             with LOCK:
-                job["status"], job["error"] = "error", "%s: %s" % (type(e).__name__, e)
+                job["status"], job["error"] = "error", (e.msg() if isinstance(e, UserError)
+                                                        else "%s: %s" % (type(e).__name__, e))
         with LOCK:
             job["phase"] = ""
             if job["status"] == "running":  # на всякий случай: не оставляем «вечно в работе»
                 job["status"] = "error"
-                job["error"] = job["error"] or "задача завершилась без результата"
+                job["error"] = job["error"] or M("err.no_result")
 
 
 # ------------------------------------------------------------- Pickers ----
@@ -1699,7 +1736,7 @@ def _pick_webview(win, kind):
     fd = getattr(webview, "FileDialog", None)
     if kind == "files":
         r = win.create_file_dialog(fd.OPEN if fd else webview.OPEN_DIALOG, allow_multiple=True, file_types=(
-            "Видео (%s)" % VIDEO_MASK.replace(" ", ";"), "Все файлы (*.*)"))
+            "%s (%s)" % (tr("pick.video"), VIDEO_MASK.replace(" ", ";")), "%s (*.*)" % tr("pick.all")))
     else:
         r = win.create_file_dialog(fd.FOLDER if fd else webview.FOLDER_DIALOG)
     return [str(x) for x in (r or [])]
@@ -1721,10 +1758,10 @@ def _pick_tk(kind):
                 pass
             r.update()
             if kind == "files":
-                out.extend(filedialog.askopenfilenames(parent=r, title="Выбери видео", filetypes=[
-                    ("Видео", VIDEO_MASK), ("Все файлы", "*.*")]))
+                out.extend(filedialog.askopenfilenames(parent=r, title=tr("pick.title_files"), filetypes=[
+                    (tr("pick.video"), VIDEO_MASK), (tr("pick.all"), "*.*")]))
             else:
-                d = filedialog.askdirectory(parent=r, title="Выбери папку с видео")
+                d = filedialog.askdirectory(parent=r, title=tr("pick.title_folder"))
                 if d:
                     out.append(d)
             r.destroy()
@@ -1735,18 +1772,18 @@ def _pick_tk(kind):
     t.start()
     t.join()
     if err:
-        raise RuntimeError("Не удалось открыть окно выбора файлов (%s). Вставь путь вручную." % err[0])
+        raise UserError("err.pick_failed", detail=str(err[0]))
     return [str(x) for x in out]
 
 
 def pick(kind):
     if IS_MAC:
         if kind == "files":
-            script = ['set fs to choose file with prompt "Выбери видео" with multiple selections allowed',
+            script = ['set fs to choose file with prompt "%s" with multiple selections allowed' % tr("pick.title_files"),
                       'set out to ""', 'repeat with f in fs', 'set out to out & POSIX path of f & linefeed',
                       'end repeat', 'return out']
         else:
-            script = ['return POSIX path of (choose folder with prompt "Выбери папку с видео")']
+            script = ['return POSIX path of (choose folder with prompt "%s")' % tr("pick.title_folder")]
         args = ["osascript"]
         for l in script:
             args += ["-e", l]
@@ -1817,7 +1854,7 @@ def snapshot(scan_ver=None):
         elif settings.get("outdir"):
             target = Path(os.path.expanduser(settings["outdir"]))
     return {"caps": caps, "jobs": jobs, "running": running, "settings": settings, "disk": disk_info(target),
-            "presets": {k: {"title": v[0], "desc": v[1]} for k, v in PRESETS.items()},
+            "presets": list(PRESETS), "sys_lang": SYS_LANG,
             "quality": QUALITY, "scan": scan_public(scan_ver), "hist_ver": HISTORY["ver"], "version": __version__, "repo": REPO_URL, "donate": DONATE_URL, "window": WINDOW["w"] is not None,
             "hist_count": len(HISTORY["items"])}
 
@@ -1855,7 +1892,7 @@ class H(BaseHTTPRequestHandler):
             m = re.search(r"[?&]t=([0-9a-f]+)", self.path)
             if not m or not self._tok_ok(m.group(1)):  # страница с ключом — только по ссылке от самой программы
                 return self._send(403, STALE_HTML.encode("utf-8"), "text/html; charset=utf-8")
-            return self._send(200, HTML.replace("__TOKEN__", TOKEN).encode("utf-8"), "text/html; charset=utf-8")
+            return self._send(200, page_html().encode("utf-8"), "text/html; charset=utf-8")
         if not self._tok_ok(self.headers.get("X-Token")):
             return self._send(403, {"error": "forbidden"})
         if self.path.split("?")[0] == "/api/status":
@@ -1884,6 +1921,8 @@ class H(BaseHTTPRequestHandler):
         try:
             res = self.route(self.path, body)
             self._send(200, res if res is not None else {"ok": True})
+        except UserError as e:  # страница покажет на своём языке по ключу, error — запасной текст
+            self._send(400, {"error": str(e), "msg": e.msg()})
         except Exception as e:
             self._send(400, {"error": str(e)})
 
@@ -1895,7 +1934,7 @@ class H(BaseHTTPRequestHandler):
                 for x in add_path(p):
                     if isinstance(x, dict):
                         errs.append(x["error"])
-            return {"added": len(paths), "errors": errs}
+            return {"added": len(paths), "errors": errs}  # ошибки: строки или {"k","p"}
         if path == "/api/add":
             errs = []
             for p in b.get("paths", []):
@@ -1910,16 +1949,21 @@ class H(BaseHTTPRequestHandler):
             with LOCK:
                 SETTINGS.update(clean_settings(b))
                 save_settings()
+            if "lang" in b and WINDOW["w"] is not None:
+                try:
+                    WINDOW["w"].set_title(app_name())
+                except Exception:
+                    pass
             return None
         if path == "/api/start":
             mode = "test" if b.get("mode") == "test" else "full"
             if not FFMPEG or not FFPROBE:
-                raise RuntimeError("FFmpeg не найден")
+                raise UserError("err.no_ffmpeg")
             if not CAPS["checked"]:
-                raise RuntimeError("Ещё проверяю возможности FFmpeg и видеокарты, подожди пару секунд")
+                raise UserError("api.checking")
             pr = SETTINGS["preset"]
             if not CAPS["presets"].get(pr, {}).get("ok"):
-                raise RuntimeError("Выбранный режим недоступен на этом компьютере")
+                raise UserError("api.mode_unavailable")
             n = 0
             with LOCK:
                 for j in JOBS:
@@ -1967,15 +2011,15 @@ class H(BaseHTTPRequestHandler):
             return None
         if path == "/api/retry":
             if not CAPS["checked"]:
-                raise RuntimeError("Ещё проверяю возможности FFmpeg и видеокарты, подожди пару секунд")
+                raise UserError("api.checking")
             if not CAPS["presets"].get(SETTINGS["preset"], {}).get("ok"):
-                raise RuntimeError("Выбранный режим недоступен на этом компьютере")
+                raise UserError("api.mode_unavailable")
             with LOCK:
                 j = next((x for x in JOBS if x["id"] == b.get("id")), None)
                 if not j or j["status"] not in ("error", "cancelled", "ready", "tested"):
-                    raise RuntimeError("Эту задачу сейчас нельзя повторить")
+                    raise UserError("api.cant_retry")
                 if not j["info"]:
-                    raise RuntimeError("Файл не читается: " + (j["error"] or "нет параметров видео"))
+                    raise UserError("api.unreadable", detail=j["error"] or M("api.no_info"))
                 j["status"], j["settings"] = "queued", dict(SETTINGS)
                 j["mode"] = j["mode"] if j["mode"] in ("test", "full") else "full"
                 j["error"], j["note"], j["pct"] = "", "", 0
@@ -1994,7 +2038,7 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/url":
             url = b.get("url")
             if url not in OPEN_URLS:
-                raise RuntimeError("ссылка не разрешена")
+                raise UserError("api.url_denied")
             webbrowser.open(url)
             return {"ok": True}
         if path == "/api/open":
@@ -2011,7 +2055,7 @@ class H(BaseHTTPRequestHandler):
                                     j["out_path"] or j["path"])
             if target:
                 if not Path(target).exists():
-                    raise RuntimeError("Файл не найден (удалён или перемещён): %s" % target)
+                    raise UserError("api.open_missing", path=str(target))
                 open_folder(target)
             return None
         if path == "/api/history":
@@ -2028,8 +2072,8 @@ STALE_HTML = """<!doctype html><meta charset="utf-8"><title>Framewring</title>
 <p>Эта вкладка устарела. Открой программу заново через ярлык.</p></body>"""
 
 HTML = r"""<!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Framewring Жмых — компрессор видео</title>
+<html lang="__LANG__"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Framewring</title>
 <style>
 :root{--bg:#0f1115;--card:#171a21;--line:#262b36;--fg:#e8eaf0;--mut:#8b93a7;--acc:#7c5cff;--acc2:#2bd9a8;--warn:#ffb347;--err:#ff5d6c}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -2093,151 +2137,178 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 .drv{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:6px 10px;cursor:pointer}
 .drv.on{border-color:var(--acc);background:#7c5cff14}.drv input{margin:0}
 .vm{font-weight:700}.vm.g{color:var(--acc2)}.vm.y{color:var(--warn)}.vm.r{color:var(--err)}
+.lng{font-size:12px;font-weight:400;margin-left:8px;color:var(--mut);white-space:nowrap}.lng button{background:none;border:0;color:var(--mut);cursor:pointer;font:inherit;padding:0 3px}
+.lng button:hover{color:var(--fg)}.lng button.on{color:var(--fg);font-weight:700}
 </style></head><body><div class="wrap">
-<div class="top"><div><h1><span>Framewring</span> Жмых <small id="appver" style="font-size:12px;color:var(--mut);font-weight:400"></small></h1>
-<div class="sub">Жмёт локально через FFmpeg. Файлы никуда не уходят, лимитов нет.</div></div>
-<div class="row" style="align-items:center"><button class="btn sm don" onclick="donate(true)" title="Поддержать автора Жмыха">♥ Поддержать автора</button><div class="pill" id="ver">проверяю FFmpeg…</div></div></div>
+<div class="top"><div><h1><span>Framewring</span><span data-t="app.suffix"></span> <small id="appver" style="font-size:12px;color:var(--mut);font-weight:400"></small><span class="lng" id="lng" data-tt="lang.title"><button data-l="ru">RU</button>|<button data-l="en">EN</button></span></h1>
+<div class="sub" data-t="app.sub"></div></div>
+<div class="row" style="align-items:center"><button class="btn sm don" onclick="donate(true)" data-t="donate.btn" data-tt="donate.btn_title"></button><div class="pill" id="ver" data-t="ver.checking"></div></div></div>
 <div id="warn"></div>
 <div class="card" id="scanCard" style="display:none;margin-bottom:16px">
-  <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Поиск тяжёлых видео</h2><button class="btn sm" onclick="toggleScan(false)">Свернуть</button></div>
-  <p class="hint" style="margin-top:8px">Ищет большие видео и прикидывает, сколько места освободит сжатие. Системные папки, установленные игры и файлы OneDrive «только в облаке» пропускаются. Ничего не удаляет и не меняет.</p>
+  <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0" data-t="scan.title"></h2><button class="btn sm" onclick="toggleScan(false)" data-t="common.collapse"></button></div>
+  <p class="hint" style="margin-top:8px" data-t="scan.hint"></p>
   <div class="row" id="drives"></div>
-  <div class="row" style="margin-top:8px"><input type="text" id="scanPath" placeholder="…или своя папка (например D:\Videos)" style="flex:1"></div>
-  <div class="row" style="margin-top:8px;align-items:center"><span class="meta" style="margin:0">Файлы от</span>
-   <div class="seg" id="minmb" style="margin:0;flex:1;min-width:260px"><button data-v="200">200 МБ</button><button data-v="500">500 МБ</button><button data-v="1000">1 ГБ</button><button data-v="3000">3 ГБ</button></div>
-   <label class="chk" style="margin:0" title="Если установлен Everything (voidtools), ищем по его индексу: доли секунды вместо минут. Снимите галочку, если Everything индексирует не все диски."><input type="checkbox" id="useEv" checked> через Everything</label>
-   <button class="btn pri" id="btnScan" onclick="scanStart()">Искать</button><button class="btn red" id="btnScanStop" onclick="api('/api/scan_cancel')" style="display:none">Стоп</button></div>
+  <div class="row" style="margin-top:8px"><input type="text" id="scanPath" data-tp="scan.path_ph" style="flex:1"></div>
+  <div class="row" style="margin-top:8px;align-items:center"><span class="meta" style="margin:0" data-t="scan.min_label"></span>
+   <div class="seg" id="minmb" style="margin:0;flex:1;min-width:260px"><button data-v="200" data-t="scan.min200"></button><button data-v="500" data-t="scan.min500"></button><button data-v="1000" data-t="scan.min1000"></button><button data-v="3000" data-t="scan.min3000"></button></div>
+   <label class="chk" style="margin:0" data-tt="scan.ev_title"><input type="checkbox" id="useEv" checked> <span data-t="scan.ev_label"></span></label>
+   <button class="btn pri" id="btnScan" onclick="scanStart()" data-t="scan.search"></button><button class="btn red" id="btnScanStop" onclick="api('/api/scan_cancel')" style="display:none" data-t="common.stop"></button></div>
   <div class="meta" id="scanInfo" style="margin-top:10px"></div>
   <div id="scanBar" class="row" style="margin-top:8px;align-items:center;display:none"></div>
   <div class="scanlist" id="scanList" style="display:none"></div>
  </div>
 <div class="card" id="histCard" style="display:none;margin-bottom:16px">
-  <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">История сжатия</h2><button class="btn sm" onclick="toggleHist(false)">Свернуть</button></div>
+  <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0" data-t="hist.title"></h2><button class="btn sm" onclick="toggleHist(false)" data-t="common.collapse"></button></div>
   <div class="meta" id="histSum" style="margin-top:8px"></div>
   <div class="scanlist" id="histList" style="margin-top:8px"></div>
  </div>
 <div class="grid">
 <div>
  <div class="card">
-  <h2>Режим</h2><div id="presets"></div>
-  <h2 style="margin-top:14px">Качество</h2>
-  <div class="seg" id="q"><button data-v="high">Максимальное</button><button data-v="balanced">Баланс</button><button data-v="compact">Компактное</button></div>
+  <h2 data-t="set.mode"></h2><div id="presets"></div>
+  <h2 style="margin-top:14px" data-t="set.quality"></h2>
+  <div class="seg" id="q"><button data-v="high" data-t="quality.high"></button><button data-v="balanced" data-t="quality.balanced"></button><button data-v="compact" data-t="quality.compact"></button></div>
   <p class="hint" id="qhint"></p>
-  <h2>Скорость кодирования</h2>
-  <div class="seg" id="sp"><button data-v="slow">Тщательно</button><button data-v="normal">Обычно</button><button data-v="fast">Быстрее</button></div>
-  <p class="hint">«Тщательно» даёт чуть меньший файл, но занимает в 1,5–2 раза больше времени.</p>
-  <h2>Звук</h2>
-  <div class="seg" id="au"><button data-v="auto">Копировать без потерь</button><button data-v="aac">Пережать AAC 192</button></div>
-  <p class="hint">Копирование звука почти ничего не весит, пережимать нет смысла.</p>
-  <h2>Куда сохранять</h2>
-  <input type="text" id="outdir" placeholder="Пусто = подпапка «compressed» рядом с исходником">
+  <h2 data-t="set.speed"></h2>
+  <div class="seg" id="sp"><button data-v="slow" data-t="speed.slow"></button><button data-v="normal" data-t="speed.normal"></button><button data-v="fast" data-t="speed.fast"></button></div>
+  <p class="hint" data-t="set.speed_hint"></p>
+  <h2 data-t="set.audio"></h2>
+  <div class="seg" id="au"><button data-v="auto" data-t="audio.auto"></button><button data-v="aac" data-t="audio.aac"></button></div>
+  <p class="hint" data-t="set.audio_hint"></p>
+  <h2 data-t="set.outdir"></h2>
+  <input type="text" id="outdir" data-tp="set.outdir_ph">
   <div style="margin-top:10px">
-   <label class="chk"><input type="checkbox" id="lowprio"> Низкий приоритет (компом можно пользоваться)</label>
-   <label class="chk"><input type="checkbox" id="nosleep"> Не давать компьютеру уснуть</label>
-   <label class="chk"><input type="checkbox" id="skip"> Пропускать уже сжатые файлы</label>
+   <label class="chk"><input type="checkbox" id="lowprio"> <span data-t="set.lowprio"></span></label>
+   <label class="chk"><input type="checkbox" id="nosleep"> <span data-t="set.nosleep"></span></label>
+   <label class="chk"><input type="checkbox" id="skip"> <span data-t="set.skip"></span></label>
   </div>
  </div>
 </div>
 <div>
  <div class="card">
   <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
-   <div class="row"><button class="btn pri" onclick="pick('files')">+ Файлы</button><button class="btn" onclick="pick('folder')">+ Папка</button><button class="btn" onclick="toggleScan()" title="Найти на дисках большие видео, которые выгодно сжать">Найти тяжёлые видео</button><button class="btn" onclick="toggleHist()" title="Всё, что уже сжато, с кнопками показать файлы">История</button></div>
-   <div class="row"><button class="btn" id="btnTest" onclick="start('test')" title="Сжимает кусок из середины каждого файла и показывает прогноз размера, времени и качества">Тест на 2 минутах</button>
-   <button class="btn go big" id="btnGo" onclick="start('full')">Сжать всё</button>
-   <button class="btn red" id="btnStop" onclick="cancel()" style="display:none">Стоп</button></div>
+   <div class="row"><button class="btn pri" onclick="pick('files')" data-t="btn.files"></button><button class="btn" onclick="pick('folder')" data-t="btn.folder"></button><button class="btn" onclick="toggleScan()" data-t="btn.scan" data-tt="btn.scan_title"></button><button class="btn" onclick="toggleHist()" data-t="btn.hist" data-tt="btn.hist_title"></button></div>
+   <div class="row"><button class="btn" id="btnTest" onclick="start('test')" data-tt="btn.test_title"></button>
+   <button class="btn go big" id="btnGo" onclick="start('full')" data-t="btn.go"></button>
+   <button class="btn red" id="btnStop" onclick="cancel()" style="display:none" data-t="common.stop"></button></div>
   </div>
-  <div class="row" style="margin-bottom:12px"><input type="text" id="manual" placeholder="…или вставь путь к файлу или папке и нажми Enter" style="flex:1"><button class="btn" onclick="addManual()">Добавить</button></div>
+  <div class="row" style="margin-bottom:12px"><input type="text" id="manual" data-tp="manual.ph" style="flex:1"><button class="btn" onclick="addManual()" data-t="manual.add"></button></div>
   <div id="jobs"></div>
-  <div class="foot"><span><span id="disk"></span> <span id="qinfo" style="margin-left:10px"></span></span><a href="#" onclick="api('/api/clear');return false" style="color:var(--mut)">Убрать готовые из списка</a></div>
+  <div class="foot"><span><span id="disk"></span> <span id="qinfo" style="margin-left:10px"></span></span><a href="#" onclick="api('/api/clear');return false" style="color:var(--mut)" data-t="btn.clear"></a></div>
  </div>
 </div></div></div>
-<div class="modal" id="donate" onclick="if(event.target===this)donate(false)"><div class="mbox" role="dialog" aria-label="Поддержать автора">
- <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap"><div><h3>Поддержать автора</h3><div class="meta">Framewring бесплатный. Если он сэкономил тебе место и время, можно поддержать автора.</div></div><button class="btn sm" onclick="donate(false)" aria-label="Закрыть">✕</button></div>
-  <p style="margin:14px 0 10px">Способы поддержки (карта, USDT) — на официальной странице программы на GitHub.</p>
- <button class="btn pri" onclick="openUrl(S.donate)">♥ Открыть страницу поддержки</button>
- <p class="hint" style="margin:14px 0 0">Официальная страница: <b id="repoUrl">github.com/remrem23/framewring</b>. Скачивай Framewring только оттуда.
- Если программа скачана в другом месте и здесь указан другой адрес — это изменённая копия.</p>
+<div class="modal" id="donate" onclick="if(event.target===this)donate(false)"><div class="mbox" role="dialog" data-ta="donate.title">
+ <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap"><div><h3 data-t="donate.title"></h3><div class="meta" data-t="donate.text"></div></div><button class="btn sm" onclick="donate(false)" data-ta="common.close">✕</button></div>
+  <p style="margin:14px 0 10px" data-t="donate.ways"></p>
+ <button class="btn pri" onclick="openUrl(S.donate)" data-t="donate.open"></button>
+ <p class="hint" style="margin:14px 0 0"><span data-t="donate.official"></span> <b id="repoUrl">github.com/remrem23/framewring</b>. <span data-t="donate.official2"></span></p>
 </div></div>
 <div class="toast" id="toast"></div>
 <script>
 const T="__TOKEN__";let S=null;
+// ---------------- язык: словарь из i18n.py (тот же, что у бэкенда)
+const I18N=__I18N__;let LANG="__LANG__";
+const LOC=()=>LANG==="ru"?"ru-RU":"en-US";
+const nf=(x,d=0)=>Number(x||0).toLocaleString(LOC(),{minimumFractionDigits:d,maximumFractionDigits:d});
+const nfm=(x,m)=>Number(x||0).toLocaleString(LOC(),{maximumFractionDigits:m});
+function tr(k,p){let s=(I18N[LANG]||{})[k];if(s==null)s=I18N.ru[k];if(s==null)s=k;return p?s.replace(/\{(\w+)\}/g,(m,n)=>n in p?fmtP(p[n]):m):s}
+function fmtP(v){return v&&typeof v==="object"?msg(v):typeof v==="number"?nfm(v,1):String(v)}
+// сообщение бэкенда: строка (старые записи, сырой текст ffmpeg), {k,p} или список таких
+function msg(x){if(x==null||x==="")return"";if(typeof x==="string")return x;if(Array.isArray(x))return x.map(msg).filter(Boolean).join(" ");if(x.k)return tr(x.k,x.p||{});return String(x)}
+function applyStatic(){document.documentElement.lang=LANG;
+ document.querySelectorAll("[data-t]").forEach(e=>e.textContent=tr(e.dataset.t));
+ document.querySelectorAll("[data-tt]").forEach(e=>e.title=tr(e.dataset.tt));
+ document.querySelectorAll("[data-tp]").forEach(e=>e.placeholder=tr(e.dataset.tp));
+ document.querySelectorAll("[data-ta]").forEach(e=>e.setAttribute("aria-label",tr(e.dataset.ta)));
+ document.querySelectorAll("#lng button").forEach(b=>b.classList.toggle("on",b.dataset.l===LANG));
+ $("btnTest").textContent=testLabel(S?S.settings.testlen:120);
+ if(S){render();renderScan({...S.scan,results:null})}else document.title=tr("app.title");
+ if(drives)renderDrives()}
+function setLang(l){if(!S||l===LANG)return;LANG=l;histVer=-1;setS("lang",l);applyStatic();if(histOpen)loadHist()}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 // innerHTML только при реальном изменении: иначе каждую секунду пересоздаются кнопки и клик «теряется»
 function setHTML(el,h){if(el._h!==h){el.innerHTML=h;el._h=h}}
-async function api(p,b){try{const r=await fetch(p,{method:"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:JSON.stringify(b||{})});const j=await r.json().catch(()=>({}));if(r.status===403){stale();return {}}if(!r.ok)toast(j.error||"Ошибка");return j}catch(e){toast("Программа не отвечает");return {}}}
+async function api(p,b){try{const r=await fetch(p,{method:"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:JSON.stringify(b||{})});const j=await r.json().catch(()=>({}));if(r.status===403){stale();return {}}if(!r.ok)toast(j.msg?msg(j.msg):(j.error||tr("err.generic")));return j}catch(e){toast(tr("err.no_response"));return {}}}
 function stale(){document.body.innerHTML='<div style="padding:40px;font-size:16px">Программа была перезапущена или закрыта — эта вкладка устарела. Открой программу заново.<br><br>The program was restarted or closed — this tab is out of date.</div>'}
-function toasts(a){if(a&&a.length)toast(a.slice(0,4).join(" · ")+(a.length>4?` (+${a.length-4})`:""))}
+function toasts(a){a=(a||[]).map(msg).filter(Boolean);if(a.length)toast(a.slice(0,4).join(" · ")+(a.length>4?` (+${a.length-4})`:""))}
 // перетаскивание: без этого окно открыло бы само видео вместо программы
-["dragover","drop"].forEach(ev=>window.addEventListener(ev,e=>{e.preventDefault();if(ev==="drop"&&!S?.window)toast("Перетаскивание работает в окне программы. Здесь — кнопки «+ Файлы» / «+ Папка».")}));
+["dragover","drop"].forEach(ev=>window.addEventListener(ev,e=>{e.preventDefault();if(ev==="drop"&&!S?.window)toast(tr("drop.browser"))}));
 function donate(on){$("donate").classList.toggle("on",on)}
 document.addEventListener("keydown",e=>{if(e.key==="Escape")donate(false)});
+$("lng").addEventListener("click",e=>{const l=e.target.dataset&&e.target.dataset.l;if(l)setLang(l)});
 async function openUrl(u){if(u)await api("/api/url",{url:u})}
-async function copyW(id){const t=$(id).textContent.trim();try{await navigator.clipboard.writeText(t);toast("Адрес скопирован: "+t)}catch(e){const r=document.createRange();r.selectNodeContents($(id));const s=getSelection();s.removeAllRanges();s.addRange(r);toast("Выделил адрес: нажми Ctrl+C")}}
 function toast(m){const t=$("toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",5000)}
-const gb=b=>b>=1e9?(b/1e9).toFixed(2)+" ГБ":b>=1e7?(b/1e6).toFixed(0)+" МБ":(b/1e6).toFixed(1)+" МБ";
-const tm=s=>{if(s==null||!isFinite(s))return"—";s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h?`${h} ч ${m} мин`:m?`${m} мин ${x} с`:`${x} с`};
+const gb=b=>{const n=Math.abs(b||0),sg=b<0?"−":"";return sg+(n>=1e9?nf(n/1e9,2)+" "+tr("unit.gb"):n>=1e7?nf(n/1e6,0)+" "+tr("unit.mb"):nf(n/1e6,1)+" "+tr("unit.mb"))};
+const tm=s=>{if(s==null||!isFinite(s))return"—";s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h?tr("time.hm",{h:String(h),m:String(m)}):m?tr("time.ms",{m:String(m),s:String(x)}):tr("time.s",{s:String(x)})};
 const dur=s=>{s=Math.round(s||0);return`${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`};
+const pctS=d=>(d<0?"+":"−")+nf(Math.abs(d),0); // −37 (меньше) / +5 (больше)
+const testLabel=tl=>{tl=tl||120;return tl<60?tr("btn.test_sec",{n:String(Math.round(tl))}):tr("btn.test_min",{n:nfm(Math.round(tl/6)/10,1)})};
+const presetTitle=k=>I18N.ru["preset."+k+".title"]!=null?tr("preset."+k+".title"):k;
 let pending=0,sver=0;
 async function setS(k,v){S.settings[k]=v;sver++;pending++;renderSettings();try{await api("/api/settings",{[k]:v})}finally{pending--}}
-async function pick(kind){toast(S.window?"Открываю окно выбора…":"Открываю окно выбора… (может появиться за браузером)");const r=await api("/api/pick",{kind});toasts(r.errors);refresh()}
-async function addManual(){const el=$("manual");if(!el.value.trim())return;const v=el.value;el.value="";toast("Добавляю…");
+async function pick(kind){toast(S.window?tr("pick.opening"):tr("pick.opening_browser"));const r=await api("/api/pick",{kind});toasts(r.errors);refresh()}
+async function addManual(){const el=$("manual");if(!el.value.trim())return;const v=el.value;el.value="";toast(tr("add.adding"));
  const paths=[...v.matchAll(/"([^"]+)"|([^"\r\n]+)/g)].map(m=>(m[1]||m[2]).trim()).filter(Boolean); // «Копировать как путь» из проводника: "a" "b"
  const r=await api("/api/add",{paths});toasts(r.errors);refresh()}
 $("manual").addEventListener("keydown",e=>{if(e.key==="Enter")addManual()});
-async function start(mode){const r=await api("/api/start",{mode});if(r.queued===0)toast(S.jobs.some(j=>j.status==="probing")?"Ещё читаю параметры файлов, подожди секунду":"Нечего запускать: добавь файлы (готовые и уже стоящие в очереди не трогаю)");refresh()}
-async function cancel(){const j=S&&S.jobs.find(x=>x.status==="running");if(j&&j.mode!=="test"&&j.pct>2&&!confirm(`Остановить сжатие «${j.name}»? Сделано ${j.pct.toFixed(0)}%, файл потом начнётся сначала.`))return;await api("/api/cancel");refresh()}
+async function start(mode){const r=await api("/api/start",{mode});if(r.queued===0)toast(S.jobs.some(j=>j.status==="probing")?tr("start.probing"):tr("start.nothing"));refresh()}
+async function cancel(){const j=S&&S.jobs.find(x=>x.status==="running");if(j&&j.mode!=="test"&&j.pct>2&&!confirm(tr("stop.confirm",{name:j.name,pct:nf(j.pct,0)})))return;await api("/api/cancel");refresh()}
 // ---------------- история
 let histVer=-1,histOpen=false;
 async function toggleHist(show){const c=$("histCard");histOpen=show==null?c.style.display==="none":show;c.style.display=histOpen?"block":"none";if(histOpen){histVer=-1;await loadHist();c.scrollIntoView({behavior:"smooth",block:"start"})}}
-const fdate=t=>{const d=new Date(t*1000),p=n=>String(n).padStart(2,"0");return `${p(d.getDate())}.${p(d.getMonth()+1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`};
+const fdate=t=>new Date(t*1000).toLocaleString(LOC(),{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
 async function loadHist(){const r=await api("/api/history");if(!r.items)return;histVer=r.ver;const it=r.items;
  const tot=it.reduce((a,x)=>a+x.size,0),out=it.reduce((a,x)=>a+x.out_size,0);
- setHTML($("histSum"),it.length?`Сжато файлов: <b>${it.length}</b> · было ${gb(tot)}, стало ${gb(out)} · освобождено <b style="color:var(--acc2)">${gb(tot-out)}</b> (−${tot?Math.round((1-out/tot)*100):0}%)`:"Пока ничего не сжато. Здесь появятся все готовые файлы, даже если убрать их из списка.");
+ setHTML($("histSum"),it.length?unB(esc(tr("hist.sum",{n:B(String(it.length)),before:gb(tot),after:gb(out),saved:B(gb(tot-out),"color:var(--acc2)"),pct:pctS(tot?(1-out/tot)*100:0)}))):esc(tr("hist.empty")));
  $("histList").style.display=it.length?"block":"none";
- setHTML($("histList"),it.map(x=>{const pr=S&&S.presets[x.preset];const d=x.size?Math.round((1-x.out_size/x.size)*100):0;
-  return `<div class="hrow"><div class="meta">${fdate(x.t)}</div><div><div class="sname">${esc(x.name)}</div><div class="meta">${esc(x.src.replace(/[\\/][^\\/]*$/,""))}</div></div>
-  <div class="num"><b>${gb(x.size)} → ${gb(x.out_size)}</b><div class="meta">${d>=0?"−"+d:"+"+(-d)}%${x.duration?" · "+dur(x.duration):""}</div></div>
-  <div class="meta">${esc(pr?pr.title:(x.preset||"режим неизвестен"))}${x.secs?`<br>сжималось ${tm(x.secs)}`:""}</div>
-  <div class="row" style="flex-wrap:nowrap"><button class="btn sm" title="Открыть папку и выделить сжатый файл" onclick="api('/api/open',{hist:${x.idx}})">📂 Сжатый</button><button class="btn sm" title="Открыть папку и выделить оригинал" onclick="api('/api/open',{hist:${x.idx},which:'src'})">📂 Оригинал</button></div></div>`}).join(""))}
+ setHTML($("histList"),it.map(x=>{const pr=S&&S.presets.includes(x.preset);const d=x.size?(1-x.out_size/x.size)*100:0;
+  return `<div class="hrow"><div class="meta">${esc(fdate(x.t))}</div><div><div class="sname">${esc(x.name)}</div><div class="meta">${esc(x.src.replace(/[\\/][^\\/]*$/,""))}</div></div>
+  <div class="num"><b>${gb(x.size)} → ${gb(x.out_size)}</b><div class="meta">${pctS(d)}%${x.duration?" · "+dur(x.duration):""}</div></div>
+  <div class="meta">${esc(pr?presetTitle(x.preset):(x.preset||tr("hist.unknown_mode")))}${x.secs?`<br>${esc(tr("hist.took",{t:tm(x.secs)}))}`:""}</div>
+  <div class="row" style="flex-wrap:nowrap"><button class="btn sm" title="${esc(tr("btn.open_out_title"))}" onclick="api('/api/open',{hist:${x.idx}})">${esc(tr("btn.open_out"))}</button><button class="btn sm" title="${esc(tr("btn.open_src_title"))}" onclick="api('/api/open',{hist:${x.idx},which:'src'})">${esc(tr("btn.open_src"))}</button></div></div>`}).join(""))}
 async function retryJob(id){await api("/api/retry",{id});refresh()}
 async function removeJob(id){await api("/api/remove",{id});refresh()}
 let builtSettings=false;
 function renderSettings(){
  const st=S.settings,caps=S.caps;
- const ord=k=>{const c=caps.presets[k]||{};return (caps.checked&&!c.ok?100:0)+Object.keys(S.presets).indexOf(k)};
- setHTML($("presets"),Object.entries(S.presets).filter(([k])=>k!=="vt_hevc"||(caps.presets[k]&&caps.presets[k].ok)).sort((a,b)=>ord(a[0])-ord(b[0])).map(([k,v])=>{const c=caps.presets[k]||{};const off=caps.checked&&!c.ok;
-  return `<label class="opt ${st.preset===k?"on":""} ${off?"off":""}" ${off?"":`onclick="setS('preset','${k}')"`}><b>${esc(v.title)}${k===caps.recommended?" · рекомендую":""}</b><small>${esc(v.desc)}${off?` <br>Недоступно: ${esc(c.why)}`:""}</small></label>`}).join(""));
+ const ord=k=>{const c=caps.presets[k]||{};return (caps.checked&&!c.ok?100:0)+S.presets.indexOf(k)};
+ setHTML($("presets"),S.presets.filter(k=>k!=="vt_hevc"||(caps.presets[k]&&caps.presets[k].ok)).sort((a,b)=>ord(a)-ord(b)).map(k=>{const c=caps.presets[k]||{};const off=caps.checked&&!c.ok;
+  return `<label class="opt ${st.preset===k?"on":""} ${off?"off":""}" ${off?"":`onclick="setS('preset','${k}')"`}><b>${esc(presetTitle(k))}${k===caps.recommended?esc(tr("preset.recommended")):""}</b><small>${esc(tr("preset."+k+".desc"))}${off?` <br>${esc(tr("preset.unavailable",{why:msg(c.why)}))}`:""}</small></label>`}).join(""));
  for(const [id,key] of [["q","quality"],["sp","speed"],["au","audio"]]){document.querySelectorAll(`#${id} button`).forEach(b=>{b.classList.toggle("on",b.dataset.v===st[key]);b.onclick=()=>setS(key,b.dataset.v)})}
  const qv=S.quality[st.preset]||{};const unit=st.preset==="vt_hevc"?"q":st.preset.startsWith("nvenc")?"CQ":"CRF";
- $("qhint").textContent=`${unit} ${qv.high} / ${qv.balanced} / ${qv.compact}. «Баланс» визуально почти неотличим от оригинала. Не уверен — сделай тест.`;
+ $("qhint").textContent=tr("set.qhint",{unit,high:String(qv.high),balanced:String(qv.balanced),compact:String(qv.compact)});
  $("sp").style.display=st.preset==="vt_hevc"?"none":"flex";
- const tl=st.testlen||120;$("btnTest").textContent=tl<60?`Тест на ${Math.round(tl)} с`:`Тест на ${String(Math.round(tl/6)/10).replace(".",",")} мин`;
+ $("btnTest").textContent=testLabel(st.testlen);
  if(!builtSettings){$("outdir").value=st.outdir||"";["lowprio","nosleep","skip"].forEach(k=>$(k).checked=!!st[k]);builtSettings=true}
 }
 $("outdir").addEventListener("change",e=>setS("outdir",e.target.value.trim()));
 ["lowprio","nosleep","skip"].forEach(k=>$(k).addEventListener("change",e=>setS(k,e.target.checked)));
-const STAT={probing:"Читаю файл…",ready:"Ждёт",queued:"В очереди",running:"В работе",done:"Готово",tested:"Тест готов",skipped:"Пропущен",error:"Ошибка",cancelled:"Отменён"};
 function vmafCls(v){return v>=95?"g":v>=92?"y":"r"}
+const phk=j=>j.phase&&j.phase.k||""; // этап работы: ключ (phase.save, phase.save_wait, …)
 function jobStatic(j){
  const i=j.info;
- const meta=i?`${i.width}×${i.height} · ${i.fps} fps · ${esc(i.vcodec.toUpperCase())} · ${(i.bitrate/1e6).toFixed(1)} Мбит/с · ${dur(i.duration)} · ${gb(j.size)} · звук: ${esc(i.audio.map(a=>`${a.codec} ${a.bitrate?Math.round(a.bitrate/1000)+"к":""}`).join(", ")||"нет")}`:gb(j.size);
+ const meta=i?`${i.width}×${i.height} · ${esc(nfm(i.fps,2))} fps · ${esc(i.vcodec.toUpperCase())} · ${esc(nf(i.bitrate/1e6,1))} ${esc(tr("unit.mbps"))} · ${dur(i.duration)} · ${gb(j.size)} · ${esc(tr("job.audio",{list:i.audio.map(a=>`${a.codec} ${a.bitrate?Math.round(a.bitrate/1000)+tr("unit.k"):""}`).join(", ")||tr("job.no_audio")}))}`:gb(j.size);
  let body="";
  if(j.status==="done"||j.status==="skipped"){const d=(1-j.out_size/j.size)*100;const bigger=d<0;
-  body=`<div class="res">${j.status==="skipped"?"Уже был сжат: ":""}<b>${gb(j.size)} → ${gb(j.out_size)}</b> (${bigger?"+"+(-d).toFixed(0):"−"+d.toFixed(0)}%) <button class="btn sm" title="Открыть папку и выделить сжатый файл" onclick="api('/api/open',{id:${j.id}})">📂 Сжатый</button> <button class="btn sm" title="Открыть папку и выделить оригинал" onclick="api('/api/open',{id:${j.id},which:'src'})">📂 Оригинал</button>${bigger?`<div class="note">Результат больше оригинала: исходник уже сжат эффективно. Оставь оригинал или выбери «Компактное».</div>`:""}</div>`}
- if(j.test){const t=j.test;const tb=t.ratio>=1;body+=`<div class="res">Тест: <i>${esc(t.label)}</i><br>Кусок ${gb(t.ref_size)} → ${gb(t.test_size)} (${tb?"+"+((t.ratio-1)*100).toFixed(0):"−"+((1-t.ratio)*100).toFixed(0)}%). <b>Прогноз для всего файла: ≈ ${gb(t.est_size)}</b>, время ≈ ${tm(t.est_time)}.
-  ${t.vmaf!=null?`<br>VMAF: <span class="vm ${vmafCls(t.vmaf)}">${t.vmaf.toFixed(1)}</span> (95+ — разницу практически не отличить, 92–95 — очень хорошо, ниже — уже видно)`:`<br>Сравни глазами: открой оба файла из папки _tests на полном экране.`}
-  ${tb?`<div class="note">Сжатие не уменьшает этот файл: исходник уже сжат эффективно.</div>`:""}
-  <br><button class="btn sm" style="margin-top:6px" onclick="api('/api/open',{id:${j.id},which:'test'})">Открыть папку теста</button></div>`}
- if(j.note)body+=`<div class="note">${esc(j.note)}</div>`;
- if(j.error)body+=`<div class="err">${esc(j.error)}</div>`;
- const rt=(j.status==="error"||j.status==="cancelled")&&j.info?`<button class="btn sm pri" title="Поставить этот файл в очередь ещё раз" onclick="retryJob(${j.id})">↻ Повторить</button>`:"";
- const rm=j.status!=="running"?rt+`<button class="btn sm" title="Убрать из списка (файл не удаляется)" onclick="removeJob(${j.id})">✕</button>`:"";
- return `<div class="jh"><div><div class="jn">${esc(j.name)}</div><div class="meta">${meta}</div></div><div class="row" style="align-items:center"><span class="st ${esc(j.status)}">${STAT[j.status]||esc(j.status)}</span>${rm}</div></div>${body}`;
+  body=`<div class="res">${j.status==="skipped"?esc(tr("job.skipped_prefix")):""}<b>${gb(j.size)} → ${gb(j.out_size)}</b> (${pctS(d)}%) <button class="btn sm" title="${esc(tr("btn.open_out_title"))}" onclick="api('/api/open',{id:${j.id}})">${esc(tr("btn.open_out"))}</button> <button class="btn sm" title="${esc(tr("btn.open_src_title"))}" onclick="api('/api/open',{id:${j.id},which:'src'})">${esc(tr("btn.open_src"))}</button>${bigger?`<div class="note">${esc(tr("job.bigger"))}</div>`:""}</div>`}
+ if(j.test){const x=j.test;const tb=x.ratio>=1;const label=x.preset?`${presetTitle(x.preset)} · ${tr("quality.name."+x.quality)}`:(x.label||"");
+  body+=`<div class="res">${esc(tr("test.head",{label:"\u0001"}))
+   .replace("\u0001",`<i>${esc(label)}</i>`)}<br>${esc(tr("test.clip",{a:gb(x.ref_size),b:gb(x.test_size),pct:pctS((1-x.ratio)*100)}))} <b>${esc(tr("test.forecast",{size:gb(x.est_size)}))}</b>${esc(tr("test.time",{t:tm(x.est_time)}))}
+  ${x.vmaf!=null?`<br>VMAF: <span class="vm ${vmafCls(x.vmaf)}">${esc(nf(x.vmaf,1))}</span> ${esc(tr("test.vmaf_scale"))}`:`<br>${esc(tr("test.eyes"))}`}
+  ${tb?`<div class="note">${esc(tr("test.not_smaller"))}</div>`:""}
+  <br><button class="btn sm" style="margin-top:6px" onclick="api('/api/open',{id:${j.id},which:'test'})">${esc(tr("test.open"))}</button></div>`}
+ const note=msg(j.note),err=msg(j.error);
+ if(note)body+=`<div class="note">${esc(note)}</div>`;
+ if(err)body+=`<div class="err">${esc(err)}</div>`;
+ const rt=(j.status==="error"||j.status==="cancelled")&&j.info?`<button class="btn sm pri" title="${esc(tr("job.retry_title"))}" onclick="retryJob(${j.id})">${esc(tr("job.retry"))}</button>`:"";
+ const rm=j.status!=="running"?rt+`<button class="btn sm" title="${esc(tr("job.remove_title"))}" onclick="removeJob(${j.id})">✕</button>`:"";
+ const st=I18N.ru["status."+j.status]!=null?tr("status."+j.status):j.status;
+ return `<div class="jh"><div><div class="jn">${esc(j.name)}</div><div class="meta">${meta}</div></div><div class="row" style="align-items:center"><span class="st ${esc(j.status)}">${esc(st)}</span>${rm}</div></div>${body}`;
 }
 function renderJobs(){
  const el=$("jobs");
- if(!S.jobs.length){el._map=null;setHTML(el,`<div class="empty">Добавь видео кнопками сверху.<br>Совет: сначала нажми «Тест», посмотри прогноз размера и качество, потом жми «Сжать всё».</div>`);return}
+ if(!S.jobs.length){el._map=null;setHTML(el,`<div class="empty">${esc(tr("jobs.empty1"))}<br>${esc(tr("jobs.empty2"))}</div>`);return}
  if(!el._map){el.innerHTML="";el._h=null;el._map=new Map()}
  const seen=new Set();
  S.jobs.forEach((j,idx)=>{
@@ -2247,26 +2318,27 @@ function renderJobs(){
   seen.add(j.id);
   setHTML(n._s,jobStatic(j));
   const run=j.status==="running";n._p.style.display=run?"block":"none";
-  const fin=run&&(j.fin||/^Сохраняю/.test(j.phase));n._bar.parentNode.classList.toggle("busy",!!fin);
+  const saving=phk(j)==="phase.save"||phk(j)==="phase.save_wait";
+  const fin=run&&(j.fin||saving);n._bar.parentNode.classList.toggle("busy",!!fin);
   if(fin){const f=j.fin||{};n._bar.style.width=(f.pct!=null?Math.max(3,f.pct):100)+"%";
-   n._m.textContent=/^Сохраняю/.test(j.phase)?j.phase:`Дописываю файл: переношу индекс в начало, чтобы видео сразу открывалось и перематывалось${f.pct!=null?` · ${f.pct.toFixed(0)}%`:""}${f.eta!=null?` · осталось ≈ ${tm(f.eta)}`:" · на больших файлах это пара минут"} · всё идёт нормально, не закрывай`}
+   n._m.textContent=saving?msg(j.phase):[tr("progress.finish"),f.pct!=null?nf(f.pct,0)+"%":"",f.eta!=null?tr("progress.left_approx",{t:tm(f.eta)}):tr("progress.big_files"),tr("progress.ok")].filter(Boolean).join(" · ")}
   else if(run){n._bar.style.width=j.pct.toFixed(1)+"%";
-   n._m.textContent=`${j.phase} · ${j.pct.toFixed(1)}%${j.fps?" · "+j.fps.toFixed(0)+" fps":""} · скорость ${j.speed?j.speed.toFixed(2)+"×":"—"} · осталось ${tm(j.eta)} · прошло ${tm(j.elapsed)}${j.cur_size?" · уже "+gb(j.cur_size):""}`}
+   n._m.textContent=[msg(j.phase),nf(j.pct,1)+"%",j.fps?nf(j.fps,0)+" fps":"",tr("progress.speed",{v:j.speed?nf(j.speed,2)+"×":"—"}),tr("progress.left",{t:tm(j.eta)}),tr("progress.elapsed",{t:tm(j.elapsed)}),j.cur_size?tr("progress.so_far",{size:gb(j.cur_size)}):""].filter(Boolean).join(" · ")}
  });
  for(const [id,n] of el._map)if(!seen.has(id)){n.remove();el._map.delete(id)}
 }
 function render(){
- const c=S.caps;$("ver").textContent=c.ffmpeg?(c.version||"FFmpeg найден").replace(/Copyright.*/,"").slice(0,60):"FFmpeg не найден";
- setHTML($("warn"),!c.ffmpeg||!c.ffprobe?`<div class="warnbox"><b>FFmpeg не найден.</b> Установи его и перезапусти Жмых.<br>Windows: <code>winget install Gyan.FFmpeg</code> · Mac: <code>brew install ffmpeg</code><br>Или распакуй FFmpeg в папку <code>ffmpeg</code> рядом с app.py.</div>`:c.pagefile_off?`<div class="warnbox"><b>Файл подкачки Windows выключен.</b> Из-за этого сжатие иногда падает с ошибкой «Cannot allocate memory», даже когда свободной памяти полно: программы заранее резервируют память, и запаса не остаётся. Жмых в таком случае сам повторит файл, но лучше включить подкачку:<br>Win+R → <code>sysdm.cpl</code> → «Дополнительно» → Быстродействие «Параметры» → «Дополнительно» → Виртуальная память «Изменить» → галочка «Автоматически выбирать объём файла подкачки» → ОК и перезагрузка.</div>`:"");
+ const c=S.caps;$("ver").textContent=c.ffmpeg?(c.version||tr("ver.found")).replace(/Copyright.*/,"").slice(0,60):tr("ver.missing");
+ setHTML($("warn"),!c.ffmpeg||!c.ffprobe?`<div class="warnbox"><b>${esc(tr("warn.ffmpeg_t"))}</b> ${esc(tr("warn.ffmpeg_1"))}<br>Windows: <code>winget install Gyan.FFmpeg</code> · Mac: <code>brew install ffmpeg</code><br>${esc(tr("warn.ffmpeg_2"))}</div>`:c.pagefile_off?`<div class="warnbox"><b>${esc(tr("warn.pf_t"))}</b> ${esc(tr("warn.pf_1"))}<br>Win+R → <code>sysdm.cpl</code> ${esc(tr("warn.pf_2"))}</div>`:"");
  renderSettings();renderJobs();
  $("btnStop").style.display=S.running?"inline-block":"none";
  // во время работы кнопки не блокируем: новые файлы встают в очередь за текущим
  $("btnGo").disabled=$("btnTest").disabled=!c.ffmpeg;
  const q=S.jobs.filter(j=>j.status==="queued");
  const left=q.reduce((a,j)=>a+(j.info?j.info.duration:0),0);
- $("qinfo").textContent=q.length?`В очереди ещё ${q.length} (${dur(left)} видео)`:"";
- $("disk").textContent=S.disk?`Свободно на диске для результата: ${gb(S.disk.free)}`:"";
- document.title=S.running?`${(S.jobs.find(j=>j.status==="running")||{pct:0}).pct.toFixed(0)}% · Framewring`:"Framewring Жмых — компрессор видео";
+ $("qinfo").textContent=q.length?tr("foot.queue",{n:String(q.length),d:dur(left)}):"";
+ $("disk").textContent=S.disk?tr("foot.disk",{size:gb(S.disk.free)}):"";
+ document.title=S.running?`${(S.jobs.find(j=>j.status==="running")||{pct:0}).pct.toFixed(0)}% · Framewring`:tr("app.title");
  if(S.version)$("appver").textContent="v"+S.version;
 }
 // ---------------- поиск тяжёлых видео
@@ -2279,14 +2351,16 @@ async function toggleScan(show){const c=$("scanCard");show=show==null?c.style.di
  if(show&&!drives){const r=await api("/api/drives");drives=r.drives||[];drives.forEach(d=>{if(!d.net&&!d.removable)driveSel.add(d.path)});renderDrives()}
  if(show)c.scrollIntoView({behavior:"smooth",block:"start"})}
 function renderDrives(){
- setHTML($("drives"),(drives||[]).map((d,i)=>`<label class="drv ${driveSel.has(d.path)?"on":""}"><input type="checkbox" data-d="${i}" ${driveSel.has(d.path)?"checked":""}> <b>${esc(d.label)}</b> <span class="meta" style="margin:0">свободно ${gb(d.free)} из ${gb(d.total)}${d.net?" · сеть":d.removable?" · съёмный":""}</span></label>`).join("")||`<span class="meta">Диски не найдены, укажи папку</span>`);
+ setHTML($("drives"),(drives||[]).map((d,i)=>`<label class="drv ${driveSel.has(d.path)?"on":""}"><input type="checkbox" data-d="${i}" ${driveSel.has(d.path)?"checked":""}> <b>${esc(msg(d.label))}</b> <span class="meta" style="margin:0">${esc(tr("drive.free",{free:gb(d.free),total:gb(d.total)}))}${d.net?" · "+esc(tr("drive.net")):d.removable?" · "+esc(tr("drive.removable")):""}</span></label>`).join("")||`<span class="meta">${esc(tr("drive.none"))}</span>`);
  document.querySelectorAll("#minmb button").forEach(b=>{b.classList.toggle("on",+b.dataset.v===minMb);b.onclick=()=>{minMb=+b.dataset.v;renderDrives()}})}
 $("drives").addEventListener("change",e=>{const i=e.target.dataset.d;if(i==null)return;const p=drives[i].path;e.target.checked?driveSel.add(p):driveSel.delete(p);renderDrives()});
 async function scanStart(){const roots=[...driveSel];const cp=$("scanPath").value.trim();if(cp)roots.push(cp);
- if(!roots.length){toast("Отметь диск или впиши папку");return}
+ if(!roots.length){toast(tr("scan.need_root"));return}
  sel.clear();seenP.clear();const r=await api("/api/scan",{roots,min_mb:minMb,everything:$("useEv").checked});if(!r.error)refresh()}
 const pct=(a,b)=>b?Math.round(a/b*100):0;
-function verdict(r){const p=r.save/r.size;return p>=.5?["g","много"]:p>=.2?["y","средне"]:["m","мало"]}
+function verdict(r){const p=r.save/r.size;return p>=.5?["g",tr("scan.v.g")]:p>=.2?["y",tr("scan.v.y")]:["m",tr("scan.v.m")]}
+const B=(s,st)=>"\u0001"+(st||"")+"\u0004"+s+"\u0002"; // жирное внутри переведённой строки: esc() потом развернёт
+const unB=h=>h.replace(/\u0001([^\u0004]*)\u0004/g,(m,st)=>st?`<b style="${st}">`:"<b>").replace(/\u0002/g,"</b>");
 function renderScan(sc){
  if(!sc)return;
  if(sc.results){scanRes=sc.results;scanVer=sc.ver;
@@ -2294,14 +2368,15 @@ function renderScan(sc){
   for(const r of scanRes){const k=pk(r.path);if(!seenP.has(k)){seenP.add(k);if(good(r)&&!taken.has(dkey(r))){sel.add(k);taken.add(dkey(r))}}}}
  $("btnScan").style.display=sc.running?"none":"inline-block";$("btnScanStop").style.display=sc.running?"inline-block":"none";
  let info="";
- if(sc.running)info=`${esc(sc.phase)}… Папок просмотрено: ${sc.dirs.toLocaleString("ru")} · больших видео: ${sc.candidates}${sc.candidates?` · прочитано ${sc.probed}`:""}${sc.cur&&!sc.phase.startsWith("Читаю")?`<br><span style="opacity:.7">${esc(sc.cur.slice(-110))}</span>`:""}`;
+ const method=Array.isArray(sc.method)&&sc.method.length?" ("+sc.method.map(m=>tr("scan.method."+m)).join(" + ")+")":"";
+ if(sc.running)info=esc(tr("scan.running",{phase:sc.phase?tr("scan.phase."+sc.phase):"",dirs:nf(sc.dirs,0),cand:String(sc.candidates)}))+(sc.candidates?" · "+esc(tr("scan.read",{n:String(sc.probed)})):"")+(sc.cur&&sc.phase!=="probe"?`<br><span style="opacity:.7">${esc(sc.cur.slice(-110))}</span>`:"");
  else if(sc.finished){const tot=scanRes.reduce((a,r)=>a+r.size,0),sv=scanRes.reduce((a,r)=>a+r.save,0);
-  info=sc.error?`<span style="color:var(--err)">Ошибка поиска: ${esc(sc.error)}</span>`:scanRes.length?`Найдено ${scanRes.length} видео на ${gb(tot)} за ${tm(sc.took)}${sc.method?" ("+esc(sc.method)+")":""}. Если сжать все, освободится примерно <b style="color:var(--acc2)">${gb(sv)}</b>. Оценка грубая, точный прогноз покажет «Тест».`:`Подходящих видео не нашлось. Попробуй порог поменьше или другой диск.`;
-  if(sc.cancel&&!sc.error)info="Поиск остановлен. "+info;
-  if(sc.ev_missing&&sc.took>20&&!sc.error&&localStorage.getItem("fw_noev")!=="1")info+=`<div class="hint" style="margin-top:8px">Совет: с бесплатной программой <b>Everything</b> поиск займёт секунды вместо ${tm(sc.took)} — Framewring сам воспользуется её индексом. <a href="#" onclick="openUrl('https://www.voidtools.com/');return false">voidtools.com</a> · <a href="#" onclick="localStorage.setItem('fw_noev','1');renderScan({...S.scan,results:null});return false">больше не показывать</a></div>`;
+  info=sc.error?`<span style="color:var(--err)">${esc(tr("scan.error",{e:sc.error}))}</span>`:scanRes.length?unB(esc(tr("scan.found",{n:String(scanRes.length),size:gb(tot),t:tm(sc.took),method,save:B(gb(sv),"color:var(--acc2)")}))):esc(tr("scan.none"));
+  if(sc.cancel&&!sc.error)info=esc(tr("scan.stopped"))+" "+info;
+  if(sc.ev_missing&&sc.took>20&&!sc.error&&localStorage.getItem("fw_noev")!=="1")info+=`<div class="hint" style="margin-top:8px">${unB(esc(tr("scan.ev_tip",{ev:B("Everything"),t:tm(sc.took)})))} <a href="#" onclick="openUrl('https://www.voidtools.com/');return false">voidtools.com</a> · <a href="#" onclick="localStorage.setItem('fw_noev','1');renderScan({...S.scan,results:null});return false">${esc(tr("scan.ev_hide"))}</a></div>`;
   const dk={};scanRes.forEach(r=>{const k=r.name.toLowerCase()+"|"+r.size;dk[k]=(dk[k]||0)+1});const dupB=Object.entries(dk).filter(([k,n])=>n>1).reduce((a,[k,n])=>a+(+k.split("|").pop())*(n-1),0);
-  if(dupB>1e9)info+=`<br>Ещё одинаковые копии одних и тех же видео в разных местах занимают <b style="color:var(--warn)">${gb(dupB)}</b> (помечены «копий: N»). Лишние копии Жмых не удаляет: проверь и удали сам.`;
-  if(sc.skipped_cloud)info+=`<br>Пропущено файлов «только в облаке» OneDrive: ${sc.skipped_cloud}.`}
+  if(dupB>1e9)info+="<br>"+unB(esc(tr("scan.dups",{size:B(gb(dupB),"color:var(--warn)")})));
+  if(sc.skipped_cloud)info+="<br>"+esc(tr("scan.cloud",{n:String(sc.skipped_cloud)}))}
  setHTML($("scanInfo"),info);
  const inQ=new Set(S.jobs.filter(j=>!["done","skipped"].includes(j.status)).map(j=>pk(j.path)));
  scanRows=[...scanRes].sort((a,b)=>b.save-a.save);
@@ -2309,32 +2384,41 @@ function renderScan(sc){
  $("scanList").style.display=scanRows.length?"block":"none";
  setHTML($("scanList"),scanRows.map((r,i)=>{const k=pk(r.path),q=inQ.has(k),[vc,vt]=verdict(r);
   return `<label class="srow ${q||r.has_out?"dim":""}"><input type="checkbox" data-i="${i}" ${sel.has(k)&&!q?"checked":""} ${q?"disabled":""}>
-  <div><div class="sname">${esc(r.name)}</div><div class="meta">${esc(r.dir)}</div>${(d=>d.length>1?`<span class="tag y" title="Тот же файл (имя и размер) лежит в нескольких местах: удалить лишнюю копию выгоднее, чем сжимать">копий: ${d.length} (${esc([...new Set(d)].join(" "))})</span> `:"")(dup[r.name.toLowerCase()+"|"+r.size])}${EDIT_CODECS.has(r.codec)?`<span class="tag m" title="Монтажный кодек: обычно это исходник для видеоредактора, сжимать его стоит, только если монтаж закончен">монтажный исходник</span>`:""}</div>
+  <div><div class="sname">${esc(r.name)}</div><div class="meta">${esc(r.dir)}</div>${(d=>d.length>1?`<span class="tag y" title="${esc(tr("scan.copies_title"))}">${esc(tr("scan.copies",{n:String(d.length),drives:[...new Set(d)].join(" ")}))}</span> `:"")(dup[r.name.toLowerCase()+"|"+r.size])}${EDIT_CODECS.has(r.codec)?`<span class="tag m" title="${esc(tr("scan.edit_title"))}">${esc(tr("scan.edit"))}</span>`:""}</div>
   <div class="num">${gb(r.size)}</div>
-  <div class="meta">${esc((r.codec||"").toUpperCase())} · ${r.w}×${r.h}${r.fps?" · "+Math.round(r.fps):""}<br>${r.mbps} Мбит/с · ${dur(r.dur)}</div>
-  <div class="num">${q?`<span class="tag m">уже в списке</span>`:r.has_out?`<span class="tag m">сжатая копия есть</span>`:`−${gb(r.save)} <span class="tag ${vc}">${vt}</span><div class="meta">≈ ${gb(r.est)} (−${pct(r.save,r.size)}%)</div>`}</div></label>`}).join(""));
+  <div class="meta">${esc((r.codec||"").toUpperCase())} · ${r.w}×${r.h}${r.fps?" · "+Math.round(r.fps):""}<br>${esc(nfm(r.mbps,1))} ${esc(tr("unit.mbps"))} · ${dur(r.dur)}</div>
+  <div class="num">${q?`<span class="tag m">${esc(tr("scan.in_list"))}</span>`:r.has_out?`<span class="tag m">${esc(tr("scan.has_out"))}</span>`:`−${gb(r.save)} <span class="tag ${vc}">${esc(vt)}</span><div class="meta">≈ ${gb(r.est)} (−${pct(r.save,r.size)}%)</div>`}</div></label>`}).join(""));
  const chosen=scanRows.filter(r=>sel.has(pk(r.path))&&!inQ.has(pk(r.path)));
  $("scanBar").style.display=scanRows.length?"flex":"none";
- setHTML($("scanBar"),`<span class="meta" style="margin:0;flex:1">Выбрано ${chosen.length} на ${gb(chosen.reduce((a,r)=>a+r.size,0))} · освободится ≈ <b style="color:var(--acc2)">${gb(chosen.reduce((a,r)=>a+r.save,0))}</b></span>
-  <button class="btn sm" onclick="scanPick('good')">Отметить выгодные</button><button class="btn sm" onclick="scanPick('all')">Все</button><button class="btn sm" onclick="scanPick('none')">Снять</button>
-  <button class="btn go" onclick="scanAdd()" ${chosen.length?"":"disabled"}>Добавить в очередь (${chosen.length})</button>`);
+ setHTML($("scanBar"),`<span class="meta" style="margin:0;flex:1">${unB(esc(tr("scan.selected",{n:String(chosen.length),size:gb(chosen.reduce((a,r)=>a+r.size,0)),save:B(gb(chosen.reduce((a,r)=>a+r.save,0)),"color:var(--acc2)")})))}</span>
+  <button class="btn sm" onclick="scanPick('good')">${esc(tr("scan.pick_good"))}</button><button class="btn sm" onclick="scanPick('all')">${esc(tr("scan.pick_all"))}</button><button class="btn sm" onclick="scanPick('none')">${esc(tr("scan.pick_none"))}</button>
+  <button class="btn go" onclick="scanAdd()" ${chosen.length?"":"disabled"}>${esc(tr("scan.add",{n:String(chosen.length)}))}</button>`);
 }
 $("scanList").addEventListener("change",e=>{const i=e.target.dataset.i;if(i==null)return;const k=pk(scanRows[i].path);e.target.checked?sel.add(k):sel.delete(k);renderScan({...S.scan,results:null})});
 function scanPick(m){sel.clear();const taken=new Set();if(m!=="none")for(const r of scanRows)if(m==="all"||(good(r)&&!taken.has(dkey(r)))){sel.add(pk(r.path));taken.add(dkey(r))}renderScan({...S.scan,results:null})}
 async function scanAdd(){const inQ=new Set(S.jobs.filter(j=>!["done","skipped"].includes(j.status)).map(j=>pk(j.path)));const paths=scanRows.filter(r=>sel.has(pk(r.path))&&!inQ.has(pk(r.path))).map(r=>r.path);
- if(!paths.length)return;toast(`Добавляю ${paths.length} файлов…`);const r=await api("/api/add",{paths});toasts(r.errors);
- await refresh();toast(`Добавлено в очередь: ${paths.length}. Можно жать «Тест» или «Сжать всё».`)}
+ if(!paths.length)return;toast(tr("scan.adding",{n:String(paths.length)}));const r=await api("/api/add",{paths});toasts(r.errors);
+ await refresh();toast(tr("scan.added",{n:String(paths.length)}))}
 async function refresh(){
  const v=sver;
  try{const r=await fetch("/api/status?sv="+scanVer,{headers:{"X-Token":T}});if(r.status===403){stale();return}const d=await r.json();
   if(pending||v!==sver)d.settings=S?S.settings:d.settings; // не откатываем только что выбранную настройку
-  S=d;render();renderScan(d.scan);if(histOpen&&d.hist_ver!==histVer)loadHist()}
- catch(e){$("ver").textContent="программа не отвечает (закрыта?)"}
+  S=d;const lg=(S.settings.lang||S.sys_lang)==="ru"?"ru":"en";
+  if(lg!==LANG){LANG=lg;histVer=-1;applyStatic()}else render();
+  renderScan(d.scan);if(histOpen&&d.hist_ver!==histVer)loadHist()}
+ catch(e){$("ver").textContent=tr("ver.no_response")}
 }
 async function loop(){await refresh();if(document.body.querySelector("#jobs"))setTimeout(loop,document.hidden?3000:1000)}
+applyStatic();
 loop();
 </script></body></html>
 """
+
+
+def page_html():
+    """Страница с ключом доступа, текущим языком и словарём обоих языков (переключение без перезагрузки)."""
+    cat = json.dumps(i18n.CATALOG, ensure_ascii=False).replace("</", "<\\/")
+    return HTML.replace("__TOKEN__", TOKEN).replace("__LANG__", cur_lang()).replace("__I18N__", cat)
 
 
 class Server(ThreadingHTTPServer):
@@ -2473,10 +2557,10 @@ def run_window(url):
                      "Framewring откроется в браузере. Чтобы было своё окно, установи WebView2 Runtime:\n"
                      "https://developer.microsoft.com/microsoft-edge/webview2/\n\n"
                      "Microsoft Edge WebView2 is missing, so Framewring will open in your browser.",
-                     APP_NAME, 0x40)
+                     app_name(), 0x40)
             return False
     except Exception as e:
-        print(" Своё окно недоступно (%s), открываю в браузере." % e)
+        print(tr("con.window_unavail", e=str(e)))
         return False
 
     def on_drop(e):  # перетащили файлы или папки в окно
@@ -2493,19 +2577,18 @@ def run_window(url):
             from webview.dom import DOMEventHandler
             win.dom.document.events.drop += DOMEventHandler(on_drop, True, True)
         except Exception as ex:
-            print(" drag&drop недоступен: %s" % ex)
+            print(tr("con.dnd_unavail", e=str(ex)))
 
     def on_closing():
         if any(j["status"] == "running" for j in JOBS):
-            r = _win_msg("Сейчас идёт сжатие. Остановить его и закрыть программу?\n\n"
-                         "Список файлов сохранится, текущий файл потом начнётся заново.",
-                         APP_NAME, 0x4 | 0x30 | 0x100)  # MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2
+            r = _win_msg(tr("native.close_confirm"),
+                         app_name(), 0x4 | 0x30 | 0x100)  # MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2
             if r != 6:  # IDYES
                 return False
         return True
 
     try:
-        win = webview.create_window(APP_NAME, url, width=1180, height=860, min_size=(760, 560),
+        win = webview.create_window(app_name(), url, width=1180, height=860, min_size=(760, 560),
                                     background_color="#0f1115", text_select=True)
         win.events.closing += on_closing
         win.events.loaded += on_loaded
@@ -2515,7 +2598,7 @@ def run_window(url):
         return True
     except Exception as e:
         WINDOW["w"] = None
-        print(" Своё окно не запустилось (%s), открываю в браузере." % e)
+        print(tr("con.window_failed", e=str(e)))
         return False
 
 
@@ -2529,7 +2612,7 @@ def main():
         except OSError:
             if zhmyh_at(port):
                 url = "http://127.0.0.1:%d/" % port
-                print("Framewring уже запущен: " + url + "  (показываю его, второй экземпляр не нужен)")
+                print(tr("con.already", url=url))
                 if "--no-browser" not in sys.argv:
                     ask_show(port)
                     time.sleep(2)
@@ -2541,17 +2624,17 @@ def main():
     threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=queue_saver, daemon=True).start()
     if not srv:
-        print("Не нашёл свободный порт 8765–8799")
+        print(tr("con.no_port"))
         sys.exit(1)
     url = "http://127.0.0.1:%d/?t=%s" % (srv.server_address[1], TOKEN)
     APP_URL["url"] = url
     _hold_mutex()
     print("=" * 60)
-    print(" %s v%s запущен: %s" % (APP_NAME, __version__, url.split("?")[0]))
-    print(" Данные (настройки, очередь, история): " + str(DATA_DIR))
-    print(" FFmpeg: " + (FFMPEG or "НЕ НАЙДЕН"))
+    print(tr("con.started", name=app_name(), ver=__version__, url=url.split("?")[0]))
+    print(tr("con.data", dir=str(DATA_DIR)))
+    print(tr("con.ffmpeg", path=FFMPEG or tr("con.ffmpeg_missing")))
     if n:
-        print(" Восстановил список прошлого сеанса: %d файлов." % n)
+        print(tr("con.restored", n=n))
     print("=" * 60)
     try:
         if "--no-browser" in sys.argv:
@@ -2559,8 +2642,8 @@ def main():
         else:
             threading.Thread(target=srv.serve_forever, daemon=True).start()
             if not run_window(url):
-                print(" Не закрывай это окно, пока идёт сжатие.")
-                print(" Чтобы выключить, закрой окно или нажми Ctrl+C.")
+                print(tr("con.keep_open"))
+                print(tr("con.how_quit"))
                 webbrowser.open(url)
                 while True:
                     time.sleep(3600)

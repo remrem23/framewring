@@ -1,3 +1,3 @@
-# Кнопка «Sponsor» на странице репозитория
-# ko_fi: ИМЯ   # раскомментировать, когда будет страница Ko-fi
+# "Sponsor" button on the repository page
+# ko_fi: USERNAME   # uncomment once the Ko-fi page exists
 custom: ["https://github.com/remrem23/framewring/blob/main/DONATE.md"]
