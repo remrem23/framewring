@@ -25,6 +25,7 @@ First public release.
 - **Own app window** (Edge WebView2) instead of a console and a browser tab; closing during compression asks
   "Stop and quit?". Without WebView2 the app opens in the browser and says so. Starting it again brings up the open window.
 - **Drag & drop** files and folders onto the window.
+- **App-style layout:** settings stay pinned on the left, the file list, search and history scroll separately on the right; the window title bar matches the dark theme.
 - **Windows build:** `Framewring.exe` (PyInstaller, Python 3.12) with an icon and version info; FFmpeg bundled;
   third-party license texts shipped in the `licenses` folder.
 - **Installer** (Inno Setup): no admin rights, `%LOCALAPPDATA%\Programs\Framewring`, Start menu and optional desktop shortcut,
@@ -69,6 +70,7 @@ First public release.
 - **Своё окно программы** (Edge WebView2) вместо консоли и вкладки браузера; при закрытии во время сжатия — вопрос
   «Остановить и выйти?». Без WebView2 программа открывается в браузере и сообщает об этом. Повторный запуск поднимает открытое окно.
 - **Перетаскивание** файлов и папок в окно.
+- **Раскладка как у приложения:** настройки всегда видны слева, список файлов, поиск и история листаются отдельно справа; полоса заголовка окна — в цвет тёмной темы.
 - **Сборка для Windows:** `Framewring.exe` (PyInstaller, Python 3.12) со значком и сведениями о версии; FFmpeg в комплекте;
   тексты лицензий сторонних компонентов — в папке `licenses`.
 - **Установщик** (Inno Setup): без прав администратора, `%LOCALAPPDATA%\Programs\Framewring`, ярлык в «Пуске» и по желанию

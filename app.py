@@ -2077,12 +2077,17 @@ HTML = r"""<!doctype html>
 <style>
 :root{--bg:#0f1115;--card:#171a21;--line:#262b36;--fg:#e8eaf0;--mut:#8b93a7;--acc:#7c5cff;--acc2:#2bd9a8;--warn:#ffb347;--err:#ff5d6c}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-.wrap{max-width:1180px;margin:0 auto;padding:22px}
+.wrap{max-width:1400px;margin:0 auto;padding:18px 22px 0;height:100vh;display:flex;flex-direction:column}
+body{overflow:hidden}
+.grid>.col{overflow-y:auto;min-height:0;padding-bottom:18px;scrollbar-width:thin;scrollbar-color:#2c3240 transparent}
+.grid>.col::-webkit-scrollbar{width:9px}.grid>.col::-webkit-scrollbar-thumb{background:#2c3240;border-radius:9px}
+.grid>.col::-webkit-scrollbar-thumb:hover{background:#3a4152}
+@media(max-width:700px){body{overflow:auto}.wrap{height:auto;padding-bottom:22px}.grid>.col{overflow:visible}}
 h1{margin:0;font-size:22px;letter-spacing:.2px}h1 span{color:var(--acc)}
 .sub{color:var(--mut);margin-top:2px}
 .top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px;flex-wrap:wrap}
 .pill{font-size:12px;color:var(--mut);border:1px solid var(--line);border-radius:99px;padding:4px 10px}
-.grid{display:grid;grid-template-columns:380px 1fr;gap:16px}@media(max-width:1000px){.grid{grid-template-columns:300px minmax(0,1fr)}}@media(max-width:700px){.grid{grid-template-columns:1fr}.grid>:last-child{order:-1}}
+.grid{display:grid;grid-template-columns:380px minmax(0,1fr);grid-template-rows:minmax(0,1fr);gap:16px;flex:1;min-height:0}@media(max-width:1000px){.grid{grid-template-columns:300px minmax(0,1fr)}}@media(max-width:700px){.grid{grid-template-columns:1fr}.grid>:last-child{order:-1}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
 .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:0 0 10px}
 .opt{display:block;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
@@ -2104,7 +2109,7 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 .big{font-size:16px;padding:12px 20px}
 .job{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
 .jh{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
-.jn{font-weight:600;word-break:break-all}.meta{color:var(--mut);font-size:12px;margin-top:2px}
+.jn{font-weight:600;overflow-wrap:anywhere}.meta{color:var(--mut);font-size:12px;margin-top:2px}
 .bar{height:8px;background:#0f1115;border-radius:99px;overflow:hidden;margin:10px 0 6px;border:1px solid var(--line)}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));width:0;transition:width .6s}
 .bar.busy i{background:repeating-linear-gradient(45deg,var(--acc) 0 12px,var(--acc2) 12px 24px);background-size:34px 34px;animation:stripes 1s linear infinite}
@@ -2118,20 +2123,21 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 .warnbox{border:1px solid var(--warn);background:#ffb34714;color:var(--warn);padding:12px;border-radius:12px;margin-bottom:14px}
 .foot{color:var(--mut);font-size:12px;margin-top:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
 @media(max-width:1000px){.hrow{grid-template-columns:minmax(120px,1fr) auto!important}.hrow>:nth-child(1),.hrow>:nth-child(4){display:none}.hrow>:nth-child(3){grid-column:1}}.toast{overflow-wrap:anywhere}
-.hrow{display:grid;grid-template-columns:96px minmax(140px,1fr) 200px 150px auto;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
-.hrow:last-child{border-bottom:0}.hrow .meta{margin:0;word-break:break-all}
+.hrow>.row{flex-direction:column;align-items:stretch;gap:4px}.hrow .btn{white-space:nowrap}
+.hrow{display:grid;grid-template-columns:88px minmax(160px,1fr) 150px 130px auto;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
+.hrow:last-child{border-bottom:0}.hrow .meta{margin:0;overflow-wrap:anywhere}
 .don{border-color:#ff6b9a55;color:#ff9abb}.don:hover{border-color:#ff6b9a;background:#ff6b9a14}
 .modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
 .modal.on{display:flex}.mbox{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;max-width:560px;width:100%}
 .mbox h3{margin:0 0 4px;font-size:18px}.wal{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px}
 .wal b{display:block;margin-bottom:6px}.addr{display:flex;gap:8px;align-items:center}
-.addr code{flex:1;background:#0f1115;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:13px ui-monospace,Consolas,monospace;word-break:break-all;user-select:all}
+.addr code{flex:1;background:#0f1115;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:13px ui-monospace,Consolas,monospace;overflow-wrap:anywhere;user-select:all}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#232836;border:1px solid var(--line);padding:10px 16px;border-radius:10px;display:none;max-width:90%}
 .note{color:var(--warn);font-size:12px;margin-top:6px}
 .scanlist{max-height:440px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:8px}
 .srow{display:grid;grid-template-columns:22px 1fr 86px 120px 150px;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
-.srow:last-child{border-bottom:0}.srow:hover{background:#ffffff06}.srow .meta{margin:0;word-break:break-all}
-.srow.dim{opacity:.55}.sname{font-weight:600;word-break:break-all}.num{text-align:right;font-variant-numeric:tabular-nums}
+.srow:last-child{border-bottom:0}.srow:hover{background:#ffffff06}.srow .meta{margin:0;overflow-wrap:anywhere}
+.srow.dim{opacity:.55}.sname{font-weight:600;overflow-wrap:anywhere}.num{text-align:right;font-variant-numeric:tabular-nums}
 .tag{font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);white-space:nowrap}
 .tag.g{color:var(--acc2);border-color:var(--acc2)}.tag.y{color:var(--warn);border-color:var(--warn)}.tag.m{color:var(--mut)}
 .drv{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:6px 10px;cursor:pointer}
@@ -2144,26 +2150,8 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 <div class="sub" data-t="app.sub"></div></div>
 <div class="row" style="align-items:center"><button class="btn sm don" onclick="donate(true)" data-t="donate.btn" data-tt="donate.btn_title"></button><div class="pill" id="ver" data-t="ver.checking"></div></div></div>
 <div id="warn"></div>
-<div class="card" id="scanCard" style="display:none;margin-bottom:16px">
-  <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0" data-t="scan.title"></h2><button class="btn sm" onclick="toggleScan(false)" data-t="common.collapse"></button></div>
-  <p class="hint" style="margin-top:8px" data-t="scan.hint"></p>
-  <div class="row" id="drives"></div>
-  <div class="row" style="margin-top:8px"><input type="text" id="scanPath" data-tp="scan.path_ph" style="flex:1"></div>
-  <div class="row" style="margin-top:8px;align-items:center"><span class="meta" style="margin:0" data-t="scan.min_label"></span>
-   <div class="seg" id="minmb" style="margin:0;flex:1;min-width:260px"><button data-v="200" data-t="scan.min200"></button><button data-v="500" data-t="scan.min500"></button><button data-v="1000" data-t="scan.min1000"></button><button data-v="3000" data-t="scan.min3000"></button></div>
-   <label class="chk" style="margin:0" data-tt="scan.ev_title"><input type="checkbox" id="useEv" checked> <span data-t="scan.ev_label"></span></label>
-   <button class="btn pri" id="btnScan" onclick="scanStart()" data-t="scan.search"></button><button class="btn red" id="btnScanStop" onclick="api('/api/scan_cancel')" style="display:none" data-t="common.stop"></button></div>
-  <div class="meta" id="scanInfo" style="margin-top:10px"></div>
-  <div id="scanBar" class="row" style="margin-top:8px;align-items:center;display:none"></div>
-  <div class="scanlist" id="scanList" style="display:none"></div>
- </div>
-<div class="card" id="histCard" style="display:none;margin-bottom:16px">
-  <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0" data-t="hist.title"></h2><button class="btn sm" onclick="toggleHist(false)" data-t="common.collapse"></button></div>
-  <div class="meta" id="histSum" style="margin-top:8px"></div>
-  <div class="scanlist" id="histList" style="margin-top:8px"></div>
- </div>
 <div class="grid">
-<div>
+<div class="col">
  <div class="card">
   <h2 data-t="set.mode"></h2><div id="presets"></div>
   <h2 style="margin-top:14px" data-t="set.quality"></h2>
@@ -2184,7 +2172,25 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
   </div>
  </div>
 </div>
-<div>
+<div class="col" id="rcol">
+<div class="card" id="scanCard" style="display:none;margin-bottom:16px">
+  <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0" data-t="scan.title"></h2><button class="btn sm" onclick="toggleScan(false)" data-t="common.collapse"></button></div>
+  <p class="hint" style="margin-top:8px" data-t="scan.hint"></p>
+  <div class="row" id="drives"></div>
+  <div class="row" style="margin-top:8px"><input type="text" id="scanPath" data-tp="scan.path_ph" style="flex:1"></div>
+  <div class="row" style="margin-top:8px;align-items:center"><span class="meta" style="margin:0" data-t="scan.min_label"></span>
+   <div class="seg" id="minmb" style="margin:0;flex:1;min-width:260px"><button data-v="200" data-t="scan.min200"></button><button data-v="500" data-t="scan.min500"></button><button data-v="1000" data-t="scan.min1000"></button><button data-v="3000" data-t="scan.min3000"></button></div>
+   <label class="chk" style="margin:0" data-tt="scan.ev_title"><input type="checkbox" id="useEv" checked> <span data-t="scan.ev_label"></span></label>
+   <button class="btn pri" id="btnScan" onclick="scanStart()" data-t="scan.search"></button><button class="btn red" id="btnScanStop" onclick="api('/api/scan_cancel')" style="display:none" data-t="common.stop"></button></div>
+  <div class="meta" id="scanInfo" style="margin-top:10px"></div>
+  <div id="scanBar" class="row" style="margin-top:8px;align-items:center;display:none"></div>
+  <div class="scanlist" id="scanList" style="display:none"></div>
+ </div>
+<div class="card" id="histCard" style="display:none;margin-bottom:16px">
+  <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0" data-t="hist.title"></h2><button class="btn sm" onclick="toggleHist(false)" data-t="common.collapse"></button></div>
+  <div class="meta" id="histSum" style="margin-top:8px"></div>
+  <div class="scanlist" id="histList" style="margin-top:8px"></div>
+ </div>
  <div class="card">
   <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
    <div class="row"><button class="btn pri" onclick="pick('files')" data-t="btn.files"></button><button class="btn" onclick="pick('folder')" data-t="btn.folder"></button><button class="btn" onclick="toggleScan()" data-t="btn.scan" data-tt="btn.scan_title"></button><button class="btn" onclick="toggleHist()" data-t="btn.hist" data-tt="btn.hist_title"></button></div>
@@ -2547,6 +2553,21 @@ def _setup_log():
         pass
 
 
+def _style_titlebar():
+    """Полоса заголовка окна в цвет программы: тёмная тема (Windows 10/11), цвет фона, текста и рамки
+    (Windows 11). Кнопки, прилипание к краям и изменение размера остаются системными."""
+    if not IS_WIN:
+        return
+    try:
+        dwm = ctypes.windll.dwmapi
+        for h in _own_windows():
+            for attr, val in ((20, 1), (19, 1), (35, 0x0015110F), (36, 0x00F0EAE8), (34, 0x00362B26)):
+                v = ctypes.c_int(val)
+                dwm.DwmSetWindowAttribute(ctypes.c_void_p(h), attr, ctypes.byref(v), ctypes.sizeof(v))
+    except Exception as e:
+        print(" titlebar: %s" % e)
+
+
 def run_window(url):
     """Своё окно программы на движке Edge (WebView2). False — не вышло, откроем браузер."""
     if "--browser" in sys.argv or not IS_WIN:
@@ -2575,6 +2596,7 @@ def run_window(url):
             print(" drop: %s" % ex)
 
     def on_loaded():
+        _style_titlebar()
         try:
             from webview.dom import DOMEventHandler
             win.dom.document.events.drop += DOMEventHandler(on_drop, True, True)
@@ -2594,6 +2616,7 @@ def run_window(url):
                                     background_color="#0f1115", text_select=True)
         win.events.closing += on_closing
         win.events.loaded += on_loaded
+        win.events.shown += _style_titlebar
         WINDOW["w"] = win
         webview.start(gui="edgechromium", private_mode=False,
                       storage_path=str(DATA_DIR / "webview"))

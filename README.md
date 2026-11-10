@@ -10,7 +10,15 @@ estimates how much space each one would free, lets you test the result on a shor
 Nvidia GPU (NVENC AV1 / H.265) or on the CPU (x265, SVT-AV1). The interface is in English, Russian, German, French, Spanish, Portuguese and Simplified Chinese
 (language list in the header; the default follows your Windows language).
 
-<!-- TODO: screenshots of the main window, "Find heavy videos" and a test result with VMAF -->
+![Framewring: compressing a queue of videos on an Nvidia GPU](docs/screenshots/main-en.png)
+
+<table><tr>
+<td width="33%"><a href="docs/screenshots/scan-en.png"><img src="docs/screenshots/scan-en.png" alt="Find heavy videos"></a><br><sub><b>Find heavy videos</b>: savings estimate, duplicates, editing sources</sub></td>
+<td width="33%"><a href="docs/screenshots/test-en.png"><img src="docs/screenshots/test-en.png" alt="Test result with VMAF"></a><br><sub><b>Test (2 min)</b>: size forecast and VMAF quality before the full run</sub></td>
+<td width="33%"><a href="docs/screenshots/history-en.png"><img src="docs/screenshots/history-en.png" alt="Compression history"></a><br><sub><b>History</b>: everything compressed and the space freed</sub></td>
+</tr></table>
+
+<sub>Screenshots use generated demo clips.</sub>
 
 ## Download
 
@@ -152,6 +160,15 @@ Framewring Жмых (английское название — *Framewring*) —
 на всех дисках, оценивает, сколько места освободит каждое, позволяет проверить результат на коротком куске и пережимает
 на видеокарте Nvidia (NVENC AV1 / H.265) или на процессоре (x265, SVT-AV1). Интерфейс: русский, английский, немецкий, французский, испанский, португальский и китайский (упрощённый)
 (выбор языка в шапке; по умолчанию — язык Windows).
+
+![Framewring Жмых: результаты теста с прогнозом размера и VMAF](docs/screenshots/main-ru.png)
+
+<table><tr>
+<td width="50%"><a href="docs/screenshots/scan-ru.png"><img src="docs/screenshots/scan-ru.png" alt="Поиск тяжёлых видео"></a><br><sub><b>Найти тяжёлые видео</b>: оценка экономии, дубликаты, монтажные исходники</sub></td>
+<td width="50%"><a href="docs/screenshots/history-ru.png"><img src="docs/screenshots/history-ru.png" alt="История сжатия"></a><br><sub><b>История</b>: всё сжатое и сколько места освободилось</sub></td>
+</tr></table>
+
+<sub>На скриншотах — сгенерированные демо-ролики.</sub>
 
 ### Скачать
 
