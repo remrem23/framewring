@@ -2,13 +2,27 @@
 
 # Framewring — free local video compressor
 
-**Finds videos that waste space on your drives and shrinks them several times over with no visible loss of quality.**
+**Your drive is full and you can't tell where the space went? Most of the time it's video.**
+Screen and game recordings, phone clips, camera footage, old projects — gigabytes recorded at bitrates nobody needs,
+scattered across folders, often in several copies.
+
+**Framewring finds them, shows how much space each one wastes, and compresses them several times smaller with no
+visible loss of quality.** You keep every video — it just takes a fraction of the space.
+Real example: a 76.6 GB screen recording became 7.3 GB; the first evening freed 93 GB.
+
 Free, local, no limits: your files never leave your computer.
 
 **[⬇ Download for Windows 10/11 (64-bit)](https://github.com/remrem23/framewring/releases/latest)** · free · GPL v3
 
-Framewring is a Windows app built on top of FFmpeg. It finds heavy videos on all your drives,
-estimates how much space each one would free, lets you test the result on a short piece, and re-encodes on an
+**How it works**
+
+1. **Find heavy videos** — scans all your drives (in seconds with [Everything](https://www.voidtools.com/)) and lists
+   every big video with the space compressing it would free. Duplicates and editing sources are marked.
+2. **Test (2 min)** — compresses a short piece and shows the final size and quality (VMAF) before you commit.
+3. **Compress all** — the compressed copies appear next to the originals in a `compressed` folder.
+   Framewring never deletes anything: when you're happy with the result, delete the originals yourself.
+
+Under the hood it's FFmpeg on an
 Nvidia, AMD or Intel GPU (NVENC / AMF / Quick Sync, AV1 or H.265) or on the CPU (x265, SVT-AV1). The interface is in English, Russian, German, French, Spanish, Portuguese and Simplified Chinese
 (language list in the header; the default follows your Windows language).
 
@@ -81,8 +95,6 @@ Copies from other sites may be modified.
   queue and history; the portable version opens the release page.
 - **🐞 Report a bug** in the header opens the GitHub bug-report form with the program version, Windows version,
   graphics cards, FFmpeg version and mode already filled in (you see everything before sending), and can show the log file.
-
-Example from the author's machine: a 3440×1440 screen recording, **76.6 GB → 7.3 GB (−90%)**; 93 GB freed on the first evening.
 
 ## How to use
 
@@ -178,13 +190,27 @@ The builds include [FFmpeg](https://ffmpeg.org) (Gyan build, GPL v3) and other c
 ## Русский
 
 **Framewring Жмых — локальный компрессор видео.**
-**Находит на дисках видео, которые зря занимают место, и ужимает их в разы без видимой потери качества.**
+**Диск забит, а куда делось место — непонятно? Чаще всего это видео.**
+Записи экрана и игр, ролики с телефона, съёмка с камеры, старые проекты — гигабайты в никому не нужном битрейте,
+разбросанные по папкам, часто ещё и в нескольких копиях.
+
+**Framewring находит их, показывает, сколько места зря занимает каждое, и сжимает в разы без видимой потери
+качества.** Все видео остаются с тобой — просто занимают в разы меньше места.
+Реальный пример: запись экрана на 76,6 ГБ стала 7,3 ГБ; за первый вечер освободилось 93 ГБ.
+
 Бесплатно, локально, без лимитов: файлы никуда не отправляются.
 
 **[⬇ Скачать для Windows 10/11 (64 бит)](https://github.com/remrem23/framewring/releases/latest)** · бесплатно · GPL v3
 
-Framewring Жмых (английское название — *Framewring*) — программа для Windows, обёртка над FFmpeg. Находит тяжёлые видео
-на всех дисках, оценивает, сколько места освободит каждое, позволяет проверить результат на коротком куске и пережимает
+**Как это работает**
+
+1. **«Найти тяжёлые видео»** — обходит все диски (с [Everything](https://www.voidtools.com/) — за секунды) и показывает
+   каждое большое видео и сколько места освободит его сжатие. Дубликаты и монтажные исходники помечены.
+2. **«Тест на 2 мин»** — сжимает короткий кусок и показывает итоговый размер и качество (VMAF) до полного сжатия.
+3. **«Сжать всё»** — сжатые копии появляются рядом с оригиналами, в папке `compressed`.
+   Framewring ничего не удаляет: когда результат устроит, оригиналы удаляешь сам.
+
+Framewring Жмых (английское название — *Framewring*) — программа для Windows на основе FFmpeg. Сжимает
 на видеокарте Nvidia, AMD или Intel (NVENC / AMF / Quick Sync, AV1 или H.265) или на процессоре (x265, SVT-AV1). Интерфейс: русский, английский, немецкий, французский, испанский, португальский и китайский (упрощённый)
 (выбор языка в шапке; по умолчанию — язык Windows).
 
@@ -256,8 +282,6 @@ FFmpeg уже внутри, ничего доустанавливать не н�
   очередь и историю; портабл-версия открывает страницу релиза.
 - **«🐞 Сообщить об ошибке»** в шапке открывает форму на GitHub, где уже заполнены версия программы, Windows, видеокарты,
   версия FFmpeg и режим (всё видно до отправки), и умеет показать файл журнала.
-
-Пример с машины автора: запись экрана 3440×1440 — **76,6 ГБ → 7,3 ГБ (−90%)**; за первый вечер освобождено 93 ГБ.
 
 ### Как пользоваться
 
