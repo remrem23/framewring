@@ -94,6 +94,9 @@ STRINGS = {
     "set.update_check": "Procurar atualizações ao iniciar",
     "stale.text": "Esta aba está desatualizada: o programa foi reiniciado ou fechado. Abra o Framewring novamente.",
     "native.webview2_missing": "A janela do programa precisa do Microsoft Edge WebView2, que não está neste computador. O Framewring abrirá no navegador. Para ter a janela do programa, instale o WebView2 Runtime:",
+    "status.kept": "Mantido como está",
+    "note.no_gain": "Não comprimido: este vídeo já está codificado de forma eficiente e o resultado não ficou menor ({pct}% do original). O original não foi alterado e nenhum arquivo extra foi deixado. Você pode tentar “Compacta” e “↻ Repetir”.",
+    "note.no_gain_early": "Interrompido em {done}%: o resultado não ficaria menor que o original (≈{pct}%). Este vídeo já está codificado de forma eficiente. O original não foi alterado e o tempo foi poupado. Você pode tentar “Compacta” e “↻ Repetir”.",
     "preset.vt_hevc.title": "GPU do Mac · H.265",
     "preset.vt_hevc.desc": "Codificador de hardware do Mac (VideoToolbox). Rápido, mas os arquivos ficam maiores "
                            "que com o processador.",

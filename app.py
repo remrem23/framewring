@@ -25,7 +25,7 @@ from pathlib import Path
 
 import i18n
 
-__version__ = "0.9.0"
+__version__ = "0.9.1"
 APP_NAMES = i18n.APP_NAMES  # заголовок окна: «Framewring Жмых» / «Framewring»
 REPO_URL = "https://github.com/remrem23/framewring"  # официальная страница программы
 DONATE_URL = REPO_URL + "/blob/main/DONATE.md"
@@ -1526,6 +1526,36 @@ def finalize(part, out, job):
         time.sleep(2)
 
 
+NO_GAIN = 0.97  # результат больше 97% оригинала — сжимать незачем, оставляем оригинал
+
+
+def _gain_watch(job, size, stop):
+    """Следит за размером во время сжатия. Если уже видно, что результат выйдет не меньше оригинала
+    (исходник и так сжат эффективно), останавливает ffmpeg — не тратим часы на файл, который не уменьшится."""
+    while not stop.wait(2):
+        pct, cur = job.get("pct") or 0, job.get("cur_size") or 0
+        if job.get("fin") or pct < 10 or cur <= 0:
+            continue
+        proj = cur / (pct / 100.0)
+        if proj >= size * (1.05 if pct < 25 else 0.99):
+            with LOCK:
+                job["_nogain"] = (round(pct), round(proj * 100.0 / size))
+                p = CUR.get("proc")
+            if p:
+                try:
+                    p.terminate()
+                except Exception:
+                    pass
+            return
+
+
+def _keep_original(job, note):
+    with LOCK:
+        job["status"], job["pct"], job["out_path"], job["out_size"] = "kept", 100, "", 0
+        job["error"] = ""
+        add_note(job, note)
+
+
 def do_full(job, s):
     out = out_path_for(job, s)
     if _same_file(out, job["path"]):  # не должно случиться, но оригинал дороже всего
@@ -1552,8 +1582,28 @@ def do_full(job, s):
     with LOCK:
         OUT_OWNERS[_norm(out)] = _norm(job["path"])
     part = out.with_name(out.stem + ".part.mp4")
-    ok, err, took = encode(job, s, job["path"], str(part), job["info"]["duration"], M("phase.compress"),
-                        ["-map_metadata", "0", "-movflags", "+faststart"], subs=True)
+    job.pop("_nogain", None)
+    stop = threading.Event()
+    threading.Thread(target=_gain_watch, args=(job, job["size"], stop), daemon=True).start()
+    try:
+        ok, err, took = encode(job, s, job["path"], str(part), job["info"]["duration"], M("phase.compress"),
+                               ["-map_metadata", "0", "-movflags", "+faststart"], subs=True)
+    finally:
+        stop.set()
+    if not ok and job.get("_nogain") and err != "cancel":
+        _rm(part)
+        with LOCK:
+            OUT_OWNERS.pop(_norm(out), None)
+        done, pct = job.pop("_nogain")
+        _keep_original(job, M("note.no_gain_early", done=done, pct=pct))
+        return
+    if ok and part.exists() and part.stat().st_size >= job["size"] * NO_GAIN:
+        pct = round(part.stat().st_size * 100.0 / job["size"])
+        _rm(part)
+        with LOCK:
+            OUT_OWNERS.pop(_norm(out), None)
+        _keep_original(job, M("note.no_gain", pct=pct))
+        return
     if ok:
         with LOCK:
             job["phase"], job["fin"] = M("phase.save"), None
@@ -2101,7 +2151,7 @@ class H(BaseHTTPRequestHandler):
                 raise UserError("api.mode_unavailable")
             with LOCK:
                 j = next((x for x in JOBS if x["id"] == b.get("id")), None)
-                if not j or j["status"] not in ("error", "cancelled", "ready", "tested"):
+                if not j or j["status"] not in ("error", "cancelled", "ready", "tested", "kept"):
                     raise UserError("api.cant_retry")
                 if not j["info"]:
                     raise UserError("api.unreadable", detail=j["error"] or M("api.no_info"))
@@ -2118,7 +2168,7 @@ class H(BaseHTTPRequestHandler):
             return None
         if path == "/api/clear":
             with LOCK:
-                JOBS[:] = [j for j in JOBS if j["status"] not in ("done", "skipped")]
+                JOBS[:] = [j for j in JOBS if j["status"] not in ("done", "skipped", "kept")]
             return None
         if path == "/api/report":
             webbrowser.open(report_url())
@@ -2217,7 +2267,7 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 .bar.busy i{background:repeating-linear-gradient(45deg,var(--acc) 0 12px,var(--acc2) 12px 24px);background-size:34px 34px;animation:stripes 1s linear infinite}
 @keyframes stripes{to{background-position:34px 0}}
 .st{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);white-space:nowrap}
-.st.done{color:var(--acc2);border-color:var(--acc2)}.st.error{color:var(--err);border-color:var(--err)}
+.st.done{color:var(--acc2);border-color:var(--acc2)}.st.kept{color:var(--mut);border-color:var(--mut)}.st.error{color:var(--err);border-color:var(--err)}
 .st.running{color:#fff;background:var(--acc);border-color:var(--acc)}.st.tested{color:var(--warn);border-color:var(--warn)}
 .res{margin-top:8px;padding:10px;border-radius:10px;background:#0f1115;border:1px dashed var(--line);font-size:13px}
 .res b{color:var(--acc2)}.err{color:var(--err);white-space:pre-wrap;font:12px/1.4 ui-monospace,Consolas,monospace;max-height:160px;overflow:auto;margin-top:8px}
@@ -2430,7 +2480,7 @@ function jobStatic(j){
  const note=msg(j.note),err=msg(j.error);
  if(note)body+=`<div class="note">${esc(note)}</div>`;
  if(err)body+=`<div class="err">${esc(err)}</div>`;
- const rt=(j.status==="error"||j.status==="cancelled")&&j.info?`<button class="btn sm pri" title="${esc(tr("job.retry_title"))}" onclick="retryJob(${j.id})">${esc(tr("job.retry"))}</button>`:"";
+ const rt=(j.status==="error"||j.status==="cancelled"||j.status==="kept")&&j.info?`<button class="btn sm pri" title="${esc(tr("job.retry_title"))}" onclick="retryJob(${j.id})">${esc(tr("job.retry"))}</button>`:"";
  const rm=j.status!=="running"?rt+`<button class="btn sm" title="${esc(tr("job.remove_title"))}" onclick="removeJob(${j.id})">✕</button>`:"";
  const st=I18N.ru["status."+j.status]!=null?tr("status."+j.status):j.status;
  return `<div class="jh"><div><div class="jn">${esc(j.name)}</div><div class="meta">${meta}</div></div><div class="row" style="align-items:center"><span class="st ${esc(j.status)}">${esc(st)}</span>${rm}</div></div>${body}`;

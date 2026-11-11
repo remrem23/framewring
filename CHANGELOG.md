@@ -6,6 +6,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [Sem
 Detailed development history with measurements: [DEVLOG.md](DEVLOG.md).
 Each version is described in English first, then in Russian.
 
+## [0.9.1] — 2026-11-11
+
+### English
+
+#### Fixed
+- **No more files bigger than the original.** Re-encoding a video that is already efficiently compressed (e.g. HEVC at a modest bitrate) could produce a *larger* file and waste hours. Now Framewring watches the output size while compressing: if it's clear after 10–25% of the file that the result won't be smaller, it stops early. If a finished result is not at least 3% smaller, it is deleted. In both cases the original is untouched and the video is marked **Kept as is**; **↻ Retry** (e.g. with **Compact**) stays available.
+
+### Русский
+
+#### Исправлено
+- **Больше никаких файлов крупнее оригинала.** Пережатие уже эффективно сжатого видео (например, HEVC с умеренным битрейтом) могло дать *больший* файл и отнять часы. Теперь Framewring следит за размером во время сжатия: если через 10–25% файла видно, что результат не станет меньше, сжатие останавливается сразу. Если готовый результат меньше оригинала не хотя бы на 3%, он удаляется. В обоих случаях оригинал не тронут, а видео помечается **«Оставлен как есть»**; **«↻ Повторить»** (например, с **«Компактным»**) остаётся доступной.
+
 ## [0.9.0] — 2026-11-11
 
 ### English
@@ -136,6 +148,7 @@ First public release.
 - Потеря готового файла, если его держал антивирус или плеер; коллизии имён результатов.
 - Черезстрочное видео, субтитры MKV, нечётное разрешение, обложка вместо видео, дата файла.
 
+[0.9.1]: https://github.com/remrem23/framewring/releases/tag/v0.9.1
 [0.9.0]: https://github.com/remrem23/framewring/releases/tag/v0.9.0
 
 ---
