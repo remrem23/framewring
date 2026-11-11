@@ -156,6 +156,20 @@ Before the release the code was reviewed by several independent automated review
 - **Drag & drop:** files and folders can be dropped onto the window.
 - All public documents are now in English first, with the full Russian text below.
 
+### 7. AMD and Intel GPUs
+- New modes *AMD GPU · AV1* / *AMD GPU · H.265* (FFmpeg AMF: `av1_amf`, `hevc_amf`) and *Intel GPU · AV1* / *Intel GPU · H.265*
+  (Quick Sync: `av1_qsv`, `hevc_qsv`). AMD uses a constant QP (shown as "QP"): 22/24/27 for
+  *Maximum / Balanced / Compact* in H.265 (AV1 on AMF uses a 0–255 scale, 88/100/116 ≈ 4× that); Intel uses ICQ (shown as "ICQ"). Nvidia keeps CUDA decoding; AMD and Intel modes decode on the CPU.
+- **Measured on real hardware** — the graphics built into a Ryzen 7 9700X, *AMD GPU · H.265*: test VMAF **99.1**,
+  a 176 MB 1080p clip → **13.5 MB**, 10-bit output. Calibration: AMF QP 22/24/27 ≈ NVENC CQ 22/24/27 in both size and VMAF,
+  so the quality levels mean the same thing on both vendors.
+- **AMF 8-bit output was broken:** VMAF ~56 against ~99 for 10-bit on the same clip — so AMD modes always encode 10-bit.
+- Every mode is test-encoded on startup; only working ones can be picked. A failed GPU mode is shown greyed out with the reason
+  only if that vendor's GPU is present (read from the display adapters in the registry); modes for absent vendors are hidden.
+- Recommendation order: Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → CPU.
+- **Not verified yet:** *AMD GPU · AV1* (needs Radeon RX 7000+) and the Intel modes have not been run on real hardware;
+  only the startup test-encode protects them. Reports welcome.
+
 ---
 
 <a id="русский"></a>
@@ -314,3 +328,19 @@ FFmpeg 8.1.1 (сборка Gyan), Windows 11, 3 NVMe SSD + 4 HDD.
   Заголовок окна по-английски — **Framewring**, по-русски — **Framewring Жмых**.
 - **Перетаскивание:** файлы и папки можно бросить прямо в окно.
 - Все публичные документы теперь сначала на английском, ниже — полный русский текст.
+
+#### 7. Видеокарты AMD и Intel
+- Новые режимы «Видеокарта AMD · AV1» / «Видеокарта AMD · H.265» (AMF в FFmpeg: `av1_amf`, `hevc_amf`) и «Видеокарта Intel · AV1» /
+  «Видеокарта Intel · H.265» (Quick Sync: `av1_qsv`, `hevc_qsv`). У AMD постоянный QP (в интерфейсе — «QP»): 22/24/27
+  для «Максимальное / Баланс / Компактное» в H.265 (AV1 у AMF — шкала 0–255, 88/100/116 ≈ 4× от этого); у Intel — ICQ (в интерфейсе — «ICQ»). Nvidia по-прежнему декодирует через CUDA; режимы AMD и Intel
+  декодируют на процессоре.
+- **Замер на реальном железе** — графика, встроенная в Ryzen 7 9700X, «Видеокарта AMD · H.265»: VMAF теста **99,1**,
+  ролик 1080p 176 МБ → **13,5 МБ**, на выходе 10 бит. Калибровка: AMF QP 22/24/27 ≈ NVENC CQ 22/24/27 и по размеру, и по VMAF —
+  уровни качества значат одно и то же у обоих производителей.
+- **8-битный вывод AMF был сломан:** VMAF ~56 против ~99 у 10 бит на том же ролике — поэтому режимы AMD всегда кодируют в 10 бит.
+- При запуске каждый режим проверяется пробным кодированием; выбрать можно только работающие. Режим видеокарты, не прошедший
+  проверку, показывается серым с причиной, только если видеокарта этого производителя есть (по видеоадаптерам в реестре);
+  режимы отсутствующих производителей скрыты.
+- Порядок рекомендации: Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → процессор.
+- **Ещё не проверено:** «Видеокарта AMD · AV1» (нужна Radeon RX 7000+) и режимы Intel на реальном железе не запускались;
+  их страхует только пробное кодирование при запуске. Отчёты приветствуются.

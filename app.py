@@ -287,9 +287,10 @@ def app_name():
 
 
 # Пресеты (порядок показа). Названия и описания: i18n.py, ключи preset.<код>.title/.desc
-PRESETS = ("nvenc_av1", "nvenc_hevc", "vt_hevc", "x265", "av1")
+PRESETS = ("nvenc_av1", "nvenc_hevc", "amf_av1", "amf_hevc", "qsv_av1", "qsv_hevc", "vt_hevc", "x265", "av1")
+HW_VENDOR = {"nvenc": "nvidia", "amf": "amd", "qsv": "intel"}  # режим видеокарты -> производитель
 # Что рекомендовать: видеокарта, если есть. Процессор жмёт чуть плотнее, но на порядок дольше.
-RECOMMEND = ("nvenc_av1", "nvenc_hevc", "vt_hevc", "x265", "av1")
+RECOMMEND = ("nvenc_av1", "amf_av1", "qsv_av1", "nvenc_hevc", "amf_hevc", "qsv_hevc", "vt_hevc", "x265", "av1")
 
 # Качество: high / balanced / compact
 QUALITY = {
@@ -298,6 +299,13 @@ QUALITY = {
     "nvenc_hevc": {"high": 22, "balanced": 24, "compact": 27},
     "nvenc_av1": {"high": 27, "balanced": 30, "compact": 33},
     "vt_hevc": {"high": 70, "balanced": 62, "compact": 55},
+    # AMD: постоянный QP. Замер (10 бит, тот же ролик): QP 22/24/27 ≈ NVENC CQ 22/24/27 по размеру и VMAF
+    "amf_hevc": {"high": 22, "balanced": 24, "compact": 27},
+    # AV1 у AMF — шкала 0–255 (≈ 4×QP HEVC); на настоящем RX 7000 ещё не проверено
+    "amf_av1": {"high": 88, "balanced": 100, "compact": 116},
+    # Intel: ICQ 1–51; на настоящем железе ещё не проверено
+    "qsv_hevc": {"high": 22, "balanced": 24, "compact": 27},
+    "qsv_av1": {"high": 24, "balanced": 27, "compact": 30},
 }
 SPEED = {
     "x265": {"slow": "slow", "normal": "medium", "fast": "fast"},
@@ -307,6 +315,10 @@ SPEED = {
     "nvenc_hevc": {"slow": ("p7", "fullres"), "normal": ("p5", "qres"), "fast": ("p4", "disabled")},
     "nvenc_av1": {"slow": ("p7", "fullres"), "normal": ("p5", "qres"), "fast": ("p4", "disabled")},
     "vt_hevc": {"slow": None, "normal": None, "fast": None},
+    "amf_hevc": {"slow": "quality", "normal": "balanced", "fast": "speed"},
+    "amf_av1": {"slow": "quality", "normal": "balanced", "fast": "speed"},
+    "qsv_hevc": {"slow": "slower", "normal": "medium", "fast": "faster"},
+    "qsv_av1": {"slow": "slower", "normal": "medium", "fast": "faster"},
 }
 MEM_ERR = re.compile(r"allocate memory|insufficient resources|cannot allocate memory|out of memory", re.I)
 
@@ -327,6 +339,17 @@ def video_args(preset, quality, speed, lp=None):
     if preset == "nvenc_av1":
         return ["-c:v", "av1_nvenc", "-preset", s[0], "-tune", "hq", "-rc", "vbr", "-cq", str(q), "-b:v", "0",
                 "-multipass", s[1], "-spatial-aq", "1", "-rc-lookahead", "32", "-pix_fmt", "p010le"]
+    if preset == "amf_hevc":  # 10 бит: в 8 битах AMF портил картинку (VMAF 56 против 99 в замере)
+        return ["-c:v", "hevc_amf", "-usage", "transcoding", "-quality", s, "-rc", "cqp", "-qp_i", str(q),
+                "-qp_p", str(q), "-profile:v", "main10", "-pix_fmt", "p010le", "-tag:v", "hvc1"]
+    if preset == "amf_av1":
+        return ["-c:v", "av1_amf", "-usage", "transcoding", "-quality", s, "-rc", "cqp", "-qp_i", str(q),
+                "-qp_p", str(q), "-pix_fmt", "p010le"]
+    if preset == "qsv_hevc":
+        return ["-c:v", "hevc_qsv", "-preset", s, "-global_quality", str(q), "-profile:v", "main10",
+                "-pix_fmt", "p010le", "-tag:v", "hvc1"]
+    if preset == "qsv_av1":
+        return ["-c:v", "av1_qsv", "-preset", s, "-global_quality", str(q), "-pix_fmt", "p010le"]
     if preset == "vt_hevc":
         return ["-c:v", "hevc_videotoolbox", "-q:v", str(q), "-profile:v", "main10", "-pix_fmt", "p010le",
                 "-tag:v", "hvc1"]
@@ -335,6 +358,36 @@ def video_args(preset, quality, speed, lp=None):
 
 CAPS = {"ffmpeg": bool(FFMPEG), "ffprobe": bool(FFPROBE), "version": "", "presets": {}, "vmaf": False,
         "checked": False, "recommended": "", "pagefile_off": pagefile_off()}
+
+
+def gpu_vendors():
+    """Какие видеокарты стоят (по описаниям драйверов в реестре, без WMI — он бывает очень медленным)."""
+    found = set()
+    if not IS_WIN:
+        return found
+    try:
+        import winreg
+        base = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base) as k:
+            for i in range(64):
+                try:
+                    sub = winreg.EnumKey(k, i)
+                except OSError:
+                    break
+                try:
+                    with winreg.OpenKey(k, sub) as sk:
+                        desc = str(winreg.QueryValueEx(sk, "DriverDesc")[0]).lower()
+                except OSError:
+                    continue
+                if "nvidia" in desc:
+                    found.add("nvidia")
+                if "radeon" in desc or "amd" in desc:
+                    found.add("amd")
+                if "intel" in desc and ("graphics" in desc or "arc" in desc or "uhd" in desc or "iris" in desc):
+                    found.add("intel")
+    except Exception:
+        pass
+    return found
 
 
 def detect_caps():
@@ -349,7 +402,9 @@ def detect_caps():
         enc = flt = ""
     CAPS["vmaf"] = bool(re.search(r"\blibvmaf\b", flt))
     need = {"x265": "libx265", "av1": "libsvtav1", "nvenc_hevc": "hevc_nvenc",
-            "nvenc_av1": "av1_nvenc", "vt_hevc": "hevc_videotoolbox"}
+            "nvenc_av1": "av1_nvenc", "vt_hevc": "hevc_videotoolbox", "amf_hevc": "hevc_amf",
+            "amf_av1": "av1_amf", "qsv_hevc": "hevc_qsv", "qsv_av1": "av1_qsv"}
+    vendors = gpu_vendors()
 
     def check(p, name):
         if not re.search(r"\b%s\b" % name, enc):
@@ -370,7 +425,13 @@ def detect_caps():
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=len(need)) as ex:
         res = {p: ex.submit(check, p, name) for p, name in need.items()}
-    CAPS["presets"] = {p: res[p].result() for p in need}  # целиком, чтобы /api/status не видел полсловаря
+    pres = {p: res[p].result() for p in need}
+    for p, c in pres.items():
+        # показываем: процессор — всегда; видеокарту — если работает, а если нет — только когда такая
+        # видеокарта стоит (тогда видно, почему недоступно). Чужие производители не захламляют список.
+        v = HW_VENDOR.get(p.split("_")[0])
+        c["show"] = p in ("x265", "av1") or c["ok"] or (v is not None and v in vendors)
+    CAPS["presets"] = pres  # целиком, чтобы /api/status не видел полсловаря
     CAPS["recommended"] = next((p for p in RECOMMEND if CAPS["presets"][p]["ok"]), "")
     with LOCK:
         # первый запуск (режим ещё ни разу не выбирали) или выбранный режим недоступен -> рекомендуемый
@@ -2279,10 +2340,10 @@ let builtSettings=false;
 function renderSettings(){
  const st=S.settings,caps=S.caps;
  const ord=k=>{const c=caps.presets[k]||{};return (caps.checked&&!c.ok?100:0)+S.presets.indexOf(k)};
- setHTML($("presets"),S.presets.filter(k=>k!=="vt_hevc"||(caps.presets[k]&&caps.presets[k].ok)).sort((a,b)=>ord(a)-ord(b)).map(k=>{const c=caps.presets[k]||{};const off=caps.checked&&!c.ok;
+ setHTML($("presets"),S.presets.filter(k=>{const c=caps.presets[k];return c?c.show!==false:(k==="x265"||k==="av1")}).sort((a,b)=>ord(a)-ord(b)).map(k=>{const c=caps.presets[k]||{};const off=caps.checked&&!c.ok;
   return `<label class="opt ${st.preset===k?"on":""} ${off?"off":""}" ${off?"":`onclick="setS('preset','${k}')"`}><b>${esc(presetTitle(k))}${k===caps.recommended?esc(tr("preset.recommended")):""}</b><small>${esc(tr("preset."+k+".desc"))}${off?` <br>${esc(tr("preset.unavailable",{why:msg(c.why)}))}`:""}</small></label>`}).join(""));
  for(const [id,key] of [["q","quality"],["sp","speed"],["au","audio"]]){document.querySelectorAll(`#${id} button`).forEach(b=>{b.classList.toggle("on",b.dataset.v===st[key]);b.onclick=()=>setS(key,b.dataset.v)})}
- const qv=S.quality[st.preset]||{};const unit=st.preset==="vt_hevc"?"q":st.preset.startsWith("nvenc")?"CQ":"CRF";
+ const qv=S.quality[st.preset]||{};const unit=st.preset==="vt_hevc"?"q":st.preset.startsWith("nvenc")?"CQ":st.preset.startsWith("amf")?"QP":st.preset.startsWith("qsv")?"ICQ":"CRF";
  $("qhint").textContent=tr("set.qhint",{unit,high:String(qv.high),balanced:String(qv.balanced),compact:String(qv.compact)});
  $("sp").style.display=st.preset==="vt_hevc"?"none":"flex";
  $("btnTest").textContent=testLabel(st.testlen);

@@ -56,12 +56,19 @@ The search never deletes or changes anything.
 |---|---|
 | **Nvidia GPU · AV1** | RTX 40/50 series. 5–7× faster than the CPU and smaller than H.265. Best for big archives. Plays on PCs, recent phones and TVs. |
 | **Nvidia GPU · H.265** | Fast and plays almost everywhere: older phones and TVs, iPhone. Files are slightly bigger than AV1. |
+| **AMD GPU · AV1** | Radeon RX 7000 series or newer. Same idea as Nvidia AV1. Not yet tested on real hardware — please report how it works. |
+| **AMD GPU · H.265** | Radeon cards, including the graphics built into Ryzen processors. Plays almost everywhere. |
+| **Intel GPU · AV1** | Intel Arc or Core Ultra graphics. Not yet tested on real hardware — please report how it works. |
+| **Intel GPU · H.265** | Most Intel graphics since about 2016. Plays almost everywhere. Not yet tested on real hardware — please report how it works. |
 | **CPU · H.265** | Files are usually 10–20% smaller than on the GPU, but many times slower (hours per hour of 4K). If you have no suitable GPU or every gigabyte counts. |
 | **CPU · AV1** | The smallest files, the slowest mode. Does not play everywhere. |
 | **Mac GPU · H.265** | Only on macOS, when run from source. |
 
-Modes your hardware or FFmpeg cannot do are greyed out with the reason. The best available one is marked **recommended**
-and chosen by default (your own choice is remembered).
+On startup every mode is test-encoded; only the working ones can be picked. Modes your hardware or FFmpeg cannot do
+are greyed out with the reason; GPU modes for a vendor whose card your PC does not have (for example AMD modes on a PC
+with only an Nvidia card) are hidden. The best available one is marked **recommended** and chosen by default
+(your own choice is remembered). Order of preference: Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 → AMD H.265 →
+Intel H.265 → CPU.
 
 **Quality** — **Maximum / Balanced / Compact**. *Balanced* is the right choice for almost everything.
 VMAF in the test: 95+ — practically indistinguishable, 92–95 — very good, lower — the difference becomes visible.
@@ -116,7 +123,9 @@ Uninstalling keeps this folder; delete it by hand if you want.
 
 ## 8. Troubleshooting
 
-- **A GPU mode is greyed out.** Update the Nvidia driver. AV1 on the GPU needs an RTX 40 or 50 series card.
+- **A GPU mode is greyed out.** Update the driver for your GPU vendor: Nvidia, AMD (AMD Software / Adrenalin)
+  or Intel. AV1 on the GPU needs an Nvidia RTX 40 or 50 series card, an AMD Radeon RX 7000 series card or newer,
+  or Intel Arc / Core Ultra graphics. The reason is shown next to the greyed-out mode.
 - **"Access denied" when writing to Documents / Videos / Desktop.** Windows *Controlled folder access* is blocking it:
   *Windows Security → Virus & threat protection → Ransomware protection → Allow an app through Controlled folder access*, add
   `Framewring.exe` and `ffmpeg.exe` from the program's `ffmpeg\bin` folder.
@@ -191,12 +200,19 @@ Framewring Жмых — бесплатный локальный компресс
 |---|---|
 | **Видеокарта Nvidia · AV1** | RTX 40xx/50xx. В 5–7 раз быстрее процессора и компактнее H.265. Лучший выбор для больших архивов. Играется на ПК, новых телефонах и ТВ. |
 | **Видеокарта Nvidia · H.265** | Быстро и открывается почти везде: старые телефоны и ТВ, iPhone. Файл немного больше, чем у AV1. |
+| **Видеокарта AMD · AV1** | Radeon RX 7000 и новее. То же, что AV1 на Nvidia. На реальном железе ещё не проверялся — напиши, как работает. |
+| **Видеокарта AMD · H.265** | Карты Radeon, в том числе графика, встроенная в процессоры Ryzen. Открывается почти везде. |
+| **Видеокарта Intel · AV1** | Графика Intel Arc или Core Ultra. На реальном железе ещё не проверялся — напиши, как работает. |
+| **Видеокарта Intel · H.265** | Большинство графики Intel примерно с 2016 года. Открывается почти везде. На реальном железе ещё не проверялся — напиши, как работает. |
 | **Процессор · H.265** | Файл обычно на 10–20% меньше, чем у видеокарты, но в разы медленнее (часы на час видео в 4K). Если подходящей видеокарты нет или важен каждый гигабайт. |
 | **Процессор · AV1** | Самый маленький файл, самый медленный режим. Открывается не везде. |
 | **Видеокарта Mac · H.265** | Только на macOS при запуске из исходников. |
 
-Режимы, которые не умеет твоё железо или FFmpeg, серые, с причиной. Лучший доступный помечен **«рекомендую»**
-и выбран по умолчанию (твой собственный выбор запоминается).
+При запуске каждый режим проверяется пробным кодированием; выбрать можно только работающие. Режимы, которые не умеет
+твоё железо или FFmpeg, серые, с причиной; режимы видеокарт производителя, которого в компьютере нет (например, режимы
+AMD на компьютере только с Nvidia), скрыты. Лучший доступный помечен **«рекомендую»** и выбран по умолчанию
+(твой собственный выбор запоминается). Порядок предпочтения: Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 →
+AMD H.265 → Intel H.265 → процессор.
 
 **Качество** — **Максимальное / Баланс / Компактное**. «Баланс» подходит почти всегда.
 VMAF в тесте: 95+ — разницу практически не отличить, 92–95 — очень хорошо, ниже — уже видно.
@@ -251,7 +267,9 @@ VMAF в тесте: 95+ — разницу практически не отли�
 
 ### 8. Если что-то не так
 
-- **Режим видеокарты серый.** Обнови драйвер Nvidia. AV1 на видеокарте требует RTX 40xx/50xx.
+- **Режим видеокарты серый.** Обнови драйвер своей видеокарты: Nvidia, AMD (AMD Software / Adrenalin) или Intel.
+  AV1 на видеокарте требует Nvidia RTX 40xx/50xx, AMD Radeon RX 7000 и новее или графику Intel Arc / Core Ultra.
+  Причина показана рядом с серым режимом.
 - **«Отказано в доступе» при записи в «Документы» / «Видео» / на рабочий стол.** Мешает «Контролируемый доступ к папкам»:
   «Безопасность Windows → Защита от вирусов и угроз → Защита от программ-шантажистов → Разрешить работу приложения через
   контролируемый доступ к папкам», добавь `Framewring.exe` и `ffmpeg.exe` из папки `ffmpeg\bin` программы.

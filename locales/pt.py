@@ -65,6 +65,14 @@ STRINGS = {
     "preset.nvenc_hevc.title": "GPU Nvidia · H.265",
     "preset.nvenc_hevc.desc": "Rápido e compatível com quase tudo: celulares antigos, TVs, iPhone. "
                               "Os arquivos ficam um pouco maiores que com AV1.",
+    "preset.amf_av1.title": "GPU AMD · AV1",
+    "preset.amf_av1.desc": "Radeon RX 7000 e mais recentes. Rápido, arquivos pequenos. Compatível com PCs, celulares e TVs recentes.",
+    "preset.amf_hevc.title": "GPU AMD · H.265",
+    "preset.amf_hevc.desc": "Placas Radeon, incluindo os gráficos integrados dos processadores Ryzen. Rápido e compatível com quase tudo.",
+    "preset.qsv_av1.title": "GPU Intel · AV1",
+    "preset.qsv_av1.desc": "Intel Arc e gráficos Core Ultra. Rápido, arquivos pequenos. Compatível com PCs, celulares e TVs recentes.",
+    "preset.qsv_hevc.title": "GPU Intel · H.265",
+    "preset.qsv_hevc.desc": "Gráficos Intel (a maioria dos processadores Intel desde 2016). Rápido e compatível com quase tudo.",
     "preset.vt_hevc.title": "GPU do Mac · H.265",
     "preset.vt_hevc.desc": "Codificador de hardware do Mac (VideoToolbox). Rápido, mas os arquivos ficam maiores "
                            "que com o processador.",

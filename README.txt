@@ -46,11 +46,19 @@ WHICH MODE
   Nvidia GPU · AV1   - RTX 40/50 series. 5-7x faster than the CPU and smaller
                        than H.265. Best for big archives.
   Nvidia GPU · H.265 - plays almost everywhere, incl. older phones and TVs.
+  AMD GPU · AV1      - Radeon RX 7000 series or newer.
+  AMD GPU · H.265    - Radeon cards, incl. graphics built into Ryzen CPUs.
+  Intel GPU · AV1    - Intel Arc or Core Ultra graphics.
+  Intel GPU · H.265  - most Intel graphics since about 2016.
   CPU · H.265 / AV1  - files usually 10-20% smaller than on the GPU, but many
                        times slower (hours per hour of 4K video). For PCs
-                       without a suitable Nvidia card, or when every GB counts.
+                       without a suitable GPU, or when every GB counts.
+  Every mode is test-encoded on startup; only working ones can be picked.
   Greyed-out modes are not supported by your hardware - try updating the
-  Nvidia driver. VMAF: 95+ practically indistinguishable, 92-95 very good.
+  driver of your GPU (Nvidia, AMD or Intel). Modes for GPU vendors your PC
+  does not have are hidden. AMD AV1 and the Intel modes have not been
+  tested on real hardware yet - please report how they work for you.
+  VMAF: 95+ practically indistinguishable, 92-95 very good.
 
 DATA AND LOG
   Installed:  %APPDATA%\Framewring
@@ -127,12 +135,21 @@ Framewring Жмых находит на дисках тяжёлые видео �
                               компактнее H.265. Лучше всего для архивов.
   Видеокарта Nvidia · H.265 - открывается почти везде, в т.ч. на старых
                               телефонах и ТВ.
+  Видеокарта AMD · AV1      - Radeon RX 7000 и новее.
+  Видеокарта AMD · H.265    - карты Radeon, в т.ч. графика, встроенная
+                              в процессоры Ryzen.
+  Видеокарта Intel · AV1    - графика Intel Arc или Core Ultra.
+  Видеокарта Intel · H.265  - большинство графики Intel примерно с 2016 г.
   Процессор · H.265 / AV1   - файл обычно на 10-20% меньше, чем у видеокарты,
                               но в разы медленнее (часы на час видео в 4K).
-                              Если подходящей карты Nvidia нет или важен
+                              Если подходящей видеокарты нет или важен
                               каждый гигабайт.
-  Серые режимы не поддерживает твоё железо - попробуй обновить драйвер
-  Nvidia. VMAF: 95+ - разницу практически не отличить, 92-95 - очень хорошо.
+  При запуске каждый режим проверяется пробным кодированием, выбрать можно
+  только работающие. Серые режимы не поддерживает твоё железо - попробуй
+  обновить драйвер своей видеокарты (Nvidia, AMD или Intel). Режимы
+  производителей, чьей видеокарты в компьютере нет, скрыты. AMD AV1 и режимы
+  Intel на реальном железе ещё не проверялись - напиши, как они у тебя
+  работают. VMAF: 95+ - разницу практически не отличить, 92-95 - очень хорошо.
 
 ДАННЫЕ И ЖУРНАЛ
   Установленная версия: %APPDATA%\Framewring

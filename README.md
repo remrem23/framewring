@@ -7,7 +7,7 @@ Free, local, no limits: your files never leave your computer.
 
 Framewring is a Windows app built on top of FFmpeg. It finds heavy videos on all your drives,
 estimates how much space each one would free, lets you test the result on a short piece, and re-encodes on an
-Nvidia GPU (NVENC AV1 / H.265) or on the CPU (x265, SVT-AV1). The interface is in English, Russian, German, French, Spanish, Portuguese and Simplified Chinese
+Nvidia, AMD or Intel GPU (NVENC / AMF / Quick Sync, AV1 or H.265) or on the CPU (x265, SVT-AV1). The interface is in English, Russian, German, French, Spanish, Portuguese and Simplified Chinese
 (language list in the header; the default follows your Windows language).
 
 ![Framewring: compressing a queue of videos on an Nvidia GPU](docs/screenshots/main-en.png)
@@ -43,17 +43,27 @@ Copies from other sites may be modified.
 - **Windows 10 or 11, 64-bit.**
 - **Microsoft Edge WebView2 Runtime** for the app window. Windows 11 already has it, Windows 10 usually does too.
   If it is missing, Framewring opens its interface in your default browser instead and tells you so.
-- **GPU modes need an Nvidia card and an up-to-date driver:** *Nvidia GPU · AV1* needs an RTX 40 or 50 series card,
-  *Nvidia GPU · H.265* works on most GeForce GTX 10 series and newer. Framewring test-encodes on startup and greys out
-  modes your hardware cannot do. Without a suitable Nvidia card the CPU modes (x265, SVT-AV1) are used —
-  they work everywhere, just slower. AMD and Intel GPU encoding is not supported yet.
+- **GPU modes need a suitable card and an up-to-date driver from its vendor:**
+  - **Nvidia** (NVENC): *Nvidia GPU · AV1* needs an RTX 40 or 50 series card, *Nvidia GPU · H.265* works on most
+    GeForce GTX 10 series and newer.
+  - **AMD** (AMF, AMD Software / Adrenalin driver): *AMD GPU · AV1* needs a Radeon RX 7000 series card or newer,
+    *AMD GPU · H.265* works on Radeon cards, including the graphics built into Ryzen processors.
+  - **Intel** (Quick Sync, Intel graphics driver): *Intel GPU · AV1* needs Intel Arc or Core Ultra graphics,
+    *Intel GPU · H.265* works on most Intel graphics since about 2016.
+
+  Framewring test-encodes every mode on startup and lets you pick only the ones that work. A GPU mode that fails is
+  greyed out with the reason if that vendor's GPU is in your PC; modes for vendors you don't have are hidden.
+  Without a suitable GPU the CPU modes (x265, SVT-AV1) are used — they work everywhere, just slower.
+  *AMD GPU · H.265* has been checked on real hardware (graphics built into a Ryzen 7 9700X); *AMD GPU · AV1* and
+  the Intel modes have not been tested on real hardware yet — if you have such a card, please report how it went in
+  [Issues](https://github.com/remrem23/framewring/issues).
 
 ## Features
 
 - **Find heavy videos** on all drives: how much space compressing each file would free, duplicate detection,
   checkboxes to choose what to queue. With the free [Everything](https://www.voidtools.com/) installed the search takes seconds;
   without it a multi-threaded folder scan is used automatically.
-- **GPU compression** (Nvidia AV1 / H.265) — 5–7× faster than the CPU — or **CPU compression** (x265, SVT-AV1) when every gigabyte counts.
+- **GPU compression** (AV1 / H.265 on Nvidia, AMD or Intel) — 5–7× faster than the CPU — or **CPU compression** (x265, SVT-AV1) when every gigabyte counts.
 - **Test on a piece of the video:** predicted final size, time and VMAF quality score before the full run.
 - **A queue that survives restarts**, a *↻ Retry* button for failed files, **history** of everything compressed with the total space freed.
 - **Drag & drop** files and folders onto the app window to add them.
@@ -158,7 +168,7 @@ The builds include [FFmpeg](https://ffmpeg.org) (Gyan build, GPL v3) and other c
 
 Framewring Жмых (английское название — *Framewring*) — программа для Windows, обёртка над FFmpeg. Находит тяжёлые видео
 на всех дисках, оценивает, сколько места освободит каждое, позволяет проверить результат на коротком куске и пережимает
-на видеокарте Nvidia (NVENC AV1 / H.265) или на процессоре (x265, SVT-AV1). Интерфейс: русский, английский, немецкий, французский, испанский, португальский и китайский (упрощённый)
+на видеокарте Nvidia, AMD или Intel (NVENC / AMF / Quick Sync, AV1 или H.265) или на процессоре (x265, SVT-AV1). Интерфейс: русский, английский, немецкий, французский, испанский, португальский и китайский (упрощённый)
 (выбор языка в шапке; по умолчанию — язык Windows).
 
 ![Framewring Жмых: результаты теста с прогнозом размера и VMAF](docs/screenshots/main-ru.png)
@@ -194,16 +204,26 @@ FFmpeg уже внутри, ничего доустанавливать не н�
 - **Windows 10 или 11, 64 бит.**
 - **Microsoft Edge WebView2 Runtime** — для окна программы. В Windows 11 он уже есть, в Windows 10 обычно тоже.
   Если его нет, Framewring откроет интерфейс в браузере по умолчанию и скажет об этом.
-- **Для режимов на видеокарте нужна карта Nvidia и свежий драйвер:** «Видеокарта Nvidia · AV1» — RTX 40xx/50xx,
-  «Видеокарта Nvidia · H.265» — большинство карт начиная с GeForce GTX 10xx. При запуске Framewring делает пробное кодирование
-  и делает недоступные режимы серыми. Без подходящей карты Nvidia работают режимы на процессоре (x265, SVT-AV1) —
-  везде, просто медленнее. Видеокарты AMD и Intel пока не поддерживаются.
+- **Для режимов на видеокарте нужна подходящая карта и свежий драйвер её производителя:**
+  - **Nvidia** (NVENC): «Видеокарта Nvidia · AV1» — RTX 40xx/50xx, «Видеокарта Nvidia · H.265» — большинство карт
+    начиная с GeForce GTX 10xx.
+  - **AMD** (AMF, драйвер AMD Software / Adrenalin): «Видеокарта AMD · AV1» — Radeon RX 7000 и новее,
+    «Видеокарта AMD · H.265» — карты Radeon, в том числе графика, встроенная в процессоры Ryzen.
+  - **Intel** (Quick Sync, графический драйвер Intel): «Видеокарта Intel · AV1» — графика Intel Arc или Core Ultra,
+    «Видеокарта Intel · H.265» — большинство графики Intel примерно с 2016 года.
+
+  При запуске Framewring делает пробное кодирование в каждом режиме, выбрать можно только работающие. Режим видеокарты,
+  который не прошёл проверку, показывается серым с причиной, если видеокарта этого производителя в компьютере есть;
+  режимы производителей, которых в компьютере нет, скрыты. Без подходящей видеокарты работают режимы на процессоре
+  (x265, SVT-AV1) — везде, просто медленнее. «Видеокарта AMD · H.265» проверена на реальном железе (графика, встроенная
+  в Ryzen 7 9700X); «Видеокарта AMD · AV1» и режимы Intel на реальном железе ещё не проверялись — если у тебя такая карта,
+  напиши, как прошло, в [Issues](https://github.com/remrem23/framewring/issues).
 
 ### Что умеет
 
 - **Поиск тяжёлых видео** на всех дисках: сколько места освободит сжатие каждого файла, пометка дублей, выбор галочками.
   Если установлен бесплатный [Everything](https://www.voidtools.com/), поиск занимает секунды; без него автоматически работает многопоточный обход папок.
-- **Сжатие на видеокарте** (Nvidia AV1 / H.265) — в 5–7 раз быстрее процессора — или **на процессоре** (x265, SVT-AV1), когда важен каждый гигабайт.
+- **Сжатие на видеокарте** (AV1 / H.265 на Nvidia, AMD или Intel) — в 5–7 раз быстрее процессора — или **на процессоре** (x265, SVT-AV1), когда важен каждый гигабайт.
 - **Тест на куске видео:** прогноз итогового размера, времени и оценка качества VMAF до полного сжатия.
 - **Очередь, которая переживает перезапуск**, кнопка «↻ Повторить» у неудачных файлов, **история** всего сжатого с итогом освобождённого места.
 - **Перетаскивание** файлов и папок прямо в окно программы.

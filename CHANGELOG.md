@@ -17,6 +17,11 @@ First public release.
   duplicate detection, editing codecs (ProRes, DNxHD) not ticked automatically. After a long search without Everything —
   an unobtrusive hint to install it (can be hidden).
 - Compression on an **Nvidia GPU** (AV1, H.265) and on the **CPU** (x265, SVT-AV1); the GPU is recommended by default when available.
+- **AMD and Intel GPUs:** modes *AMD GPU · AV1*, *AMD GPU · H.265* (AMF, 10-bit, constant QP) and *Intel GPU · AV1*,
+  *Intel GPU · H.265* (Quick Sync, ICQ). Every mode is test-encoded on startup; a failed GPU mode is greyed out with
+  the reason only if that vendor's GPU is in the PC, modes for absent vendors are hidden. Recommended order:
+  Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → CPU. AMD H.265 is verified on
+  Ryzen integrated graphics; AMD AV1 and Intel are not yet tested on real hardware.
 - **Test** on a piece of the video: forecast of size and time, VMAF.
 - The queue and the compression **history** survive restarts; **↻ Retry** for failed files; **📂 Compressed / 📂 Original**.
 - "Finishing the file" stage with progress; warnings about a disabled page file and low free space.
@@ -62,6 +67,12 @@ First public release.
   монтажные кодеки (ProRes, DNxHD) не отмечаются автоматически. После долгого поиска без Everything — ненавязчивая подсказка
   установить его (можно скрыть).
 - Сжатие на **видеокарте Nvidia** (AV1, H.265) и **процессоре** (x265, SVT-AV1); видеокарта рекомендуется по умолчанию, если есть.
+- **Видеокарты AMD и Intel:** режимы «Видеокарта AMD · AV1», «Видеокарта AMD · H.265» (AMF, 10 бит, постоянный QP)
+  и «Видеокарта Intel · AV1», «Видеокарта Intel · H.265» (Quick Sync, ICQ). При запуске каждый режим проверяется пробным
+  кодированием; режим видеокарты, не прошедший проверку, показывается серым с причиной, только если видеокарта этого
+  производителя в компьютере есть, режимы отсутствующих производителей скрыты. Порядок рекомендации:
+  Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → процессор. AMD H.265 проверен на встроенной
+  графике Ryzen; AMD AV1 и Intel на реальном железе ещё не проверялись.
 - **Тест** на куске видео: прогноз размера и времени, VMAF.
 - Очередь и **история** сжатия сохраняются между запусками; «↻ Повторить» для неудачных файлов; «📂 Сжатый / 📂 Оригинал».
 - Этап «Дописываю файл» с прогрессом; предупреждения о выключенном файле подкачки и свободном месте.

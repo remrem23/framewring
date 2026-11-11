@@ -25,8 +25,9 @@ app window (WebView2)  or  browser   ──HTTP/JSON──►  server (Threading
 | FFmpeg lookup (`find_tool`) | `ffmpeg/bin/`, `ffmpeg/`, the folder itself — next to the exe / `app.py`, then inside the bundle; then `PATH` |
 | Child processes (`spawn`) | no window, below-normal priority, Windows Job Object — ffmpeg dies together with the app |
 | Memory (`avail_mem`, `svt_lp_for`, `pagefile_off`) | SVT-AV1 parallelism, detection of a disabled page file |
-| Modes (`PRESETS`, `QUALITY`, `SPEED`, `RECOMMEND`, `video_args`) | encoders and their flags; recommendation order |
-| Capabilities (`detect_caps`) | which encoders the FFmpeg build has; hardware ones are verified with a 0.5 s trial encode |
+| Modes (`PRESETS`, `HW_VENDOR`, `QUALITY`, `SPEED`, `RECOMMEND`, `video_args`) | encoders and their flags; GPU mode → vendor; recommendation order (see *Encoding modes* below) |
+| GPU vendors (`gpu_vendors`) | which GPUs are installed: reads `DriverDesc` of the display adapters from the registry (`HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-…}`) instead of WMI, which can be very slow |
+| Capabilities (`detect_caps`) | which encoders the FFmpeg build has; hardware ones are verified in parallel with a 0.5 s trial encode using the real flags; per mode `ok`, `why` and `show` |
 | `probe` / `probe_cached` | file parameters via ffprobe; cache keyed by (size, mtime), saved in `probe_cache.json` |
 | Jobs (`JOBS`, `add_path`, `out_dir_for`, `out_path_for`) | the file list; output naming that never overwrites an original or a foreign file |
 | Scanner (`scan_thread`, `everything_search`, `_scan_walk`, `estimate`) | finding big videos, estimating savings |
@@ -58,6 +59,31 @@ Name comparisons are case-insensitive.
 
 Test (`do_test`): a piece is cut without re-encoding (`_tests/…_original_cut.mkv`, starting at 40% of the duration),
 compressed with the same settings, and VMAF is computed (frames matched by number; above 1080p — at 1080p).
+
+## Encoding modes
+
+| Preset | Mode in the UI | FFmpeg encoder | Rate control (Maximum / Balanced / Compact) |
+|---|---|---|---|
+| `nvenc_av1` | Nvidia GPU · AV1 | `av1_nvenc` | VBR with CQ 27 / 30 / 33 |
+| `nvenc_hevc` | Nvidia GPU · H.265 | `hevc_nvenc` | VBR with CQ 22 / 24 / 27 |
+| `amf_av1` | AMD GPU · AV1 | `av1_amf` | constant QP on the 0–255 scale, 88 / 100 / 116 |
+| `amf_hevc` | AMD GPU · H.265 | `hevc_amf` | constant QP 22 / 24 / 27 |
+| `qsv_av1` | Intel GPU · AV1 | `av1_qsv` | ICQ 24 / 27 / 30 |
+| `qsv_hevc` | Intel GPU · H.265 | `hevc_qsv` | ICQ 22 / 24 / 27 |
+| `vt_hevc` | Mac GPU · H.265 | `hevc_videotoolbox` | `-q:v` 70 / 62 / 55 |
+| `x265` | CPU · H.265 | `libx265` | CRF 20 / 22 / 24 |
+| `av1` | CPU · AV1 | `libsvtav1` | CRF 27 / 30 / 33 |
+
+- All modes output 10-bit. For AMF this matters: 8-bit output was broken in a measurement (VMAF ~56 vs ~99 for 10-bit).
+  AMF QP 22/24/27 was calibrated against NVENC CQ 22/24/27 (same size and VMAF on the same clip).
+- Decoding: Nvidia modes use CUDA decoding (`-hwaccel cuda`); AMD, Intel and CPU modes decode on the CPU.
+- `RECOMMEND`: `nvenc_av1` → `amf_av1` → `qsv_av1` → `nvenc_hevc` → `amf_hevc` → `qsv_hevc` → `vt_hevc` → `x265` → `av1`;
+  the first mode with `ok` becomes `CAPS["recommended"]`.
+- `detect_caps` sets per mode: `ok` — the trial encode passed; `why` — the reason if not; `show` — whether the UI lists the mode:
+  CPU modes always, a GPU mode if it works or if a GPU of its vendor (`HW_VENDOR`) is found by `gpu_vendors()`.
+  So a failing mode is greyed out with the reason only on a PC that has that vendor's GPU; other vendors' modes are hidden.
+- `amf_av1` (Radeon RX 7000+) and the `qsv_*` modes have not been verified on real hardware yet; `amf_hevc` was checked on
+  Ryzen 7 9700X integrated graphics.
 
 ## Finding heavy videos
 
@@ -152,8 +178,9 @@ Writes are atomic: to a temporary file, then `os.replace`.
 | Поиск FFmpeg (`find_tool`) | `ffmpeg/bin/`, `ffmpeg/`, сама папка — рядом с exe / `app.py`, затем внутри сборки; затем `PATH` |
 | Дочерние процессы (`spawn`) | без окна, пониженный приоритет, Windows Job Object — ffmpeg завершается вместе с программой |
 | Память (`avail_mem`, `svt_lp_for`, `pagefile_off`) | подбор параллельности SVT-AV1, обнаружение выключенного файла подкачки |
-| Режимы (`PRESETS`, `QUALITY`, `SPEED`, `RECOMMEND`, `video_args`) | таблица кодеров и их флагов; порядок рекомендации |
-| Возможности (`detect_caps`) | какие кодеры есть в сборке FFmpeg; аппаратные проверяются пробным кодированием 0,5 с |
+| Режимы (`PRESETS`, `HW_VENDOR`, `QUALITY`, `SPEED`, `RECOMMEND`, `video_args`) | таблица кодеров и их флагов; режим видеокарты → производитель; порядок рекомендации (см. «Режимы сжатия» ниже) |
+| Производители видеокарт (`gpu_vendors`) | какие видеокарты стоят: читает `DriverDesc` видеоадаптеров из реестра (`HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-…}`) вместо WMI, который бывает очень медленным |
+| Возможности (`detect_caps`) | какие кодеры есть в сборке FFmpeg; аппаратные проверяются параллельно пробным кодированием 0,5 с с настоящими флагами; для каждого режима `ok`, `why` и `show` |
 | `probe` / `probe_cached` | параметры файла через ffprobe; кэш по (размер, mtime), сохраняется в `probe_cache.json` |
 | Задачи (`JOBS`, `add_path`, `out_dir_for`, `out_path_for`) | список файлов; имя результата, которое никогда не затирает оригинал или чужой файл |
 | Сканер (`scan_thread`, `everything_search`, `_scan_walk`, `estimate`) | поиск больших видео, оценка экономии |
@@ -162,7 +189,7 @@ Writes are atomic: to a temporary file, then `os.replace`.
 | Очередь и история (`queue_saver`, `load_queue`, `add_history`) | переживают перезапуск |
 | `worker` | один поток, берёт задачи `queued` по порядку |
 | HTTP (`H`, `snapshot`) | API, проверка Host и токена, заголовки безопасности |
-| `HTML` | интерфейс (английский и русский): настройки, очередь, поиск, история, окно доната |
+| `HTML` | интерфейс (7 языков, строки из `i18n.py` + `locales/`): настройки, очередь, поиск, история, окно доната |
 | `run_window`, `_setup_log`, `main` | один экземпляр на машину, загрузка данных, потоки, своё окно или браузер, журнал для exe |
 
 ### Жизненный цикл задачи
@@ -185,6 +212,32 @@ Writes are atomic: to a temporary file, then `os.replace`.
 
 Тест (`do_test`): вырезается кусок без пережатия (`_tests/…_original_cut.mkv`, начиная с 40% длительности),
 сжимается теми же настройками, считается VMAF (кадры сопоставляются по номеру, выше 1080p — в 1080p).
+
+### Режимы сжатия
+
+| Пресет | Режим в интерфейсе | Кодер FFmpeg | Управление качеством (Максимальное / Баланс / Компактное) |
+|---|---|---|---|
+| `nvenc_av1` | Видеокарта Nvidia · AV1 | `av1_nvenc` | VBR с CQ 27 / 30 / 33 |
+| `nvenc_hevc` | Видеокарта Nvidia · H.265 | `hevc_nvenc` | VBR с CQ 22 / 24 / 27 |
+| `amf_av1` | Видеокарта AMD · AV1 | `av1_amf` | постоянный QP по шкале 0–255, 88 / 100 / 116 |
+| `amf_hevc` | Видеокарта AMD · H.265 | `hevc_amf` | постоянный QP 22 / 24 / 27 |
+| `qsv_av1` | Видеокарта Intel · AV1 | `av1_qsv` | ICQ 24 / 27 / 30 |
+| `qsv_hevc` | Видеокарта Intel · H.265 | `hevc_qsv` | ICQ 22 / 24 / 27 |
+| `vt_hevc` | Видеокарта Mac · H.265 | `hevc_videotoolbox` | `-q:v` 70 / 62 / 55 |
+| `x265` | Процессор · H.265 | `libx265` | CRF 20 / 22 / 24 |
+| `av1` | Процессор · AV1 | `libsvtav1` | CRF 27 / 30 / 33 |
+
+- Все режимы выдают 10 бит. Для AMF это важно: 8-битный вывод в замере был сломан (VMAF ~56 против ~99 у 10 бит).
+  QP 22/24/27 у AMF откалиброван по NVENC CQ 22/24/27 (тот же размер и VMAF на том же ролике).
+- Декодирование: режимы Nvidia декодируют через CUDA (`-hwaccel cuda`); режимы AMD, Intel и процессора — на процессоре.
+- `RECOMMEND`: `nvenc_av1` → `amf_av1` → `qsv_av1` → `nvenc_hevc` → `amf_hevc` → `qsv_hevc` → `vt_hevc` → `x265` → `av1`;
+  первый режим с `ok` становится `CAPS["recommended"]`.
+- `detect_caps` задаёт для каждого режима: `ok` — пробное кодирование прошло; `why` — причина, если нет; `show` — показывать ли
+  режим в интерфейсе: процессор — всегда, видеокарту — если работает или если `gpu_vendors()` нашёл видеокарту её производителя
+  (`HW_VENDOR`). Поэтому неработающий режим показывается серым с причиной только там, где такая видеокарта есть; режимы
+  других производителей скрыты.
+- `amf_av1` (Radeon RX 7000+) и режимы `qsv_*` на реальном железе ещё не проверялись; `amf_hevc` проверен на встроенной
+  графике Ryzen 7 9700X.
 
 ### Поиск тяжёлых видео
 
