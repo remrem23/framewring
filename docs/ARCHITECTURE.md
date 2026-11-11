@@ -2,7 +2,7 @@
 
 # Framewring architecture
 
-The whole program is one file, `app.py` (~2,600 lines). It uses only the Python standard library;
+The program is `app.py` (~2,900 lines) plus the interface strings in `i18n.py` and `locales/`. It uses only the Python standard library;
 [pywebview](https://pywebview.flowrl.com/) is optional and gives the app its own window.
 It is a local HTTP server on `127.0.0.1:8765` (if busy — the next free port up to 8799)
 plus a web interface embedded in the same file (the `HTML` string). Compression is done by an external FFmpeg.
@@ -36,7 +36,9 @@ app window (WebView2)  or  browser   ──HTTP/JSON──►  server (Threading
 | Queue and history (`queue_saver`, `load_queue`, `add_history`) | survive restarts |
 | `worker` | one thread, takes `queued` jobs in order |
 | HTTP (`H`, `snapshot`) | API, Host and token checks, security headers |
-| `HTML` | the interface (7 languages, strings from `i18n.py` + `locales/`): settings, queue, search, history, donate window |
+| `HTML` | the interface (7 languages, strings from `i18n.py` + `locales/`): settings, queue, search, history, donate window, bug-report window, update bar |
+| Updates (`UPDATE`, `install_kind`, `check_update`, `install_update`) | once per launch asks GitHub for the latest release; one-click update of the installed version (see *Updates* below) |
+| Bug report (`report_url`) | URL of the GitHub issue form with version, Windows, GPU names, FFmpeg version and mode pre-filled |
 | `run_window`, `_setup_log`, `main` | single instance per machine, data loading, threads, own window or browser, log file for the exe |
 
 ## Job lifecycle
@@ -77,12 +79,13 @@ compressed with the same settings, and VMAF is computed (frames matched by numbe
 - All modes output 10-bit. For AMF this matters: 8-bit output was broken in a measurement (VMAF ~56 vs ~99 for 10-bit).
   AMF QP 22/24/27 was calibrated against NVENC CQ 22/24/27 (same size and VMAF on the same clip).
 - Decoding: Nvidia modes use CUDA decoding (`-hwaccel cuda`); AMD, Intel and CPU modes decode on the CPU.
-- `RECOMMEND`: `nvenc_av1` → `amf_av1` → `qsv_av1` → `nvenc_hevc` → `amf_hevc` → `qsv_hevc` → `vt_hevc` → `x265` → `av1`;
-  the first mode with `ok` becomes `CAPS["recommended"]`.
+- `RECOMMEND`: `nvenc_av1` → `nvenc_hevc` → `amf_hevc` → `qsv_hevc` → `amf_av1` → `qsv_av1` → `vt_hevc` → `x265` → `av1`;
+  the first mode with `ok` becomes `CAPS["recommended"]`. `amf_av1` and `qsv_av1` stay below the H.265 modes until they are
+  verified on real hardware.
 - `detect_caps` sets per mode: `ok` — the trial encode passed; `why` — the reason if not; `show` — whether the UI lists the mode:
   CPU modes always, a GPU mode if it works or if a GPU of its vendor (`HW_VENDOR`) is found by `gpu_vendors()`.
   So a failing mode is greyed out with the reason only on a PC that has that vendor's GPU; other vendors' modes are hidden.
-- `amf_av1` (Radeon RX 7000+) and the `qsv_*` modes have not been verified on real hardware yet; `amf_hevc` was checked on
+- `amf_av1` (Radeon RX 7000+, Ryzen 7040/8040-series graphics — Radeon 780M/880M) and the `qsv_*` modes have not been verified on real hardware yet; `amf_hevc` was checked on
   Ryzen 7 9700X integrated graphics.
 
 ## Finding heavy videos
@@ -100,14 +103,15 @@ compressed with the same settings, and VMAF is computed (frames matched by numbe
 - Every request checks `Host` (`127.0.0.1` / `localhost`) — protection against DNS rebinding.
 - A random token is generated at startup. The page is served only at `/?t=<token>` (the app opens this URL itself);
   all other `GET` and `POST` requests require the `X-Token` header. Exceptions: `GET /api/ping` and `POST /api/show`,
-  used by a second launch to find and raise the running instance; they reveal nothing.
+  used by a second launch to find and raise the running instance; they reveal nothing and refuse requests that carry
+  `Origin`, `Sec-Fetch-Site` or `Referer` (i.e. requests made from a web page).
 - Responses carry `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: no-referrer`, `Cache-Control: no-store`.
 
 | Method and path | Purpose |
 |---|---|
 | `GET /?t=TOKEN` | the interface |
-| `GET /api/status?sv=N` | state snapshot; search results are sent only if version `sv` changed |
+| `GET /api/status?sv=N` | state snapshot; search results are sent only if version `sv` changed; `update` (`latest`, `state`, `pct`, `err`) and `install_kind` (`installer` / `portable` / `source`) |
 | `GET /api/ping`, `POST /api/show` | second launch: "is Framewring here?" / raise the window |
 | `POST /api/pick` `{kind}` | system file/folder dialog |
 | `POST /api/add` `{paths}` | add files or folders |
@@ -118,6 +122,10 @@ compressed with the same settings, and VMAF is computed (frames matched by numbe
 | `POST /api/remove` `{id}`, `/api/clear` | remove a job / all finished ones |
 | `POST /api/open` `{id, which}` or `{hist, which}` | show a file in Explorer (`which`: compressed by default, `src`, `test`) |
 | `POST /api/url` `{url}` | open one of the allowed pages (repository, support page, voidtools.com) |
+| `POST /api/report` | open the bug-report issue form in the browser, pre-filled by `report_url` |
+| `POST /api/open_log` | show `framewring.log` in Explorer (error if there is no log — source runs have none) |
+| `POST /api/update_page` | open the release page of the new version |
+| `POST /api/update_install` | download + verify + silent install of the new version (installed version only) |
 | `POST /api/history` | compression history |
 | `POST /api/drives`, `/api/scan`, `/api/scan_cancel` | drive list, search |
 | `POST /api/quit` | quit (browser mode only, where there is no window to close) |
@@ -126,7 +134,7 @@ compressed with the same settings, and VMAF is computed (frames matched by numbe
 
 | File | Contents | Personal data |
 |---|---|---|
-| `settings.json` | chosen mode, quality, output folder | no |
+| `settings.json` | chosen mode, quality, output folder, options (incl. `update_check`) | no |
 | `queue.json` | job list | **video paths** |
 | `history.json` | compression history | **video paths** |
 | `probe_cache.json` | video parameters | **video paths** |
@@ -143,6 +151,24 @@ Writes are atomic: to a temporary file, then `os.replace`.
 - **macOS:** `caffeinate`, VideoToolbox H.265, file dialogs via `osascript`. Barely tested.
 - **Linux:** `prctl(PR_SET_PDEATHSIG)`, `/proc/meminfo`, `zenity`. Barely tested.
 
+## Updates
+
+- `check_update` runs once per launch (4 s after start) unless the setting `update_check` is off. It makes one request to
+  `api.github.com` for the latest release of `remrem23/framewring`; drafts, pre-releases and versions not newer than the
+  running one are ignored. Only the `-setup.exe` and `SHA256SUMS.txt` assets of that release on
+  `github.com/remrem23/framewring/releases/download/` are accepted. Nothing about the user's files is sent.
+- The result is kept in `UPDATE` and reported in `/api/status` as `update` (`latest`, `state`: `""` / `download` / `install` /
+  `error`, `pct`, `err`) together with `install_kind`. The interface shows the bar *"Framewring X is available."* with
+  *Update* / *What's new* / *Later* (*Later* hides that version in `localStorage`); for `portable` and `source` the first
+  button is *Download* (`/api/update_page`).
+- `install_update` (only for `install_kind() == "installer"`): downloads `SHA256SUMS.txt` and the setup into
+  `%TEMP%\FramewringUpdate`, compares the SHA-256, releases the single-instance mutex, starts the setup detached with
+  `/SILENT /SP- /NOCANCEL /NORESTART /FWUPDATE=1` and quits. Settings, queue and history stay in `%APPDATA%\Framewring`.
+  Checked end-to-end: 0.8.0 → 0.9.0 in about 20 s.
+- The installer (`packaging/framewring.iss`) has `[Code] IsSelfUpdate`, true when `/FWUPDATE=1` is passed; the `[Run]` entry
+  that starts `Framewring.exe` after a silent install is guarded by it, so the app is relaunched only after a self-update,
+  not after a silent install run by an administrator.
+
 ## Build
 
 `packaging/build.py` — PyInstaller onedir (`Framewring.exe`, `_internal\`, `ffmpeg\`, license texts);
@@ -155,7 +181,7 @@ Writes are atomic: to a temporary file, then `os.replace`.
 
 **Архитектура Framewring Жмых**
 
-Вся программа — один файл `app.py` (~2600 строк). Используется только стандартная библиотека Python;
+Программа — это `app.py` (~2900 строк) плюс строки интерфейса в `i18n.py` и `locales/`. Используется только стандартная библиотека Python;
 [pywebview](https://pywebview.flowrl.com/) — по желанию, даёт программе своё окно.
 Это локальный HTTP-сервер на `127.0.0.1:8765` (при занятости — следующий свободный порт до 8799)
 плюс веб-интерфейс, встроенный в тот же файл (строка `HTML`). Сжатие делает внешний FFmpeg.
@@ -189,7 +215,9 @@ Writes are atomic: to a temporary file, then `os.replace`.
 | Очередь и история (`queue_saver`, `load_queue`, `add_history`) | переживают перезапуск |
 | `worker` | один поток, берёт задачи `queued` по порядку |
 | HTTP (`H`, `snapshot`) | API, проверка Host и токена, заголовки безопасности |
-| `HTML` | интерфейс (7 языков, строки из `i18n.py` + `locales/`): настройки, очередь, поиск, история, окно доната |
+| `HTML` | интерфейс (7 языков, строки из `i18n.py` + `locales/`): настройки, очередь, поиск, история, окно доната, окно «Сообщить об ошибке», полоса обновления |
+| Обновления (`UPDATE`, `install_kind`, `check_update`, `install_update`) | раз за запуск спрашивает у GitHub последний релиз; обновление установленной версии в один клик (см. «Обновления» ниже) |
+| Сообщение об ошибке (`report_url`) | адрес формы issue на GitHub с заполненными версией, Windows, видеокартами, версией FFmpeg и режимом |
 | `run_window`, `_setup_log`, `main` | один экземпляр на машину, загрузка данных, потоки, своё окно или браузер, журнал для exe |
 
 ### Жизненный цикл задачи
@@ -230,13 +258,14 @@ Writes are atomic: to a temporary file, then `os.replace`.
 - Все режимы выдают 10 бит. Для AMF это важно: 8-битный вывод в замере был сломан (VMAF ~56 против ~99 у 10 бит).
   QP 22/24/27 у AMF откалиброван по NVENC CQ 22/24/27 (тот же размер и VMAF на том же ролике).
 - Декодирование: режимы Nvidia декодируют через CUDA (`-hwaccel cuda`); режимы AMD, Intel и процессора — на процессоре.
-- `RECOMMEND`: `nvenc_av1` → `amf_av1` → `qsv_av1` → `nvenc_hevc` → `amf_hevc` → `qsv_hevc` → `vt_hevc` → `x265` → `av1`;
-  первый режим с `ok` становится `CAPS["recommended"]`.
+- `RECOMMEND`: `nvenc_av1` → `nvenc_hevc` → `amf_hevc` → `qsv_hevc` → `amf_av1` → `qsv_av1` → `vt_hevc` → `x265` → `av1`;
+  первый режим с `ok` становится `CAPS["recommended"]`. `amf_av1` и `qsv_av1` стоят ниже режимов H.265, пока не проверены
+  на реальном железе.
 - `detect_caps` задаёт для каждого режима: `ok` — пробное кодирование прошло; `why` — причина, если нет; `show` — показывать ли
   режим в интерфейсе: процессор — всегда, видеокарту — если работает или если `gpu_vendors()` нашёл видеокарту её производителя
   (`HW_VENDOR`). Поэтому неработающий режим показывается серым с причиной только там, где такая видеокарта есть; режимы
   других производителей скрыты.
-- `amf_av1` (Radeon RX 7000+) и режимы `qsv_*` на реальном железе ещё не проверялись; `amf_hevc` проверен на встроенной
+- `amf_av1` (Radeon RX 7000+, графика Ryzen серий 7040/8040 — Radeon 780M/880M) и режимы `qsv_*` на реальном железе ещё не проверялись; `amf_hevc` проверен на встроенной
   графике Ryzen 7 9700X.
 
 ### Поиск тяжёлых видео
@@ -254,14 +283,15 @@ Writes are atomic: to a temporary file, then `os.replace`.
 - Любой запрос проверяет `Host` (`127.0.0.1` / `localhost`) — защита от DNS rebinding.
 - При запуске генерируется случайный токен. Страница отдаётся только по адресу `/?t=<токен>` (его открывает сама программа);
   все остальные `GET` и `POST` требуют заголовок `X-Token`. Исключения — `GET /api/ping` и `POST /api/show`:
-  по ним второй запуск находит и поднимает работающий экземпляр; ничего не раскрывают.
+  по ним второй запуск находит и поднимает работающий экземпляр; они ничего не раскрывают и отклоняют запросы
+  с заголовками `Origin`, `Sec-Fetch-Site` или `Referer` (то есть пришедшие с веб-страницы).
 - В ответах: `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: no-referrer`, `Cache-Control: no-store`.
 
 | Метод и путь | Назначение |
 |---|---|
 | `GET /?t=ТОКЕН` | интерфейс |
-| `GET /api/status?sv=N` | снимок состояния; результаты поиска отдаются, только если изменилась версия `sv` |
+| `GET /api/status?sv=N` | снимок состояния; результаты поиска отдаются, только если изменилась версия `sv`; `update` (`latest`, `state`, `pct`, `err`) и `install_kind` (`installer` / `portable` / `source`) |
 | `GET /api/ping`, `POST /api/show` | второй запуск: «здесь уже работает Framewring?» / показать окно |
 | `POST /api/pick` `{kind}` | системное окно выбора файлов/папки |
 | `POST /api/add` `{paths}` | добавить файлы или папки |
@@ -272,6 +302,10 @@ Writes are atomic: to a temporary file, then `os.replace`.
 | `POST /api/remove` `{id}`, `/api/clear` | убрать задачу / все готовые |
 | `POST /api/open` `{id, which}` или `{hist, which}` | показать файл в проводнике (`which`: сжатый по умолчанию, `src`, `test`) |
 | `POST /api/url` `{url}` | открыть одну из разрешённых страниц (репозиторий, страница поддержки, voidtools.com) |
+| `POST /api/report` | открыть в браузере форму issue «сообщить об ошибке», заполненную `report_url` |
+| `POST /api/open_log` | показать `framewring.log` в проводнике (ошибка, если журнала нет — при запуске из исходников его нет) |
+| `POST /api/update_page` | открыть страницу релиза новой версии |
+| `POST /api/update_install` | скачать, проверить и тихо установить новую версию (только установленная версия) |
 | `POST /api/history` | журнал сжатия |
 | `POST /api/drives`, `/api/scan`, `/api/scan_cancel` | список дисков, поиск |
 | `POST /api/quit` | выход (только в режиме браузера, где нет окна, которое можно закрыть) |
@@ -280,7 +314,7 @@ Writes are atomic: to a temporary file, then `os.replace`.
 
 | Файл | Содержимое | Личные данные |
 |---|---|---|
-| `settings.json` | выбранный режим, качество, папка вывода | нет |
+| `settings.json` | выбранный режим, качество, папка вывода, опции (в т.ч. `update_check`) | нет |
 | `queue.json` | список задач | **пути к видео** |
 | `history.json` | журнал сжатия | **пути к видео** |
 | `probe_cache.json` | параметры видео | **пути к видео** |
@@ -296,6 +330,24 @@ Writes are atomic: to a temporary file, then `os.replace`.
   предупреждение о файле подкачки, своё окно через pywebview (WebView2) с окнами выбора файлов и перетаскиванием; в режиме браузера — окна выбора через tkinter.
 - **macOS:** `caffeinate`, VideoToolbox H.265, выбор файлов через `osascript`. Почти не тестировалось.
 - **Linux:** `prctl(PR_SET_PDEATHSIG)`, `/proc/meminfo`, `zenity`. Почти не тестировалось.
+
+### Обновления
+
+- `check_update` запускается раз за запуск (через 4 с после старта), если не выключена настройка `update_check`. Это один
+  запрос к `api.github.com` за последним релизом `remrem23/framewring`; черновики, пре-релизы и версии не новее текущей
+  игнорируются. Принимаются только файлы `-setup.exe` и `SHA256SUMS.txt` этого релиза с
+  `github.com/remrem23/framewring/releases/download/`. Ничего о файлах пользователя не передаётся.
+- Результат хранится в `UPDATE` и отдаётся в `/api/status` как `update` (`latest`, `state`: `""` / `download` / `install` /
+  `error`, `pct`, `err`) вместе с `install_kind`. Интерфейс показывает полосу «Доступна версия Framewring X.» с кнопками
+  «Обновить» / «Что нового» / «Позже» («Позже» скрывает эту версию через `localStorage`); для `portable` и `source` первая
+  кнопка — «Скачать» (`/api/update_page`).
+- `install_update` (только при `install_kind() == "installer"`): скачивает `SHA256SUMS.txt` и установщик в
+  `%TEMP%\FramewringUpdate`, сверяет SHA-256, отпускает мьютекс единственного экземпляра, запускает установщик отдельным
+  процессом с `/SILENT /SP- /NOCANCEL /NORESTART /FWUPDATE=1` и завершается. Настройки, очередь и история остаются
+  в `%APPDATA%\Framewring`. Проверено целиком: 0.8.0 → 0.9.0 примерно за 20 с.
+- В установщике (`packaging/framewring.iss`) есть `[Code] IsSelfUpdate` — истина, если передан `/FWUPDATE=1`; запись `[Run]`,
+  которая запускает `Framewring.exe` после тихой установки, проверяет его, поэтому программа перезапускается только после
+  самообновления, а не после тихой установки администратором.
 
 ### Сборка
 

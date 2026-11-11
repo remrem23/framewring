@@ -104,6 +104,13 @@ def copy_licenses():
     tk = DIST / "_internal" / "_tk_data" / "license.terms"
     if tk.is_file():
         shutil.copy2(tk, out / "Tcl-Tk-license.terms.txt")
+    import importlib.metadata as _md
+    try:  # полный текст Apache-2.0 (лицензия OpenSSL 3) — берём из пакета packaging, он двойной Apache/BSD
+        apache = next(Path(_md.distribution("packaging").locate_file(f)) for f in _md.distribution("packaging").files
+                      if f.name == "LICENSE.APACHE")
+        shutil.copy2(apache, out / "OpenSSL-LICENSE-Apache-2.0.txt")
+    except Exception:
+        print("ВНИМАНИЕ: не нашёл текст Apache-2.0 для OpenSSL")
     (out / "OpenSSL-NOTICE.txt").write_text(
         "OpenSSL (libssl/libcrypto, bundled with Python): Apache License 2.0\n"
         "https://www.openssl.org/source/license.html\n", encoding="utf-8")
@@ -174,6 +181,15 @@ def main():
         if (ROOT / n).is_file():
             shutil.copy2(ROOT / n, DIST / n)
     copy_licenses()
+    # лишнее из pywebview: файл для Android. Папки runtimes\win-x86/win-arm64 НЕ трогать —
+    # pywebview проверяет их наличие при запуске и без них откатывается в браузер (проверено)
+    wl = DIST / "_internal" / "webview" / "lib"
+    for x in ("pywebview-android.jar",):
+        q = wl / x
+        if q.is_dir():
+            shutil.rmtree(q)
+        elif q.is_file():
+            q.unlink()
 
     total = sum(p.stat().st_size for p in DIST.rglob("*") if p.is_file())
     print("Готово: %s (%.0f МБ)" % (DIST, total / 1e6))

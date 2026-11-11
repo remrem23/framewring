@@ -4,7 +4,7 @@ FRAMEWRING - free local video compressor
 
 Framewring finds heavy videos on your drives and re-encodes them several
 times smaller without visible quality loss. It is a front-end for FFmpeg.
-Everything runs on your computer; nothing is uploaded anywhere.
+Everything runs on your computer; your files never leave it.
 
 Official page (the only one): https://github.com/remrem23/framewring
 Full guide:  https://github.com/remrem23/framewring/blob/main/docs/USER-GUIDE.md
@@ -46,8 +46,10 @@ WHICH MODE
   Nvidia GPU · AV1   - RTX 40/50 series. 5-7x faster than the CPU and smaller
                        than H.265. Best for big archives.
   Nvidia GPU · H.265 - plays almost everywhere, incl. older phones and TVs.
-  AMD GPU · AV1      - Radeon RX 7000 series or newer.
-  AMD GPU · H.265    - Radeon cards, incl. graphics built into Ryzen CPUs.
+  AMD GPU · AV1      - Radeon RX 7000 or newer, and Ryzen 7040/8040-series
+                       graphics (Radeon 780M/880M).
+  AMD GPU · H.265    - Radeon RX 400 series or newer, including Ryzen
+                       integrated graphics.
   Intel GPU · AV1    - Intel Arc or Core Ultra graphics.
   Intel GPU · H.265  - most Intel graphics since about 2016.
   CPU · H.265 / AV1  - files usually 10-20% smaller than on the GPU, but many
@@ -58,6 +60,9 @@ WHICH MODE
   driver of your GPU (Nvidia, AMD or Intel). Modes for GPU vendors your PC
   does not have are hidden. AMD AV1 and the Intel modes have not been
   tested on real hardware yet - please report how they work for you.
+  "Recommended" order: Nvidia AV1 -> Nvidia H.265 -> AMD H.265 ->
+  Intel H.265 -> AMD AV1 -> Intel AV1 -> CPU (AMD AV1 and Intel AV1 stay
+  below H.265 until they are verified on real hardware).
   VMAF: 95+ practically indistinguishable, 92-95 very good.
 
 DATA AND LOG
@@ -71,13 +76,31 @@ TROUBLESHOOTING
   access". Windows Security -> Virus & threat protection -> Ransomware
   protection -> Allow an app through Controlled folder access -> add
   Framewring.exe and ffmpeg\bin\ffmpeg.exe from the program folder.
-  Memory errors: turn the Windows page file back on.
+  Memory errors: turn the Windows page file back on. If you keep it off on
+  purpose, hide the warning with its "x" button (remembered).
   Your own FFmpeg: replace ffmpeg.exe and ffprobe.exe in ffmpeg\bin.
+
+REPORT A BUG
+  "Report a bug" in the header opens a small window:
+  "Open the form on GitHub" - the bug-report form with the program version,
+  Windows version, graphics cards, FFmpeg version and mode filled in; you see
+  everything before sending (a free GitHub account is needed).
+  "Show the log" - opens the folder with framewring.log; attach it if you
+  can, removing anything you don't want to share (e.g. file paths).
+
+UPDATES
+  Once per launch the app asks GitHub for the newest version number
+  (setting "Check for updates on startup" turns this off). If there is a
+  newer one, a bar offers "Update": the installed version downloads the new
+  setup.exe, verifies its SHA-256, installs it and restarts; settings, queue
+  and history are kept. The portable version shows "Download" instead.
 
 PRIVACY
   The interface is a local server on 127.0.0.1 protected by a token.
-  No analytics, no telemetry, no update checks. Web pages open only when you
-  click a link.
+  Your files never leave your computer. The only network request is a check
+  for a new version on GitHub once per launch (can be turned off in
+  settings); nothing about your files is sent. No analytics, no telemetry.
+  Web pages open only when you click a link or button.
 
 LICENSE
   GNU GPL v3 (LICENSE.txt). Third-party components and their licenses:
@@ -91,7 +114,7 @@ FRAMEWRING ЖМЫХ - бесплатный локальный компрессо
 
 Framewring Жмых находит на дисках тяжёлые видео и пережимает их в разы
 меньше без видимой потери качества. Это обёртка над FFmpeg. Всё работает
-на твоём компьютере, файлы никуда не отправляются.
+на твоём компьютере, файлы его не покидают.
 
 Официальная страница (единственная): https://github.com/remrem23/framewring
 Подробная инструкция:
@@ -135,9 +158,10 @@ Framewring Жмых находит на дисках тяжёлые видео �
                               компактнее H.265. Лучше всего для архивов.
   Видеокарта Nvidia · H.265 - открывается почти везде, в т.ч. на старых
                               телефонах и ТВ.
-  Видеокарта AMD · AV1      - Radeon RX 7000 и новее.
-  Видеокарта AMD · H.265    - карты Radeon, в т.ч. графика, встроенная
-                              в процессоры Ryzen.
+  Видеокарта AMD · AV1      - Radeon RX 7000 и новее, а также графика Ryzen
+                              серий 7040/8040 (Radeon 780M/880M).
+  Видеокарта AMD · H.265    - Radeon RX 400 и новее, в т.ч. графика,
+                              встроенная в процессоры Ryzen.
   Видеокарта Intel · AV1    - графика Intel Arc или Core Ultra.
   Видеокарта Intel · H.265  - большинство графики Intel примерно с 2016 г.
   Процессор · H.265 / AV1   - файл обычно на 10-20% меньше, чем у видеокарты,
@@ -149,7 +173,10 @@ Framewring Жмых находит на дисках тяжёлые видео �
   обновить драйвер своей видеокарты (Nvidia, AMD или Intel). Режимы
   производителей, чьей видеокарты в компьютере нет, скрыты. AMD AV1 и режимы
   Intel на реальном железе ещё не проверялись - напиши, как они у тебя
-  работают. VMAF: 95+ - разницу практически не отличить, 92-95 - очень хорошо.
+  работают. Порядок «рекомендую»: Nvidia AV1 -> Nvidia H.265 -> AMD H.265 ->
+  Intel H.265 -> AMD AV1 -> Intel AV1 -> процессор (AMD AV1 и Intel AV1 ниже
+  H.265, пока не проверены на реальном железе).
+  VMAF: 95+ - разницу практически не отличить, 92-95 - очень хорошо.
 
 ДАННЫЕ И ЖУРНАЛ
   Установленная версия: %APPDATA%\Framewring
@@ -164,13 +191,33 @@ Framewring Жмых находит на дисках тяжёлые видео �
   вирусов и угроз -> Защита от программ-шантажистов -> Разрешить работу
   приложения через контролируемый доступ к папкам -> добавь Framewring.exe
   и ffmpeg\bin\ffmpeg.exe из папки программы.
-  Сбои памяти: включи файл подкачки Windows.
+  Сбои памяти: включи файл подкачки Windows. Если он выключен намеренно,
+  скрой предупреждение крестиком (программа это запомнит).
   Свой FFmpeg: замени ffmpeg.exe и ffprobe.exe в папке ffmpeg\bin.
 
+СООБЩИТЬ ОБ ОШИБКЕ
+  Кнопка «Сообщить об ошибке» в шапке открывает небольшое окно:
+  «Открыть форму на GitHub» - форма, где уже заполнены версия программы,
+  Windows, видеокарты, версия FFmpeg и режим; всё видно до отправки (нужен
+  бесплатный аккаунт GitHub).
+  «Показать журнал» - открывает папку с framewring.log; приложи его, если
+  можешь, убрав то, чем не хочешь делиться (например, пути к файлам).
+
+ОБНОВЛЕНИЯ
+  Один раз при запуске программа спрашивает у GitHub номер новейшей версии
+  (отключается настройкой «Проверять обновления при запуске»). Если есть
+  новая, появляется кнопка «Обновить»: установленная версия скачивает новый
+  setup.exe, сверяет его SHA-256, устанавливает и перезапускается;
+  настройки, очередь и история сохраняются. У портабл-версии вместо неё -
+  «Скачать».
+
 ПРИВАТНОСТЬ
-  Интерфейс - локальный сервер на 127.0.0.1, защищённый токеном. Нет
-  аналитики, телеметрии и проверки обновлений. Веб-страницы открываются,
-  только когда ты нажимаешь ссылку.
+  Интерфейс - локальный сервер на 127.0.0.1, защищённый токеном.
+  Твои файлы никуда не уходят с компьютера. Единственный запрос в сеть -
+  проверка новой версии на GitHub один раз при запуске (можно отключить
+  в настройках); ничего о твоих файлах не передаётся. Аналитики и
+  телеметрии нет. Веб-страницы открываются, только когда ты нажимаешь
+  ссылку или кнопку.
 
 ЛИЦЕНЗИЯ
   GNU GPL v3 (LICENSE.txt). Сторонние компоненты и их лицензии:

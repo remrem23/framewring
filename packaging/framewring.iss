@@ -34,6 +34,11 @@ SolidCompression=yes
 LZMANumBlockThreads=2
 LZMAUseSeparateProcess=yes
 WizardStyle=modern
+VersionInfoVersion={#AppVer}
+VersionInfoProductName=Framewring
+VersionInfoProductVersion={#AppVer}
+VersionInfoDescription=Framewring Setup
+VersionInfoCompany=Framewring
 AppMutex=FramewringRunning
 CloseApplications=yes
 RestartApplications=no
@@ -69,6 +74,14 @@ Name: "{autodesktop}\{cm:AppTitle}"; Filename: "{app}\Framewring.exe"; Tasks: de
 
 [Run]
 Filename: "{app}\Framewring.exe"; Description: "{cm:LaunchProgram,{cm:AppTitle}}"; Flags: nowait postinstall skipifsilent
+; обновление из самой программы (тихо, с /FWUPDATE=1) — сразу запускаем новую версию
+Filename: "{app}\Framewring.exe"; Flags: nowait skipifnotsilent; Check: IsSelfUpdate
 
 ; Настройки, очередь и история (%APPDATA%\Framewring) при удалении не трогаем:
 ; переустановка не должна терять историю сжатия.
+
+[Code]
+function IsSelfUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:FWUPDATE|0}') = '1';
+end;

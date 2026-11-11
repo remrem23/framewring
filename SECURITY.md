@@ -17,7 +17,8 @@ Reports in English or Russian are welcome. You can expect a first answer within 
 Relevant areas include:
 - the local HTTP server (`127.0.0.1`, token, Host check) — for example, another program or a web page controlling Framewring;
 - anything that could overwrite or delete a user's files;
-- the build and release process (installer, portable zip, bundled FFmpeg).
+- the build and release process (installer, portable zip, bundled FFmpeg);
+- the update check and one-click update (download from the GitHub release, SHA-256 verification against `SHA256SUMS.txt`).
 
 ## Fake copies and payment details
 
@@ -49,7 +50,8 @@ Verify downloads with `SHA256SUMS.txt` from the release (`Get-FileHash <file>` i
 Важные области:
 - локальный HTTP-сервер (`127.0.0.1`, токен, проверка Host) — например, если другая программа или веб-страница может управлять Framewring;
 - всё, что может перезаписать или удалить файлы пользователя;
-- сборка и выпуск (установщик, портабл-архив, FFmpeg в комплекте).
+- сборка и выпуск (установщик, портабл-архив, FFmpeg в комплекте);
+- проверка и установка обновлений (скачивание из релиза на GitHub, сверка SHA-256 с `SHA256SUMS.txt`).
 
 ### Поддельные копии и реквизиты
 

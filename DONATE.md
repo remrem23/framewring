@@ -1,6 +1,6 @@
 **English** · [Русский](#русский)
 
-# Support Framewring / Поддержать Framewring
+# Support Framewring
 
 | Network / Сеть | USDT address / Адрес USDT |
 |---|---|
@@ -23,6 +23,8 @@ Thank you! ♥
 
 <a id="русский"></a>
 ## Русский
+
+**Поддержать Framewring**
 
 Framewring бесплатный и без рекламы. Если он сэкономил тебе место и время, можно поддержать автора.
 

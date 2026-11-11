@@ -94,7 +94,7 @@ Confirmed with experiments on small clips, then fixed:
 - **The task list is saved** (`queue.json`, every 2 s): close the window and everything is there on the next launch. A "↻ Retry" button for errors and cancelled tasks.
 - **Compression history** (`history.json`): a separate log independent of the list. At the time of writing: 12 files, 129.8 → 36.7 GB, 93.1 GB freed.
 - "📂 Compressed" and "📂 Original" buttons on finished files and in the history.
-- A "♥ Support the author" button with USDT wallets (TRC-20, TON).
+- A "♥ Support the author" button with USDT wallets (TRC-20, TON) (later removed, see below).
 
 ### Name
 
@@ -166,9 +166,24 @@ Before the release the code was reviewed by several independent automated review
 - **AMF 8-bit output was broken:** VMAF ~56 against ~99 for 10-bit on the same clip — so AMD modes always encode 10-bit.
 - Every mode is test-encoded on startup; only working ones can be picked. A failed GPU mode is shown greyed out with the reason
   only if that vendor's GPU is present (read from the display adapters in the registry); modes for absent vendors are hidden.
-- Recommendation order: Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → CPU.
+- Recommendation order at first: Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → CPU
+  (changed in the final review, see below).
 - **Not verified yet:** *AMD GPU · AV1* (needs Radeon RX 7000+) and the Intel modes have not been run on real hardware;
   only the startup test-encode protects them. Reports welcome.
+
+### 8. Final review
+Before publishing, four independent reviewers went over the program and the documents in parallel. Fixed after it:
+- **Layout at the minimum window size:** the search results list and the history now fit and scroll correctly;
+  links are easier to read; the page-file warning can be hidden with ✕ (remembered).
+- **Updates:** once per launch the app asks GitHub for the newest version (can be turned off). The installed version
+  updates in one click: it downloads the new setup.exe, verifies its SHA-256 against `SHA256SUMS.txt`, installs silently
+  and restarts; the installer relaunches the app only after such a self-update (`/FWUPDATE=1`). Verified end-to-end:
+  **0.8.0 → 0.9.0 in ~20 s**, settings, queue and history kept.
+- **🐞 Report a bug:** opens the GitHub issue form with version, Windows, graphics cards, FFmpeg version and mode pre-filled,
+  and can show the log.
+- **Recommendation order changed** to Nvidia AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → AMD AV1 → Intel AV1 → CPU:
+  the unverified AMD AV1 and Intel AV1 should not be recommended over a verified H.265.
+- `/api/ping` and `/api/show` (used by a second launch) now refuse requests that come from a web page.
 
 ---
 
@@ -267,7 +282,7 @@ FFmpeg 8.1.1 (сборка Gyan), Windows 11, 3 NVMe SSD + 4 HDD.
 - **Список задач сохраняется** (`queue.json`, раз в 2 с): закрыл окно — при следующем запуске всё на месте. Кнопка «↻ Повторить» у ошибок и отменённых.
 - **История сжатия** (`history.json`): отдельный журнал, не зависит от списка. На момент записи: 12 файлов, 129,8 → 36,7 ГБ, освобождено 93,1 ГБ.
 - Кнопки «📂 Сжатый» и «📂 Оригинал» у готовых файлов и в истории.
-- Кнопка «♥ Поддержать автора» с кошельками USDT (TRC-20, TON).
+- Кнопка «♥ Поддержать автора» с кошельками USDT (TRC-20, TON) (позже убрана, см. ниже).
 
 #### Название для английской версии
 
@@ -341,6 +356,21 @@ FFmpeg 8.1.1 (сборка Gyan), Windows 11, 3 NVMe SSD + 4 HDD.
 - При запуске каждый режим проверяется пробным кодированием; выбрать можно только работающие. Режим видеокарты, не прошедший
   проверку, показывается серым с причиной, только если видеокарта этого производителя есть (по видеоадаптерам в реестре);
   режимы отсутствующих производителей скрыты.
-- Порядок рекомендации: Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → процессор.
+- Порядок рекомендации сначала: Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → процессор
+  (изменён на финальном ревью, см. ниже).
 - **Ещё не проверено:** «Видеокарта AMD · AV1» (нужна Radeon RX 7000+) и режимы Intel на реальном железе не запускались;
   их страхует только пробное кодирование при запуске. Отчёты приветствуются.
+
+#### 8. Финальное ревью
+Перед публикацией программу и документы параллельно проверили четыре независимых ревьюера. По итогам исправлено:
+- **Вёрстка при минимальном размере окна:** список результатов поиска и история теперь помещаются и листаются правильно;
+  ссылки стало легче читать; предупреждение о файле подкачки можно скрыть крестиком ✕ (запоминается).
+- **Обновления:** один раз при запуске программа спрашивает у GitHub номер новейшей версии (можно отключить). Установленная
+  версия обновляется в один клик: скачивает новый setup.exe, сверяет SHA-256 с `SHA256SUMS.txt`, тихо устанавливает
+  и перезапускается; установщик перезапускает программу только после такого самообновления (`/FWUPDATE=1`). Проверено
+  целиком: **0.8.0 → 0.9.0 примерно за 20 с**, настройки, очередь и история сохранились.
+- **«🐞 Сообщить об ошибке»:** открывает форму issue на GitHub с заполненными версией, Windows, видеокартами, версией FFmpeg
+  и режимом и умеет показать журнал.
+- **Порядок рекомендации изменён** на Nvidia AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → AMD AV1 → Intel AV1 → процессор:
+  непроверенные AMD AV1 и Intel AV1 не должны рекомендоваться раньше проверенного H.265.
+- `/api/ping` и `/api/show` (ими пользуется второй запуск) теперь отклоняют запросы с веб-страниц.

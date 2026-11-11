@@ -36,7 +36,7 @@ body:
     id: gpu
     attributes:
       label: GPU and driver version / Видеокарта и версия драйвера
-      placeholder: "RTX 4070, driver 576.xx / no Nvidia GPU"
+      placeholder: "RTX 4070, driver 576.xx / Radeon 780M, Adrenalin 25.x / none"
     validations:
       required: true
   - type: input

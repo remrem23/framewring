@@ -30,7 +30,10 @@ APP_NAMES = i18n.APP_NAMES  # заголовок окна: «Framewring Жмых
 REPO_URL = "https://github.com/remrem23/framewring"  # официальная страница программы
 DONATE_URL = REPO_URL + "/blob/main/DONATE.md"
 EVERYTHING_URL = "https://www.voidtools.com/"
-OPEN_URLS = (REPO_URL, DONATE_URL, EVERYTHING_URL)  # только эти ссылки интерфейс может открыть
+OPEN_URLS = (REPO_URL, DONATE_URL, EVERYTHING_URL)
+RELEASES_URL = REPO_URL + "/releases/latest"
+RELEASES_API = "https://api.github.com/repos/remrem23/framewring/releases/latest"
+ISSUES_NEW = REPO_URL + "/issues/new"  # только эти ссылки интерфейс может открыть
 
 FROZEN = bool(getattr(sys, "frozen", False))  # собрано в .exe (PyInstaller)
 APP_DIR = Path(__file__).resolve().parent  # код (в сборке — внутренняя папка)
@@ -290,7 +293,8 @@ def app_name():
 PRESETS = ("nvenc_av1", "nvenc_hevc", "amf_av1", "amf_hevc", "qsv_av1", "qsv_hevc", "vt_hevc", "x265", "av1")
 HW_VENDOR = {"nvenc": "nvidia", "amf": "amd", "qsv": "intel"}  # режим видеокарты -> производитель
 # Что рекомендовать: видеокарта, если есть. Процессор жмёт чуть плотнее, но на порядок дольше.
-RECOMMEND = ("nvenc_av1", "amf_av1", "qsv_av1", "nvenc_hevc", "amf_hevc", "qsv_hevc", "vt_hevc", "x265", "av1")
+# AV1 на AMD и Intel ниже H.265, пока не проверены на настоящих видеокартах
+RECOMMEND = ("nvenc_av1", "nvenc_hevc", "amf_hevc", "qsv_hevc", "amf_av1", "qsv_av1", "vt_hevc", "x265", "av1")
 
 # Качество: high / balanced / compact
 QUALITY = {
@@ -302,7 +306,7 @@ QUALITY = {
     # AMD: постоянный QP. Замер (10 бит, тот же ролик): QP 22/24/27 ≈ NVENC CQ 22/24/27 по размеру и VMAF
     "amf_hevc": {"high": 22, "balanced": 24, "compact": 27},
     # AV1 у AMF — шкала 0–255 (≈ 4×QP HEVC); на настоящем RX 7000 ещё не проверено
-    "amf_av1": {"high": 88, "balanced": 100, "compact": 116},
+    "amf_av1": {"high": 108, "balanced": 120, "compact": 132},  # ≈ 4× шкалы 0–63, как CQ 27/30/33 у других AV1
     # Intel: ICQ 1–51; на настоящем железе ещё не проверено
     "qsv_hevc": {"high": 22, "balanced": 24, "compact": 27},
     "qsv_av1": {"high": 24, "balanced": 27, "compact": 30},
@@ -320,7 +324,7 @@ SPEED = {
     "qsv_hevc": {"slow": "slower", "normal": "medium", "fast": "faster"},
     "qsv_av1": {"slow": "slower", "normal": "medium", "fast": "faster"},
 }
-MEM_ERR = re.compile(r"allocate memory|insufficient resources|cannot allocate memory|out of memory", re.I)
+MEM_ERR = re.compile(r"allocate memory|insufficient resources|cannot allocate memory|out[ _]of[ _]memory", re.I)
 
 
 def video_args(preset, quality, speed, lp=None):
@@ -344,6 +348,7 @@ def video_args(preset, quality, speed, lp=None):
                 "-qp_p", str(q), "-profile:v", "main10", "-pix_fmt", "p010le", "-tag:v", "hvc1"]
     if preset == "amf_av1":
         return ["-c:v", "av1_amf", "-usage", "transcoding", "-quality", s, "-rc", "cqp", "-qp_i", str(q),
+                "-qp_b", str(q),
                 "-qp_p", str(q), "-pix_fmt", "p010le"]
     if preset == "qsv_hevc":
         return ["-c:v", "hevc_qsv", "-preset", s, "-global_quality", str(q), "-profile:v", "main10",
@@ -360,11 +365,12 @@ CAPS = {"ffmpeg": bool(FFMPEG), "ffprobe": bool(FFPROBE), "version": "", "preset
         "checked": False, "recommended": "", "pagefile_off": pagefile_off()}
 
 
-def gpu_vendors():
-    """Какие видеокарты стоят (по описаниям драйверов в реестре, без WMI — он бывает очень медленным)."""
-    found = set()
+def gpu_names():
+    """Названия видеокарт из описаний драйверов в реестре (без WMI — он бывает очень медленным).
+    Виртуальные мониторы и прочее отбрасываем: только Nvidia / AMD / Intel."""
+    names = []
     if not IS_WIN:
-        return found
+        return names
     try:
         import winreg
         base = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
@@ -376,17 +382,28 @@ def gpu_vendors():
                     break
                 try:
                     with winreg.OpenKey(k, sub) as sk:
-                        desc = str(winreg.QueryValueEx(sk, "DriverDesc")[0]).lower()
+                        desc = str(winreg.QueryValueEx(sk, "DriverDesc")[0]).strip()
                 except OSError:
                     continue
-                if "nvidia" in desc:
-                    found.add("nvidia")
-                if "radeon" in desc or "amd" in desc:
-                    found.add("amd")
-                if "intel" in desc and ("graphics" in desc or "arc" in desc or "uhd" in desc or "iris" in desc):
-                    found.add("intel")
+                low = desc.lower()
+                if any(x in low for x in ("nvidia", "radeon", "amd", "intel")) and desc not in names:
+                    names.append(desc)
     except Exception:
         pass
+    return names
+
+
+def gpu_vendors():
+    """Какие видеокарты стоят: nvidia / amd / intel."""
+    found = set()
+    for desc in gpu_names():
+        d = desc.lower()
+        if "nvidia" in d:
+            found.add("nvidia")
+        if "radeon" in d or "amd" in d:
+            found.add("amd")
+        if "intel" in d and ("graphics" in d or "arc" in d or "uhd" in d or "iris" in d):
+            found.add("intel")
     return found
 
 
@@ -414,7 +431,7 @@ def detect_caps():
         # Проверяем, что железо реально умеет, теми же флагами
         try:
             r = run_quiet([FFMPEG, "-hide_banner", "-v", "error", "-f", "lavfi", "-i",
-                           "color=black:s=1280x720:r=60:d=0.5"] + video_args(p, "balanced", "normal")
+                           "color=black:s=1920x1080:r=30:d=0.5"] + video_args(p, "balanced", "normal")
                           + ["-f", "null", "-"], timeout=30)
             ok = r.returncode == 0
             return {"ok": ok, "why": "" if ok else M("caps.hw_unsupported")}
@@ -484,6 +501,7 @@ WAKE = threading.Event()
 CUR = {"proc": None, "cancel": False}
 DEFAULT_SETTINGS = {"preset": "x265", "quality": "balanced", "speed": "normal", "audio": "auto",
                     "outdir": "", "lowprio": True, "nosleep": True, "skip": True, "testlen": 120,
+                    "update_check": True,
                     "lang": ""}  # lang: "" = как в системе, иначе "ru" / "en"
 
 
@@ -526,7 +544,7 @@ def clean_settings(b):
             continue
         if k == "audio" and v not in ("auto", "aac"):
             continue
-        if k in ("lowprio", "nosleep", "skip"):
+        if k in ("lowprio", "nosleep", "skip", "update_check"):
             v = bool(v)
         if k == "outdir":
             v = os.path.expandvars(os.path.expanduser(v.strip().strip('"').strip("'")))
@@ -1445,7 +1463,8 @@ def encode(job, s, src, dst, total, phase, extra, subs=False):
             if mem_tries == 2:
                 pre = []
             with LOCK:
-                job["note"] = M("note.mem_retry" if pre else "note.mem_retry_cpu", n=mem_tries + 1)
+                job["note"] = M("note.mem_retry_cpu" if mem_tries == 2 and s["preset"].startswith("nvenc")
+                                else "note.mem_retry", n=mem_tries + 1)
             time.sleep(5)
             continue
         cur = lp or 5
@@ -1916,7 +1935,8 @@ def snapshot(scan_ver=None):
             target = Path(os.path.expanduser(settings["outdir"]))
     return {"caps": caps, "jobs": jobs, "running": running, "settings": settings, "disk": disk_info(target),
             "presets": list(PRESETS), "sys_lang": SYS_LANG,
-            "quality": QUALITY, "scan": scan_public(scan_ver), "hist_ver": HISTORY["ver"], "version": __version__, "repo": REPO_URL, "donate": DONATE_URL, "window": WINDOW["w"] is not None,
+            "quality": QUALITY, "scan": scan_public(scan_ver), "hist_ver": HISTORY["ver"], "version": __version__, "update": {k: UPDATE[k] for k in ("latest", "state", "pct", "err")},
+            "install_kind": install_kind(), "repo": REPO_URL, "donate": DONATE_URL, "window": WINDOW["w"] is not None,
             "hist_count": len(HISTORY["items"])}
 
 
@@ -1941,13 +1961,17 @@ class H(BaseHTTPRequestHandler):
         host = (self.headers.get("Host") or "").split(":")[0]
         return host in ("127.0.0.1", "localhost")
 
+    def _from_browser(self):
+        """Запрос пришёл со страницы в браузере (а не от второго запуска программы через urllib)."""
+        return bool(self.headers.get("Origin") or self.headers.get("Sec-Fetch-Site") or self.headers.get("Referer"))
+
     def _tok_ok(self, given):
         return hmac.compare_digest(str(given or "").encode(), TOKEN.encode())
 
     def do_GET(self):
         if not self._host_ok():
             return self._send(403, {"error": "forbidden"})
-        if self.path == "/api/ping":  # для второго запуска: «здесь уже работает Framewring»
+        if self.path == "/api/ping" and not self._from_browser():  # второй запуск: «здесь уже работает Framewring»
             return self._send(200, {"app": "Framewring"})
         if self.path == "/" or self.path.startswith("/?"):
             m = re.search(r"[?&]t=([0-9a-f]+)", self.path)
@@ -1964,7 +1988,7 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._host_ok():
             return self._send(403, {"error": "forbidden"})
-        if self.path == "/api/show":  # второй запуск просит показать уже открытое окно
+        if self.path == "/api/show" and not self._from_browser():  # второй запуск просит показать окно
             threading.Thread(target=show_self, daemon=True).start()
             return self._send(200, {"ok": True})
         if not self._tok_ok(self.headers.get("X-Token")):
@@ -2096,6 +2120,23 @@ class H(BaseHTTPRequestHandler):
             with LOCK:
                 JOBS[:] = [j for j in JOBS if j["status"] not in ("done", "skipped")]
             return None
+        if path == "/api/report":
+            webbrowser.open(report_url())
+            return None
+        if path == "/api/open_log":
+            log = DATA_DIR / "framewring.log"
+            if not log.exists():
+                raise UserError("api.no_log")
+            open_folder(str(log))
+            return None
+        if path == "/api/update_page":
+            webbrowser.open(UPDATE["notes_url"] or RELEASES_URL)
+            return None
+        if path == "/api/update_install":
+            if UPDATE["state"] in ("download", "install"):
+                return None
+            install_update()
+            return None
         if path == "/api/url":
             url = b.get("url")
             if url not in OPEN_URLS:
@@ -2181,9 +2222,10 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 .res{margin-top:8px;padding:10px;border-radius:10px;background:#0f1115;border:1px dashed var(--line);font-size:13px}
 .res b{color:var(--acc2)}.err{color:var(--err);white-space:pre-wrap;font:12px/1.4 ui-monospace,Consolas,monospace;max-height:160px;overflow:auto;margin-top:8px}
 .empty{color:var(--mut);text-align:center;padding:40px 10px;border:1px dashed var(--line);border-radius:12px}
+.updbox{border:1px solid var(--acc);background:#7c5cff18;padding:10px 12px;border-radius:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .warnbox{border:1px solid var(--warn);background:#ffb34714;color:var(--warn);padding:12px;border-radius:12px;margin-bottom:14px}
 .foot{color:var(--mut);font-size:12px;margin-top:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
-@media(max-width:1000px){.hrow{grid-template-columns:minmax(120px,1fr) auto!important}.hrow>:nth-child(1),.hrow>:nth-child(4){display:none}.hrow>:nth-child(3){grid-column:1}}.toast{overflow-wrap:anywhere}
+@media(max-width:1200px){.hrow{grid-template-columns:minmax(120px,1fr) auto!important}.hrow>:nth-child(1),.hrow>:nth-child(4){display:none}.hrow>:nth-child(3){grid-column:1}}.toast{overflow-wrap:anywhere}
 .hrow>.row{flex-direction:column;align-items:stretch;gap:4px}.hrow .btn{white-space:nowrap}
 .hrow{display:grid;grid-template-columns:88px minmax(160px,1fr) 150px 130px auto;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
 .hrow:last-child{border-bottom:0}.hrow .meta{margin:0;overflow-wrap:anywhere}
@@ -2193,10 +2235,12 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 .mbox h3{margin:0 0 4px;font-size:18px}.wal{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px}
 .wal b{display:block;margin-bottom:6px}.addr{display:flex;gap:8px;align-items:center}
 .addr code{flex:1;background:#0f1115;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:13px ui-monospace,Consolas,monospace;overflow-wrap:anywhere;user-select:all}
-.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#232836;border:1px solid var(--line);padding:10px 16px;border-radius:10px;display:none;max-width:90%}
+a{color:var(--acc)}:root{color-scheme:dark}.jh .btn{white-space:nowrap}
+.toast{z-index:60;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#232836;border:1px solid var(--line);padding:10px 16px;border-radius:10px;display:none;max-width:90%}
 .note{color:var(--warn);font-size:12px;margin-top:6px}
-.scanlist{max-height:440px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:8px}
-.srow{display:grid;grid-template-columns:22px 1fr 86px 120px 150px;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.scanlist{max-height:min(440px,calc(100vh - 260px));min-height:160px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:8px}
+@media(max-width:1100px){.srow{grid-template-columns:22px minmax(0,1fr) auto!important}.srow>:nth-child(3),.srow>:nth-child(4){display:none}}
+.srow{display:grid;grid-template-columns:22px minmax(0,1fr) 86px 120px auto;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
 .srow:last-child{border-bottom:0}.srow:hover{background:#ffffff06}.srow .meta{margin:0;overflow-wrap:anywhere}
 .srow.dim{opacity:.55}.sname{font-weight:600;overflow-wrap:anywhere}.num{text-align:right;font-variant-numeric:tabular-nums}
 .tag{font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);white-space:nowrap}
@@ -2209,8 +2253,8 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 </style></head><body><div class="wrap">
 <div class="top"><div><h1><span>Framewring</span><span data-t="app.suffix"></span> <small id="appver" style="font-size:12px;color:var(--mut);font-weight:400"></small><select class="lng" id="lng" data-tt="lang.title">__LANGOPTS__</select></h1>
 <div class="sub" data-t="app.sub"></div></div>
-<div class="row" style="align-items:center"><button class="btn sm don" onclick="donate(true)" data-t="donate.btn" data-tt="donate.btn_title"></button><div class="pill" id="ver" data-t="ver.checking"></div></div></div>
-<div id="warn"></div>
+<div class="row" style="align-items:center"><button class="btn sm" onclick="report(true)" data-t="report.btn" data-tt="report.btn_title"></button><button class="btn sm don" onclick="donate(true)" data-t="donate.btn" data-tt="donate.btn_title"></button><div class="pill" id="ver" data-t="ver.checking"></div></div></div>
+<div id="warn"></div><div id="upd"></div>
 <div class="grid">
 <div class="col">
  <div class="card">
@@ -2229,6 +2273,7 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
   <div style="margin-top:10px">
    <label class="chk"><input type="checkbox" id="lowprio"> <span data-t="set.lowprio"></span></label>
    <label class="chk"><input type="checkbox" id="nosleep"> <span data-t="set.nosleep"></span></label>
+<label class="chk"><input type="checkbox" id="update_check"> <span data-t="set.update_check"></span></label>
    <label class="chk"><input type="checkbox" id="skip"> <span data-t="set.skip"></span></label>
   </div>
  </div>
@@ -2270,6 +2315,11 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
  <button class="btn pri" onclick="openUrl(S.donate)" data-t="donate.open"></button>
  <p class="hint" style="margin:14px 0 0"><span data-t="donate.official"></span> <b id="repoUrl">github.com/remrem23/framewring</b>. <span data-t="donate.official2"></span></p>
 </div></div>
+<div class="modal" id="report" onclick="if(event.target===this)report(false)"><div class="mbox" role="dialog" data-ta="report.title">
+ <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap"><div><h3 data-t="report.title"></h3><div class="meta" data-t="report.text"></div></div><button class="btn sm" onclick="report(false)" data-ta="common.close">✕</button></div>
+ <p style="margin:14px 0 10px" data-t="report.log"></p>
+ <div class="row"><button class="btn pri" onclick="api('/api/report')" data-t="report.open"></button><button class="btn" onclick="api('/api/open_log')" data-t="report.open_log"></button></div>
+</div></div>
 <div class="toast" id="toast"></div>
 <script>
 const T="__TOKEN__";let S=null;
@@ -2297,15 +2347,27 @@ const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;"
 // innerHTML только при реальном изменении: иначе каждую секунду пересоздаются кнопки и клик «теряется»
 function setHTML(el,h){if(el._h!==h){el.innerHTML=h;el._h=h}}
 async function api(p,b){try{const r=await fetch(p,{method:"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:JSON.stringify(b||{})});const j=await r.json().catch(()=>({}));if(r.status===403){stale();return {}}if(!r.ok)toast(j.msg?msg(j.msg):(j.error||tr("err.generic")));return j}catch(e){toast(tr("err.no_response"));return {}}}
-function stale(){document.body.innerHTML='<div style="padding:40px;font-size:16px">Программа была перезапущена или закрыта — эта вкладка устарела. Открой программу заново.<br><br>The program was restarted or closed — this tab is out of date.</div>'}
+function stale(){document.body.innerHTML=`<div style="padding:40px;font-size:16px">${esc(tr("stale.text"))}</div>`}
 function toasts(a){a=(a||[]).map(msg).filter(Boolean);if(a.length)toast(a.slice(0,4).join(" · ")+(a.length>4?` (+${a.length-4})`:""))}
 // перетаскивание: без этого окно открыло бы само видео вместо программы
 ["dragover","drop"].forEach(ev=>window.addEventListener(ev,e=>{e.preventDefault();if(ev==="drop"&&!S?.window)toast(tr("drop.browser"))}));
-function donate(on){$("donate").classList.toggle("on",on)}
-document.addEventListener("keydown",e=>{if(e.key==="Escape")donate(false)});
+function donate(on){const d=$("donate");if(d)d.classList.toggle("on",on)}
+function report(on){const d=$("report");if(d)d.classList.toggle("on",on)}
+async function updInstall(){if(S.running&&!confirm(tr("upd.confirm_running")))return;await api("/api/update_install");refresh()}
+function renderUpd(){const u=S.update||{};let h="";
+ if(u.latest&&localStorage.getItem("fw_upd_skip")!==u.latest){
+  const inst=S.install_kind==="installer";let act;
+  if(u.state==="download")act=`<span>${esc(tr("upd.downloading",{pct:nf(u.pct,0)}))}</span>`;
+  else if(u.state==="install")act=`<span>${esc(tr("upd.installing"))}</span>`;
+  else act=(u.state==="error"?`<span style="color:var(--err)">${esc(tr("upd.failed",{err:msg(u.err)}))}</span> `:"")+
+   (inst?`<button class="btn sm pri" onclick="updInstall()">${esc(tr("upd.install"))}</button>`:`<button class="btn sm pri" onclick="api('/api/update_page')">${esc(tr("upd.download"))}</button>`)+
+   `<button class="btn sm" onclick="api('/api/update_page')">${esc(tr("upd.notes"))}</button><button class="btn sm" onclick="localStorage.setItem('fw_upd_skip','${esc(u.latest)}');renderUpd()">${esc(tr("upd.later"))}</button>`;
+  h=`<div class="updbox"><b>${esc(tr("upd.available",{v:u.latest}))}</b><div class="row" style="align-items:center">${act}</div></div>`}
+ setHTML($("upd"),h)}
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){donate(false);report(false)}});
 $("lng").addEventListener("change",e=>setLang(e.target.value));
 async function openUrl(u){if(u)await api("/api/url",{url:u})}
-function toast(m){const t=$("toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",5000)}
+function toast(m){const t=$("toast");if(!t)return;t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",5000)}
 const gb=b=>{const n=Math.abs(b||0),sg=b<0?"−":"";return sg+(n>=1e9?nf(n/1e9,2)+" "+tr("unit.gb"):n>=1e7?nf(n/1e6,0)+" "+tr("unit.mb"):nf(n/1e6,1)+" "+tr("unit.mb"))};
 const tm=s=>{if(s==null||!isFinite(s))return"—";s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h?tr("time.hm",{h:String(h),m:String(m)}):m?tr("time.ms",{m:String(m),s:String(x)}):tr("time.s",{s:String(x)})};
 const dur=s=>{s=Math.round(s||0);return`${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`};
@@ -2347,10 +2409,10 @@ function renderSettings(){
  $("qhint").textContent=tr("set.qhint",{unit,high:String(qv.high),balanced:String(qv.balanced),compact:String(qv.compact)});
  $("sp").style.display=st.preset==="vt_hevc"?"none":"flex";
  $("btnTest").textContent=testLabel(st.testlen);
- if(!builtSettings){$("outdir").value=st.outdir||"";["lowprio","nosleep","skip"].forEach(k=>$(k).checked=!!st[k]);builtSettings=true}
+ if(!builtSettings){$("outdir").value=st.outdir||"";["lowprio","nosleep","skip","update_check"].forEach(k=>$(k).checked=!!st[k]);builtSettings=true}
 }
 $("outdir").addEventListener("change",e=>setS("outdir",e.target.value.trim()));
-["lowprio","nosleep","skip"].forEach(k=>$(k).addEventListener("change",e=>setS(k,e.target.checked)));
+["lowprio","nosleep","skip","update_check"].forEach(k=>$(k).addEventListener("change",e=>setS(k,e.target.checked)));
 function vmafCls(v){return v>=95?"g":v>=92?"y":"r"}
 const phk=j=>j.phase&&j.phase.k||""; // этап работы: ключ (phase.save, phase.save_wait, …)
 function jobStatic(j){
@@ -2394,9 +2456,9 @@ function renderJobs(){
  });
  for(const [id,n] of el._map)if(!seen.has(id)){n.remove();el._map.delete(id)}
 }
-function render(){
+function render(){renderUpd();
  const c=S.caps;$("ver").textContent=c.ffmpeg?(c.version||tr("ver.found")).replace(/Copyright.*/,"").slice(0,60):tr("ver.missing");
- setHTML($("warn"),!c.ffmpeg||!c.ffprobe?`<div class="warnbox"><b>${esc(tr("warn.ffmpeg_t"))}</b> ${esc(tr("warn.ffmpeg_1"))}<br>Windows: <code>winget install Gyan.FFmpeg</code> · Mac: <code>brew install ffmpeg</code><br>${esc(tr("warn.ffmpeg_2"))}</div>`:c.pagefile_off?`<div class="warnbox"><b>${esc(tr("warn.pf_t"))}</b> ${esc(tr("warn.pf_1"))}<br>Win+R → <code>sysdm.cpl</code> ${esc(tr("warn.pf_2"))}</div>`:"");
+ setHTML($("warn"),!c.ffmpeg||!c.ffprobe?`<div class="warnbox"><b>${esc(tr("warn.ffmpeg_t"))}</b> ${esc(tr("warn.ffmpeg_1"))}<br>Windows: <code>winget install Gyan.FFmpeg</code> · Mac: <code>brew install ffmpeg</code><br>${esc(tr("warn.ffmpeg_2"))}</div>`:c.pagefile_off&&localStorage.getItem("fw_nopf")!=="1"?`<div class="warnbox"><button class="btn sm" style="float:right;margin-left:10px" title="${esc(tr("common.close"))}" onclick="localStorage.setItem('fw_nopf','1');render()">✕</button><b>${esc(tr("warn.pf_t"))}</b> ${esc(tr("warn.pf_1"))}<br>Win+R → <code>sysdm.cpl</code> ${esc(tr("warn.pf_2"))}</div>`:"");
  renderSettings();renderJobs();
  $("btnStop").style.display=S.running?"inline-block":"none";
  // во время работы кнопки не блокируем: новые файлы встают в очередь за текущим
@@ -2529,6 +2591,135 @@ def ask_show(port):
 
 APP_URL = {"url": None}
 
+# ------------------------------------------------------------- Updates / bug report ----
+
+UPDATE = {"latest": "", "notes_url": "", "setup": None, "sums": None, "state": "", "pct": 0, "err": None}
+
+
+def install_kind():
+    """Как запущена программа: installer (стоит через установщик), portable или source."""
+    if not FROZEN:
+        return "source"
+    if (BASE_DIR / "portable.txt").exists():
+        return "portable"
+    return "installer" if (BASE_DIR / "unins000.exe").exists() else "portable"
+
+
+def _ver_tuple(v):
+    nums = [int(x) for x in re.findall(r"\d+", str(v))[:3]]
+    return tuple(nums + [0] * (3 - len(nums)))
+
+
+def _http_get(url, timeout=15):
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": "Framewring/" + __version__,
+                                               "Accept": "application/vnd.github+json"})
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
+def check_update():
+    """Раз за запуск спрашиваем у GitHub номер последней версии. Больше ничего не отправляется."""
+    if not SETTINGS.get("update_check", True):
+        return
+    try:
+        with _http_get(RELEASES_API) as r:
+            rel = json.loads(r.read().decode("utf-8"))
+        tag = str(rel.get("tag_name") or "")
+        if rel.get("draft") or rel.get("prerelease") or _ver_tuple(tag) <= _ver_tuple(__version__):
+            return
+        ok = REPO_URL + "/releases/download/"
+        assets = {a.get("name", ""): a.get("browser_download_url", "") for a in rel.get("assets") or []}
+        setup = next((u for n, u in assets.items() if n.lower().endswith("-setup.exe") and u.startswith(ok)), None)
+        sums = assets.get("SHA256SUMS.txt")
+        notes = rel.get("html_url") or ""
+        with LOCK:
+            UPDATE.update(latest=tag.lstrip("vV"), notes_url=notes if notes.startswith(REPO_URL + "/") else RELEASES_URL,
+                          setup=setup, sums=sums if sums and sums.startswith(ok) else None)
+        print(" Доступна новая версия: %s" % tag)
+    except Exception as e:
+        print(" update check: %s" % e)
+
+
+def _spawn_detached(cmd):
+    """Процесс, который переживёт нас (установщик). Без Job Object, отдельно от нашей консоли."""
+    flags = NO_WINDOW | 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    try:
+        subprocess.Popen(cmd, creationflags=flags | 0x01000000, close_fds=True)  # CREATE_BREAKAWAY_FROM_JOB
+    except OSError:
+        subprocess.Popen(cmd, creationflags=flags, close_fds=True)
+
+
+def install_update():
+    """Скачать установщик новой версии, сверить SHA-256 из SHA256SUMS.txt того же релиза,
+    тихо поставить поверх и перезапуститься. Настройки, очередь и история остаются в %APPDATA%."""
+    def run():
+        try:
+            setup, sums = UPDATE["setup"], UPDATE["sums"]
+            if install_kind() != "installer" or not setup or not sums:
+                raise UserError("upd.manual")
+            with LOCK:
+                UPDATE.update(state="download", pct=0, err=None)
+            import hashlib
+            import tempfile
+            name = setup.rsplit("/", 1)[1]
+            with _http_get(sums) as r:
+                lines = r.read().decode("utf-8", "replace").splitlines()
+            want = next((ln.split()[0].lower() for ln in lines if ln.strip().endswith(name)), None)
+            if not want:
+                raise RuntimeError("no checksum for " + name)
+            d = Path(tempfile.gettempdir()) / "FramewringUpdate"
+            d.mkdir(exist_ok=True)
+            dst = d / name
+            h = hashlib.sha256()
+            with _http_get(setup, timeout=60) as r, open(dst, "wb") as f:
+                total, done = int(r.headers.get("Content-Length") or 0), 0
+                while True:
+                    b = r.read(1 << 20)
+                    if not b:
+                        break
+                    f.write(b)
+                    h.update(b)
+                    done += len(b)
+                    if total:
+                        UPDATE["pct"] = done * 100.0 / total
+            if h.hexdigest().lower() != want:
+                _rm(dst)
+                raise RuntimeError("checksum mismatch")
+            with LOCK:
+                UPDATE["state"] = "install"
+            # Отпускаем мьютекс (иначе установщик спросит «закройте программу») и сразу выходим: до замены
+            # файлов установщику нужно несколько секунд на распаковку, к тому времени нас уже нет.
+            # /FWUPDATE=1 — после тихой установки запустить новую версию (обычная тихая установка этого не делает).
+            for h in _MUTEX:
+                try:
+                    ctypes.windll.kernel32.CloseHandle(h)
+                except Exception:
+                    pass
+            _MUTEX.clear()
+            _spawn_detached([str(dst), "/SILENT", "/SP-", "/NOCANCEL", "/NORESTART", "/FWUPDATE=1"])
+            quit_app()
+        except Exception as e:
+            with LOCK:
+                UPDATE.update(state="error", err=e.msg() if isinstance(e, UserError) else str(e))
+    threading.Thread(target=run, daemon=True).start()
+
+
+def report_url():
+    """Форма «Сообщить об ошибке» на GitHub с уже заполненными версией, Windows, видеокартами и режимом.
+    Ничего не отправляется само: человек видит всё в браузере и решает, отправлять ли."""
+    import platform
+    import urllib.parse
+    try:
+        build = sys.getwindowsversion().build if IS_WIN else 0
+        win = ("Windows %s (build %d)" % ("11" if build >= 22000 else "10", build)) if IS_WIN else platform.platform()
+    except Exception:
+        win = platform.platform()
+    s = SETTINGS
+    q = {"template": "bug_report.yml", "version": "%s (%s)" % (__version__, install_kind()), "windows": win,
+         "gpu": ", ".join(gpu_names()) or "?", "ffmpeg": (CAPS.get("version") or "")[:150],
+         "mode": "%s · %s · %s" % (s.get("preset"), s.get("quality"), s.get("speed"))}
+    return ISSUES_NEW + "?" + urllib.parse.urlencode(q)
+
 
 def _own_windows():
     """Видимые окна нашего процесса (окно программы pywebview)."""
@@ -2602,6 +2793,11 @@ def _hold_mutex():
 def _setup_log():
     """В сборке без консоли print некуда выводить: пишем в framewring.log в папке данных."""
     if sys.stdout is not None and sys.stderr is not None:
+        for st in (sys.stdout, sys.stderr):
+            try:
+                st.reconfigure(errors="replace")
+            except Exception:
+                pass
         return
     try:
         log = DATA_DIR / "framewring.log"
@@ -2637,10 +2833,7 @@ def run_window(url):
         import webview
         from webview.platforms import winforms as _wf
         if not _wf._is_chromium():
-            _win_msg("Для окна программы нужен компонент Microsoft Edge WebView2 — его нет на этом компьютере.\n\n"
-                     "Framewring откроется в браузере. Чтобы было своё окно, установи WebView2 Runtime:\n"
-                     "https://developer.microsoft.com/microsoft-edge/webview2/\n\n"
-                     "Microsoft Edge WebView2 is missing, so Framewring will open in your browser.",
+            _win_msg(tr("native.webview2_missing") + "\nhttps://developer.microsoft.com/microsoft-edge/webview2/",
                      app_name(), 0x40)
             return False
     except Exception as e:
@@ -2709,6 +2902,7 @@ def main():
     threading.Thread(target=detect_caps, daemon=True).start()
     threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=queue_saver, daemon=True).start()
+    threading.Timer(4.0, check_update).start()
     if not srv:
         print(tr("con.no_port"))
         sys.exit(1)

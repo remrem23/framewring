@@ -21,7 +21,10 @@ PKG = ROOT / "packaging"
 DIST = ROOT / "build" / "dist" / "Framewring"
 OUT = ROOT / "build" / "release"
 
-PORTABLE_NOTE = """Этот файл включает портабл-режим Framewring:
+PORTABLE_NOTE = """This file turns on Framewring's portable mode: settings, queue and history are kept in the
+data folder next to Framewring.exe instead of %APPDATA%. Delete this file to store data in %APPDATA%\\Framewring.
+
+Этот файл включает портабл-режим Framewring:
 настройки, очередь и история хранятся в папке data рядом с Framewring.exe,
 а не в %APPDATA%. Удалишь этот файл — программа начнёт хранить данные в %APPDATA%\\Framewring.
 """

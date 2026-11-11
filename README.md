@@ -5,6 +5,8 @@
 **Finds videos that waste space on your drives and shrinks them several times over with no visible loss of quality.**
 Free, local, no limits: your files never leave your computer.
 
+**[⬇ Download for Windows 10/11 (64-bit)](https://github.com/remrem23/framewring/releases/latest)** · free · GPL v3
+
 Framewring is a Windows app built on top of FFmpeg. It finds heavy videos on all your drives,
 estimates how much space each one would free, lets you test the result on a short piece, and re-encodes on an
 Nvidia, AMD or Intel GPU (NVENC / AMF / Quick Sync, AV1 or H.265) or on the CPU (x265, SVT-AV1). The interface is in English, Russian, German, French, Spanish, Portuguese and Simplified Chinese
@@ -47,13 +49,16 @@ Copies from other sites may be modified.
   - **Nvidia** (NVENC): *Nvidia GPU · AV1* needs an RTX 40 or 50 series card, *Nvidia GPU · H.265* works on most
     GeForce GTX 10 series and newer.
   - **AMD** (AMF, AMD Software / Adrenalin driver): *AMD GPU · AV1* needs a Radeon RX 7000 series card or newer,
-    *AMD GPU · H.265* works on Radeon cards, including the graphics built into Ryzen processors.
+    or Ryzen 7040/8040-series graphics (Radeon 780M/880M); *AMD GPU · H.265* works on Radeon RX 400 series or newer,
+    including Ryzen integrated graphics.
   - **Intel** (Quick Sync, Intel graphics driver): *Intel GPU · AV1* needs Intel Arc or Core Ultra graphics,
     *Intel GPU · H.265* works on most Intel graphics since about 2016.
 
   Framewring test-encodes every mode on startup and lets you pick only the ones that work. A GPU mode that fails is
   greyed out with the reason if that vendor's GPU is in your PC; modes for vendors you don't have are hidden.
   Without a suitable GPU the CPU modes (x265, SVT-AV1) are used — they work everywhere, just slower.
+  The mode marked *recommended* is chosen in this order: Nvidia AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 →
+  AMD AV1 → Intel AV1 → CPU (AMD AV1 and Intel AV1 stay below H.265 until they are verified on real hardware).
   *AMD GPU · H.265* has been checked on real hardware (graphics built into a Ryzen 7 9700X); *AMD GPU · AV1* and
   the Intel modes have not been tested on real hardware yet — if you have such a card, please report how it went in
   [Issues](https://github.com/remrem23/framewring/issues).
@@ -63,7 +68,7 @@ Copies from other sites may be modified.
 - **Find heavy videos** on all drives: how much space compressing each file would free, duplicate detection,
   checkboxes to choose what to queue. With the free [Everything](https://www.voidtools.com/) installed the search takes seconds;
   without it a multi-threaded folder scan is used automatically.
-- **GPU compression** (AV1 / H.265 on Nvidia, AMD or Intel) — 5–7× faster than the CPU — or **CPU compression** (x265, SVT-AV1) when every gigabyte counts.
+- **GPU compression** (AV1 / H.265 on Nvidia, AMD or Intel; on Nvidia, 5–7× faster than the CPU) or **CPU compression** (x265, SVT-AV1) when every gigabyte counts.
 - **Test on a piece of the video:** predicted final size, time and VMAF quality score before the full run.
 - **A queue that survives restarts**, a *↻ Retry* button for failed files, **history** of everything compressed with the total space freed.
 - **Drag & drop** files and folders onto the app window to add them.
@@ -71,6 +76,11 @@ Copies from other sites may be modified.
   the result is written to a temporary file and appears only when complete. Audio, text subtitles and the file date are kept;
   interlaced video is deinterlaced; variable-frame-rate recordings keep their timing.
 - **Reliable:** free-space check, automatic retry on memory errors, works even if an antivirus or a player holds the file.
+- **Updates in one click:** once per launch the app checks GitHub for a new version (can be turned off in settings).
+  The installed version downloads the new installer, verifies its SHA-256 and updates itself, keeping settings,
+  queue and history; the portable version opens the release page.
+- **🐞 Report a bug** in the header opens the GitHub bug-report form with the program version, Windows version,
+  graphics cards, FFmpeg version and mode already filled in (you see everything before sending), and can show the log file.
 
 Example from the author's machine: a 3440×1440 screen recording, **76.6 GB → 7.3 GB (−90%)**; 93 GB freed on the first evening.
 
@@ -113,9 +123,11 @@ existing files from elsewhere are never overwritten (a number is added). Deletin
 **What about variable frame rate (phones, OBS, screen recorders)?** Frames are passed through with their original timestamps —
 nothing is dropped or duplicated, and the test VMAF compares the right frames.
 
-**Is anything sent to the internet?** No. See *Privacy* below.
+**Is anything sent to the internet?** Your files never leave your computer. The only network request is a check for a new version
+on GitHub once per launch (can be turned off in settings); nothing about your files is sent. See *Privacy* below.
 
-**Where do I report a bug?** [Issues](https://github.com/remrem23/framewring/issues) — please attach `framewring.log` from the data folder.
+**Where do I report a bug?** Click **🐞 Report a bug** in the header: it opens the [Issues](https://github.com/remrem23/framewring/issues)
+form with your system details filled in (a free GitHub account is needed). Please attach `framewring.log` — **📂 Show the log** opens its folder.
 
 ## Running from source
 
@@ -132,8 +144,11 @@ Building the exe, installer and portable zip: [packaging/](packaging/) (`build.p
 ## Privacy
 
 Everything runs on your computer: the interface is a local server on `127.0.0.1`, protected by a random token.
-Nothing is sent over the network: no analytics, no telemetry, no background update checks.
-The app opens a web page only when you click a link (this repository, the support page, voidtools.com).
+Your files never leave your computer. The only network request is a check for a new version on GitHub once per launch
+(`api.github.com`, latest release of `remrem23/framewring`; can be turned off with *Check for updates on startup* in settings);
+nothing about your files is sent. No analytics, no telemetry. When you click *Update*, the installer is downloaded from the
+GitHub release. The app opens a web page only when you click a link or button (this repository, the bug-report form,
+the release page, the support page, voidtools.com).
 
 ## Support the author
 
@@ -165,6 +180,8 @@ The builds include [FFmpeg](https://ffmpeg.org) (Gyan build, GPL v3) and other c
 **Framewring Жмых — локальный компрессор видео.**
 **Находит на дисках видео, которые зря занимают место, и ужимает их в разы без видимой потери качества.**
 Бесплатно, локально, без лимитов: файлы никуда не отправляются.
+
+**[⬇ Скачать для Windows 10/11 (64 бит)](https://github.com/remrem23/framewring/releases/latest)** · бесплатно · GPL v3
 
 Framewring Жмых (английское название — *Framewring*) — программа для Windows, обёртка над FFmpeg. Находит тяжёлые видео
 на всех дисках, оценивает, сколько места освободит каждое, позволяет проверить результат на коротком куске и пережимает
@@ -208,14 +225,17 @@ FFmpeg уже внутри, ничего доустанавливать не н�
   - **Nvidia** (NVENC): «Видеокарта Nvidia · AV1» — RTX 40xx/50xx, «Видеокарта Nvidia · H.265» — большинство карт
     начиная с GeForce GTX 10xx.
   - **AMD** (AMF, драйвер AMD Software / Adrenalin): «Видеокарта AMD · AV1» — Radeon RX 7000 и новее,
-    «Видеокарта AMD · H.265» — карты Radeon, в том числе графика, встроенная в процессоры Ryzen.
+    а также графика Ryzen серий 7040/8040 (Radeon 780M/880M); «Видеокарта AMD · H.265» — Radeon RX 400 и новее,
+    в том числе графика, встроенная в процессоры Ryzen.
   - **Intel** (Quick Sync, графический драйвер Intel): «Видеокарта Intel · AV1» — графика Intel Arc или Core Ultra,
     «Видеокарта Intel · H.265» — большинство графики Intel примерно с 2016 года.
 
   При запуске Framewring делает пробное кодирование в каждом режиме, выбрать можно только работающие. Режим видеокарты,
   который не прошёл проверку, показывается серым с причиной, если видеокарта этого производителя в компьютере есть;
   режимы производителей, которых в компьютере нет, скрыты. Без подходящей видеокарты работают режимы на процессоре
-  (x265, SVT-AV1) — везде, просто медленнее. «Видеокарта AMD · H.265» проверена на реальном железе (графика, встроенная
+  (x265, SVT-AV1) — везде, просто медленнее. Режим с пометкой «рекомендую» выбирается в таком порядке: Nvidia AV1 →
+  Nvidia H.265 → AMD H.265 → Intel H.265 → AMD AV1 → Intel AV1 → процессор (AMD AV1 и Intel AV1 стоят ниже H.265, пока
+  не проверены на реальном железе). «Видеокарта AMD · H.265» проверена на реальном железе (графика, встроенная
   в Ryzen 7 9700X); «Видеокарта AMD · AV1» и режимы Intel на реальном железе ещё не проверялись — если у тебя такая карта,
   напиши, как прошло, в [Issues](https://github.com/remrem23/framewring/issues).
 
@@ -223,7 +243,7 @@ FFmpeg уже внутри, ничего доустанавливать не н�
 
 - **Поиск тяжёлых видео** на всех дисках: сколько места освободит сжатие каждого файла, пометка дублей, выбор галочками.
   Если установлен бесплатный [Everything](https://www.voidtools.com/), поиск занимает секунды; без него автоматически работает многопоточный обход папок.
-- **Сжатие на видеокарте** (AV1 / H.265 на Nvidia, AMD или Intel) — в 5–7 раз быстрее процессора — или **на процессоре** (x265, SVT-AV1), когда важен каждый гигабайт.
+- **Сжатие на видеокарте** (AV1 / H.265 на Nvidia, AMD или Intel; на Nvidia — в 5–7 раз быстрее процессора) или **на процессоре** (x265, SVT-AV1), когда важен каждый гигабайт.
 - **Тест на куске видео:** прогноз итогового размера, времени и оценка качества VMAF до полного сжатия.
 - **Очередь, которая переживает перезапуск**, кнопка «↻ Повторить» у неудачных файлов, **история** всего сжатого с итогом освобождённого места.
 - **Перетаскивание** файлов и папок прямо в окно программы.
@@ -231,6 +251,11 @@ FFmpeg уже внутри, ничего доустанавливать не н�
   результат пишется во временный файл и появляется только целым. Сохраняются звук, текстовые субтитры и дата файла;
   черезстрочное видео деинтерлейсится; у видео с переменной частотой кадров сохраняется исходный тайминг.
 - **Надёжность:** проверка свободного места, повтор при сбоях памяти, корректная работа, если файл держит антивирус или плеер.
+- **Обновление в один клик:** при запуске программа один раз проверяет на GitHub, нет ли новой версии (можно отключить
+  в настройках). Установленная версия сама скачивает новый установщик, сверяет его SHA-256 и обновляется, сохраняя настройки,
+  очередь и историю; портабл-версия открывает страницу релиза.
+- **«🐞 Сообщить об ошибке»** в шапке открывает форму на GitHub, где уже заполнены версия программы, Windows, видеокарты,
+  версия FFmpeg и режим (всё видно до отправки), и умеет показать файл журнала.
 
 Пример с машины автора: запись экрана 3440×1440 — **76,6 ГБ → 7,3 ГБ (−90%)**; за первый вечер освобождено 93 ГБ.
 
@@ -274,9 +299,11 @@ FFmpeg уже внутри, ничего доустанавливать не н�
 **Видео с переменной частотой кадров (телефоны, OBS, запись экрана)?** Кадры передаются с исходными метками времени —
 ничего не выбрасывается и не дублируется, а VMAF в тесте сравнивает правильные кадры.
 
-**Отправляется ли что-то в интернет?** Нет, см. «Приватность».
+**Отправляется ли что-то в интернет?** Твои файлы никуда не уходят с компьютера. Единственный запрос в сеть — проверка новой версии
+на GitHub один раз при запуске (можно отключить в настройках); ничего о твоих файлах не передаётся. См. «Приватность».
 
-**Куда писать об ошибке?** В [Issues](https://github.com/remrem23/framewring/issues) — приложи `framewring.log` из папки данных.
+**Куда писать об ошибке?** Нажми «🐞 Сообщить об ошибке» в шапке: откроется форма в [Issues](https://github.com/remrem23/framewring/issues)
+с уже заполненными данными о системе (нужен бесплатный аккаунт GitHub). Приложи `framewring.log` — «📂 Показать журнал» откроет его папку.
 
 ### Запуск из исходников
 
@@ -293,8 +320,11 @@ FFmpeg уже внутри, ничего доустанавливать не н�
 ### Приватность
 
 Программа работает только на твоём компьютере: интерфейс — локальный сервер на `127.0.0.1`, защищённый случайным токеном.
-Ничего не отправляется в сеть: нет аналитики, телеметрии и проверки обновлений в фоне.
-Веб-страницу программа открывает, только когда ты нажимаешь ссылку (этот репозиторий, страница поддержки, voidtools.com).
+Твои файлы никуда не уходят с компьютера. Единственный запрос в сеть — проверка новой версии на GitHub один раз при запуске
+(`api.github.com`, последний релиз `remrem23/framewring`; отключается настройкой «Проверять обновления при запуске»);
+ничего о твоих файлах не передаётся. Аналитики и телеметрии нет. Когда ты нажимаешь «Обновить», установщик скачивается
+из релиза на GitHub. Веб-страницу программа открывает, только когда ты нажимаешь ссылку или кнопку (этот репозиторий,
+форма сообщения об ошибке, страница релиза, страница поддержки, voidtools.com).
 
 ### Поддержать автора
 

@@ -8,9 +8,9 @@ Each version is described in English first, then in Russian.
 
 ## [0.9.0] — 2026-11-11
 
-First public release.
-
 ### English
+
+First public release.
 
 #### Added
 - **Find heavy videos** on all drives: Everything index (seconds) or a multi-threaded folder walk; estimated savings,
@@ -20,8 +20,9 @@ First public release.
 - **AMD and Intel GPUs:** modes *AMD GPU · AV1*, *AMD GPU · H.265* (AMF, 10-bit, constant QP) and *Intel GPU · AV1*,
   *Intel GPU · H.265* (Quick Sync, ICQ). Every mode is test-encoded on startup; a failed GPU mode is greyed out with
   the reason only if that vendor's GPU is in the PC, modes for absent vendors are hidden. Recommended order:
-  Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → CPU. AMD H.265 is verified on
-  Ryzen integrated graphics; AMD AV1 and Intel are not yet tested on real hardware.
+  Nvidia AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → AMD AV1 → Intel AV1 → CPU (AMD AV1 and Intel AV1 stay below
+  H.265 until verified on real hardware). AMD H.265 is verified on Ryzen integrated graphics; AMD AV1 and Intel are not
+  yet tested on real hardware.
 - **Test** on a piece of the video: forecast of size and time, VMAF.
 - The queue and the compression **history** survive restarts; **↻ Retry** for failed files; **📂 Compressed / 📂 Original**.
 - "Finishing the file" stage with progress; warnings about a disabled page file and low free space.
@@ -40,12 +41,20 @@ First public release.
   The exe writes its log to `framewring.log` there.
 - **♥ Support the author** opens a window with a link to the official [support page](DONATE.md) on GitHub —
   there are no wallet addresses in the program, so a modified copy cannot swap them.
+- **🐞 Report a bug** in the header: opens the GitHub bug-report form with the program version and install type, Windows
+  version, graphics cards, FFmpeg version and mode pre-filled (everything is visible before sending; a free GitHub account
+  is needed); **📂 Show the log** opens the folder with `framewring.log`.
+- **Update check and one-click update:** once per launch the app asks GitHub for the newest version (setting *Check for
+  updates on startup*). If there is one, a bar offers *Update* / *What's new* / *Later*. The installed version downloads
+  the new setup.exe, verifies its SHA-256 against `SHA256SUMS.txt` of the release, installs silently and restarts, keeping
+  settings, queue and history; portable and source versions get *Download* (the release page).
 - License: GNU GPL v3.
 
 #### Changed
 - **Stop** asks for confirmation.
 - The file dialog opens inside the program (no separate Python process).
 - Layout fixes for small windows.
+- The page-file warning can be hidden with **✕** (remembered).
 
 #### Fixed
 - **Never overwrite originals or unrelated files:** a result in the source folder gets a `_compressed` suffix; same-folder detection
@@ -54,13 +63,17 @@ First public release.
 - **Variable-frame-rate** MKV no longer drops frames (`-fps_mode passthrough`); test VMAF on VFR video fixed.
 - VMAF was underestimated (~75 instead of ~96) because frames were matched by time.
 - **Security:** the interface token can no longer be read by other local processes (the UI is served at a tokenized URL,
-  status requires the token); anti-framing headers.
+  status requires the token); anti-framing headers. `/api/ping` and `/api/show` refuse requests made from web pages.
+- Layout at the minimum window size: the search results list and the history now fit and scroll correctly.
+- Links in the interface are easier to read.
 - SVT-AV1 crash on low memory; one-off memory errors are retried.
 - FFmpeg kept running after the window was closed; two instances shared one port.
 - Losing a finished file if an antivirus or a player held it; result name collisions.
 - Interlaced video, MKV subtitles, odd resolutions, cover art picked instead of video, file date.
 
 ### Русский
+
+Первый публичный выпуск.
 
 #### Добавлено
 - **Поиск тяжёлых видео** на дисках: индекс Everything (секунды) или многопоточный обход; оценка экономии, дубликаты,
@@ -71,8 +84,9 @@ First public release.
   и «Видеокарта Intel · AV1», «Видеокарта Intel · H.265» (Quick Sync, ICQ). При запуске каждый режим проверяется пробным
   кодированием; режим видеокарты, не прошедший проверку, показывается серым с причиной, только если видеокарта этого
   производителя в компьютере есть, режимы отсутствующих производителей скрыты. Порядок рекомендации:
-  Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → процессор. AMD H.265 проверен на встроенной
-  графике Ryzen; AMD AV1 и Intel на реальном железе ещё не проверялись.
+  Nvidia AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → AMD AV1 → Intel AV1 → процессор (AMD AV1 и Intel AV1 стоят ниже
+  H.265, пока не проверены на реальном железе). AMD H.265 проверен на встроенной графике Ryzen; AMD AV1 и Intel на реальном
+  железе ещё не проверялись.
 - **Тест** на куске видео: прогноз размера и времени, VMAF.
 - Очередь и **история** сжатия сохраняются между запусками; «↻ Повторить» для неудачных файлов; «📂 Сжатый / 📂 Оригинал».
 - Этап «Дописываю файл» с прогрессом; предупреждения о выключенном файле подкачки и свободном месте.
@@ -92,12 +106,20 @@ First public release.
   Журнал exe-версии — там же, `framewring.log`.
 - **«♥ Поддержать автора»** открывает окно со ссылкой на официальную [страницу поддержки](DONATE.md#русский) на GitHub —
   адресов кошельков в программе нет, подменить их в копии нельзя.
+- **«🐞 Сообщить об ошибке»** в шапке: открывает форму на GitHub, где уже заполнены версия программы и тип установки,
+  версия Windows, видеокарты, версия FFmpeg и режим (всё видно до отправки; нужен бесплатный аккаунт GitHub);
+  **«📂 Показать журнал»** открывает папку с `framewring.log`.
+- **Проверка обновлений и обновление в один клик:** один раз при запуске программа спрашивает у GitHub номер новейшей
+  версии (настройка «Проверять обновления при запуске»). Если она есть, появляется полоса «Обновить» / «Что нового» / «Позже».
+  Установленная версия скачивает новый setup.exe, сверяет его SHA-256 с `SHA256SUMS.txt` релиза, тихо устанавливает и
+  перезапускается, сохраняя настройки, очередь и историю; портабл-версия и запуск из исходников получают «Скачать» (страница релиза).
 - Лицензия: GNU GPL v3.
 
 #### Изменено
 - **«Стоп»** спрашивает подтверждение.
 - Окно выбора файлов открывается внутри программы (без отдельного процесса Python).
 - Вёрстка исправлена для маленьких окон.
+- Предупреждение о файле подкачки можно скрыть крестиком **✕** (запоминается).
 
 #### Исправлено
 - **Оригиналы и чужие файлы никогда не перезаписываются:** результат в папке оригинала получает суффикс `_compressed`;
@@ -106,7 +128,9 @@ First public release.
 - Видео с **переменной частотой кадров** (MKV) больше не теряет кадры (`-fps_mode passthrough`); исправлен VMAF теста для такого видео.
 - VMAF занижался (~75 вместо ~96) из-за сопоставления кадров по времени.
 - **Безопасность:** токен интерфейса больше не может прочитать другой локальный процесс (интерфейс открывается по адресу с токеном,
-  статус требует токен); заголовки против встраивания в чужие страницы.
+  статус требует токен); заголовки против встраивания в чужие страницы. `/api/ping` и `/api/show` отклоняют запросы с веб-страниц.
+- Вёрстка при минимальном размере окна: список результатов поиска и история теперь помещаются и листаются правильно.
+- Ссылки в интерфейсе стало легче читать.
 - Падение SVT-AV1 при нехватке памяти; разовые сбои памяти повторяются.
 - ffmpeg оставался работать после закрытия окна; два экземпляра делили один порт.
 - Потеря готового файла, если его держал антивирус или плеер; коллизии имён результатов.

@@ -3,7 +3,7 @@
 # Framewring — user guide
 
 Framewring is a free local video compressor (an FFmpeg front-end). It finds heavy videos on your drives and
-re-encodes them several times smaller without visible quality loss. Nothing is uploaded anywhere.
+re-encodes them several times smaller without visible quality loss. Your files never leave your computer.
 
 ## 1. Install and start
 
@@ -56,8 +56,8 @@ The search never deletes or changes anything.
 |---|---|
 | **Nvidia GPU · AV1** | RTX 40/50 series. 5–7× faster than the CPU and smaller than H.265. Best for big archives. Plays on PCs, recent phones and TVs. |
 | **Nvidia GPU · H.265** | Fast and plays almost everywhere: older phones and TVs, iPhone. Files are slightly bigger than AV1. |
-| **AMD GPU · AV1** | Radeon RX 7000 series or newer. Same idea as Nvidia AV1. Not yet tested on real hardware — please report how it works. |
-| **AMD GPU · H.265** | Radeon cards, including the graphics built into Ryzen processors. Plays almost everywhere. |
+| **AMD GPU · AV1** | Radeon RX 7000 or newer, and Ryzen 7040/8040-series graphics (Radeon 780M/880M). Same idea as Nvidia AV1. Not yet tested on real hardware — please report how it works. |
+| **AMD GPU · H.265** | Radeon RX 400 series or newer, including Ryzen integrated graphics. Plays almost everywhere. Tested on real hardware (Ryzen 7 9700X graphics). |
 | **Intel GPU · AV1** | Intel Arc or Core Ultra graphics. Not yet tested on real hardware — please report how it works. |
 | **Intel GPU · H.265** | Most Intel graphics since about 2016. Plays almost everywhere. Not yet tested on real hardware — please report how it works. |
 | **CPU · H.265** | Files are usually 10–20% smaller than on the GPU, but many times slower (hours per hour of 4K). If you have no suitable GPU or every gigabyte counts. |
@@ -67,13 +67,13 @@ The search never deletes or changes anything.
 On startup every mode is test-encoded; only the working ones can be picked. Modes your hardware or FFmpeg cannot do
 are greyed out with the reason; GPU modes for a vendor whose card your PC does not have (for example AMD modes on a PC
 with only an Nvidia card) are hidden. The best available one is marked **recommended** and chosen by default
-(your own choice is remembered). Order of preference: Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 → AMD H.265 →
-Intel H.265 → CPU.
+(your own choice is remembered). Order of preference: Nvidia AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → AMD AV1 →
+Intel AV1 → CPU. AMD AV1 and Intel AV1 stay below H.265 until they are verified on real hardware.
 
 **Quality** — **Maximum / Balanced / Compact**. *Balanced* is the right choice for almost everything.
 VMAF in the test: 95+ — practically indistinguishable, 92–95 — very good, lower — the difference becomes visible.
 
-**Encoding speed** — the slowest setting gives a slightly smaller file but takes 1.5–2× longer.
+**Encoding speed** — **Thorough** gives a slightly smaller file but takes 1.5–2× longer.
 
 **Audio** — copied losslessly by default (it weighs almost nothing). If the audio format does not fit into MP4, it is re-encoded to AAC 192 kbps;
 you can also force AAC.
@@ -81,7 +81,15 @@ you can also force AAC.
 **Output folder** — empty means a `compressed` subfolder next to each original. You can set one common folder instead.
 
 Other options: low priority (you can keep using the computer), keep the computer awake while compressing,
-**Skip already compressed files** (if the result already exists).
+**Skip already compressed files** (if the result already exists), **Check for updates on startup** (see below).
+
+**Updates.** Once per launch Framewring asks GitHub (`api.github.com`) for the number of the newest version — that is the
+only network request it makes, and nothing about your files is sent. Turn it off with **Check for updates on startup**.
+If a newer version exists, a bar appears: *"Framewring X is available."* with **Update**, **What's new** and **Later**.
+In the installed version **Update** downloads the new installer from the GitHub release, verifies its SHA-256 against
+`SHA256SUMS.txt` of the same release, installs it over the old one and restarts the app; settings, the queue and history
+are kept (if compression is running, it asks first). The portable version and the source version show **Download**
+instead, which opens the release page.
 
 ## 5. Compressing
 
@@ -124,17 +132,28 @@ Uninstalling keeps this folder; delete it by hand if you want.
 ## 8. Troubleshooting
 
 - **A GPU mode is greyed out.** Update the driver for your GPU vendor: Nvidia, AMD (AMD Software / Adrenalin)
-  or Intel. AV1 on the GPU needs an Nvidia RTX 40 or 50 series card, an AMD Radeon RX 7000 series card or newer,
-  or Intel Arc / Core Ultra graphics. The reason is shown next to the greyed-out mode.
+  or Intel. AV1 on the GPU needs an Nvidia RTX 40 or 50 series card, an AMD Radeon RX 7000 series card or newer
+  (or Ryzen 7040/8040-series graphics, Radeon 780M/880M), or Intel Arc / Core Ultra graphics. The reason is shown next to the greyed-out mode.
 - **"Access denied" when writing to Documents / Videos / Desktop.** Windows *Controlled folder access* is blocking it:
   *Windows Security → Virus & threat protection → Ransomware protection → Allow an app through Controlled folder access*, add
   `Framewring.exe` and `ffmpeg.exe` from the program's `ffmpeg\bin` folder.
 - **Memory errors / "page file is off" warning.** With the Windows page file disabled the encoder can run out of memory.
-  Framewring retries automatically, but turning the page file back on is the real fix.
+  Framewring retries automatically, but turning the page file back on is the real fix. If you keep the page file off
+  on purpose, hide the warning with its **✕** — it stays hidden.
 - **"Not enough free space".** Free some space on the output drive or choose another output folder.
 - **The window does not open.** Install the [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
   or use the browser that opens instead.
 - **Use your own FFmpeg.** Replace `ffmpeg.exe` and `ffprobe.exe` in the program's `ffmpeg\bin` folder.
+
+## 9. Reporting a problem
+
+Click **🐞 Report a bug** in the header. A small window opens:
+
+- **Open the form on GitHub** opens the bug-report form of this repository with the program version and install type,
+  Windows version, graphics card names, FFmpeg version and mode already filled in. You see everything before sending;
+  a free GitHub account is needed.
+- **📂 Show the log** opens the folder with `framewring.log`. Attach it to the report if you can, removing anything you
+  don't want to share, such as file paths. The log exists only in the installed and portable versions.
 
 Questions and bug reports: [github.com/remrem23/framewring/issues](https://github.com/remrem23/framewring/issues).
 The only official page of the program is [github.com/remrem23/framewring](https://github.com/remrem23/framewring).
@@ -146,7 +165,7 @@ The only official page of the program is [github.com/remrem23/framewring](https:
 
 **Framewring Жмых — инструкция.**
 Framewring Жмых — бесплатный локальный компрессор видео (обёртка над FFmpeg). Находит на дисках тяжёлые видео и пережимает
-их в разы меньше без видимой потери качества. Ничего никуда не отправляется.
+их в разы меньше без видимой потери качества. Твои файлы никуда не уходят с компьютера.
 
 ### 1. Установка и запуск
 
@@ -200,8 +219,8 @@ Framewring Жмых — бесплатный локальный компресс
 |---|---|
 | **Видеокарта Nvidia · AV1** | RTX 40xx/50xx. В 5–7 раз быстрее процессора и компактнее H.265. Лучший выбор для больших архивов. Играется на ПК, новых телефонах и ТВ. |
 | **Видеокарта Nvidia · H.265** | Быстро и открывается почти везде: старые телефоны и ТВ, iPhone. Файл немного больше, чем у AV1. |
-| **Видеокарта AMD · AV1** | Radeon RX 7000 и новее. То же, что AV1 на Nvidia. На реальном железе ещё не проверялся — напиши, как работает. |
-| **Видеокарта AMD · H.265** | Карты Radeon, в том числе графика, встроенная в процессоры Ryzen. Открывается почти везде. |
+| **Видеокарта AMD · AV1** | Radeon RX 7000 и новее, а также графика Ryzen серий 7040/8040 (Radeon 780M/880M). То же, что AV1 на Nvidia. На реальном железе ещё не проверялся — напиши, как работает. |
+| **Видеокарта AMD · H.265** | Radeon RX 400 и новее, в том числе графика, встроенная в процессоры Ryzen. Открывается почти везде. Проверен на реальном железе (графика Ryzen 7 9700X). |
 | **Видеокарта Intel · AV1** | Графика Intel Arc или Core Ultra. На реальном железе ещё не проверялся — напиши, как работает. |
 | **Видеокарта Intel · H.265** | Большинство графики Intel примерно с 2016 года. Открывается почти везде. На реальном железе ещё не проверялся — напиши, как работает. |
 | **Процессор · H.265** | Файл обычно на 10–20% меньше, чем у видеокарты, но в разы медленнее (часы на час видео в 4K). Если подходящей видеокарты нет или важен каждый гигабайт. |
@@ -211,8 +230,8 @@ Framewring Жмых — бесплатный локальный компресс
 При запуске каждый режим проверяется пробным кодированием; выбрать можно только работающие. Режимы, которые не умеет
 твоё железо или FFmpeg, серые, с причиной; режимы видеокарт производителя, которого в компьютере нет (например, режимы
 AMD на компьютере только с Nvidia), скрыты. Лучший доступный помечен **«рекомендую»** и выбран по умолчанию
-(твой собственный выбор запоминается). Порядок предпочтения: Nvidia AV1 → AMD AV1 → Intel AV1 → Nvidia H.265 →
-AMD H.265 → Intel H.265 → процессор.
+(твой собственный выбор запоминается). Порядок предпочтения: Nvidia AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 →
+AMD AV1 → Intel AV1 → процессор. AMD AV1 и Intel AV1 стоят ниже H.265, пока не проверены на реальном железе.
 
 **Качество** — **Максимальное / Баланс / Компактное**. «Баланс» подходит почти всегда.
 VMAF в тесте: 95+ — разницу практически не отличить, 92–95 — очень хорошо, ниже — уже видно.
@@ -225,7 +244,15 @@ VMAF в тесте: 95+ — разницу практически не отли�
 **Куда сохранять** — пусто = подпапка `compressed` рядом с каждым оригиналом. Можно указать одну общую папку.
 
 Прочее: низкий приоритет (компьютером можно пользоваться), не давать компьютеру уснуть,
-**«Пропускать уже сжатые файлы»** (если результат уже есть).
+**«Пропускать уже сжатые файлы»** (если результат уже есть), **«Проверять обновления при запуске»** (см. ниже).
+
+**Обновления.** Один раз при запуске Framewring спрашивает у GitHub (`api.github.com`) номер новейшей версии — это
+единственный запрос в сеть, ничего о твоих файлах не передаётся. Отключается настройкой **«Проверять обновления при запуске»**.
+Если есть новая версия, появляется полоса «Доступна версия Framewring X.» с кнопками **«Обновить»**, **«Что нового»** и **«Позже»**.
+В установленной версии «Обновить» скачивает новый установщик из релиза на GitHub, сверяет его SHA-256 с `SHA256SUMS.txt`
+того же релиза, ставит поверх старой версии и перезапускает программу; настройки, очередь и история сохраняются (если идёт
+сжатие, программа сначала спросит). У портабл-версии и при запуске из исходников вместо неё кнопка **«Скачать»** — она
+открывает страницу релиза.
 
 ### 5. Сжатие
 
@@ -268,17 +295,29 @@ VMAF в тесте: 95+ — разницу практически не отли�
 ### 8. Если что-то не так
 
 - **Режим видеокарты серый.** Обнови драйвер своей видеокарты: Nvidia, AMD (AMD Software / Adrenalin) или Intel.
-  AV1 на видеокарте требует Nvidia RTX 40xx/50xx, AMD Radeon RX 7000 и новее или графику Intel Arc / Core Ultra.
+  AV1 на видеокарте требует Nvidia RTX 40xx/50xx, AMD Radeon RX 7000 и новее (или графику Ryzen серий 7040/8040,
+  Radeon 780M/880M) или графику Intel Arc / Core Ultra.
   Причина показана рядом с серым режимом.
 - **«Отказано в доступе» при записи в «Документы» / «Видео» / на рабочий стол.** Мешает «Контролируемый доступ к папкам»:
   «Безопасность Windows → Защита от вирусов и угроз → Защита от программ-шантажистов → Разрешить работу приложения через
   контролируемый доступ к папкам», добавь `Framewring.exe` и `ffmpeg.exe` из папки `ffmpeg\bin` программы.
 - **Сбои памяти / предупреждение «файл подкачки выключен».** Без файла подкачки кодеру может не хватить памяти.
-  Framewring повторяет сам, но надёжнее включить файл подкачки.
+  Framewring повторяет сам, но надёжнее включить файл подкачки. Если файл подкачки выключен намеренно, скрой
+  предупреждение крестиком **✕** — программа это запомнит.
 - **«Мало свободного места».** Освободи место на диске вывода или выбери другую папку.
 - **Окно не открывается.** Установи [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
   или пользуйся браузером, который откроется вместо окна.
 - **Свой FFmpeg.** Замени `ffmpeg.exe` и `ffprobe.exe` в папке `ffmpeg\bin` программы.
+
+### 9. Как сообщить о проблеме
+
+Нажми **«🐞 Сообщить об ошибке»** в шапке. Откроется небольшое окно:
+
+- **«Открыть форму на GitHub»** открывает форму сообщения об ошибке в этом репозитории, где уже заполнены версия программы
+  и тип установки, версия Windows, названия видеокарт, версия FFmpeg и режим. Всё видно до отправки; нужен бесплатный
+  аккаунт GitHub.
+- **«📂 Показать журнал»** открывает папку с `framewring.log`. Если можешь, приложи его, убрав то, чем не хочешь делиться,
+  например пути к файлам. Журнал есть только у установленной и портабл-версии.
 
 Вопросы и ошибки: [github.com/remrem23/framewring/issues](https://github.com/remrem23/framewring/issues).
 Официальная страница программы — только [github.com/remrem23/framewring](https://github.com/remrem23/framewring).
