@@ -185,6 +185,71 @@ Before publishing, four independent reviewers went over the program and the docu
   the unverified AMD AV1 and Intel AV1 should not be recommended over a verified H.265.
 - `/api/ping` and `/api/show` (used by a second launch) now refuse requests that come from a web page.
 
+
+## 2026-11-12 — 0.9.1 – 0.9.3: no bloated files, backups, replacing originals
+
+### 1. No results bigger than the original (0.9.1)
+Re-encoding an already efficient video (e.g. HEVC at a modest bitrate) could produce a *larger* file after hours of work.
+Now the output size is watched during compression: if after 10–25% of the file it is clear the result won't be smaller,
+ffmpeg is stopped; a finished result that is not at least 3% smaller is deleted. The video gets the new status
+**Kept as is** (original untouched, **↻ Retry** available). Checked: an efficient HEVC was stopped at 17% with no files left;
+an ordinary clip went 302 → 100 MB as before.
+
+### 2. SVT-AV1 preset 4 for “Thorough” (0.9.2, [#1](https://github.com/remrem23/framewring/issues/1))
+6-second synthetic 1080p clip (with noise), *CPU · AV1*, CRF 30 (*Balanced*):
+
+| SVT-AV1 preset | Time | Size |
+|---|---|---|
+| 6 (*Normal*) | 4.2 s | 5.52 MB |
+| 5 (old *Thorough*) | 5.2 s | 4.98 MB |
+| 4 (new *Thorough*) | 7.1 s | 4.61 MB |
+
+Preset 4 gives a file ~16% smaller than *Normal* and ~7% smaller than the old *Thorough* at ~1.7× the time of *Normal*
+(VMAF 98.2) — worth it for a mode chosen when every gigabyte counts.
+
+### 3. Backups and `.part.mp4` cleanup (0.9.2)
+- Settings, history and the queue are written with up to 3 backup copies (the queue at most once every 5 minutes) and are
+  restored on start if a file is damaged or the data folder is gone. The installed version keeps them in
+  `%LOCALAPPDATA%\Framewring\backup`, away from `%APPDATA%\Framewring`.
+- The `.part.mp4` path is stored in the job: removed on exit mid-compression and on the next start after a crash
+  (only files ending in `.part.mp4`).
+- Installer and update checks in Windows Sandbox.
+
+### 4. Replacing originals (0.9.3)
+Compressing alone frees no space, and asking people to delete originals by hand is both tedious and risky. **⇄ Replace originals**
+does it, but only for the files the user ticks (nothing is pre-selected) and only after a full check:
+- the compressed file is decoded from start to end with no errors; duration and audio-track count must match the original;
+- the original's size and date must be the same as at compression (`src_sig`), checked again right before replacing;
+- the compressed file is moved next to the original under a temporary name, the **original goes to the Recycle Bin**
+  (`SHFileOperationW` + `FOF_ALLOWUNDO`), then the new file takes the original's name with `.mp4`;
+- anything failing before the Recycle Bin step leaves everything as it was;
+- blocked: not smaller, original changed, a file missing, name taken by another file, drives without a Recycle Bin
+  (network/removable — Windows would delete permanently), already replaced; warnings: no Test, Test VMAF < 93,
+  editing source, saving < 20%.
+
+Tested: mp4 → mp4 in place; mkv → mp4 next to it; name collision refused; a corrupted compressed file caught
+by the decode; a changed original refused; a failed Recycle Bin step fully rolled back.
+
+Also in 0.9.3: a short **How it works** hint on first run, and history **Export… / Import…** (JSON in *Documents*;
+import merges and skips duplicates).
+
+### 5. Independent review of Replace
+Since Replace is the only feature that removes originals, an adversarial reviewer went through it looking for any way to lose
+a file. It found 10 issues: the Recycle Bin quota (a file bigger than the bin's free space is deleted permanently by Windows);
+`subst` drives (deleting through the drive letter bypassed the bin); old entries without fingerprints; the compressed file's
+identity not verified (it could have been swapped); history indexes shifting after an import; the final rename able to
+overwrite; a truncated video passing the check when the audio was full length; lost tracks (subtitles, telemetry,
+attachments) not warned about; no guard against replacing a file that is being compressed; no recovery after a crash
+mid-replacement. All fixed: `bin_check` (bin settings, policies, free space), the real path for `subst`/mapped drives,
+`out_sig`, stable entry keys, rename that never overwrites, a separate full video decode that must reach the end,
+`stream_counts` warnings, a `busy` block, the intent recorded in history and `replace_recover()` on start, plus a check that
+the original really is in the bin.
+
+Covered by 12 test scenarios: bin too small → blocked; bin turned off → blocked; `subst` drive → real path used; entry
+without fingerprints → blocked; compressed file swapped → blocked; history import during a replacement → refused, keys stay
+valid; target name taken at the final step → no overwrite; truncated video with full audio → caught; missing subtitle/data
+tracks → warned; file in the queue → blocked; crash before the Recycle Bin → rolled back; crash after it → finished.
+
 ---
 
 <a id="русский"></a>
@@ -374,3 +439,66 @@ FFmpeg 8.1.1 (сборка Gyan), Windows 11, 3 NVMe SSD + 4 HDD.
 - **Порядок рекомендации изменён** на Nvidia AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → AMD AV1 → Intel AV1 → процессор:
   непроверенные AMD AV1 и Intel AV1 не должны рекомендоваться раньше проверенного H.265.
 - `/api/ping` и `/api/show` (ими пользуется второй запуск) теперь отклоняют запросы с веб-страниц.
+
+### 2026-11-12 — 0.9.1 – 0.9.3: без раздутых файлов, резервные копии, замена оригиналов
+
+#### 1. Никаких результатов крупнее оригинала (0.9.1)
+Пережатие уже эффективного видео (например, HEVC с умеренным битрейтом) могло после часов работы дать файл *больше*
+оригинала. Теперь размер результата отслеживается во время сжатия: если через 10–25% файла видно, что меньше не выйдет,
+ffmpeg останавливается; готовый результат, который не меньше оригинала хотя бы на 3%, удаляется. Видео получает новый статус
+**«Оставлен как есть»** (оригинал не тронут, «↻ Повторить» доступна). Проверено: эффективный HEVC остановлен на 17%, файлов
+не осталось; обычный ролик, как и раньше, сжат 302 → 100 МБ.
+
+#### 2. Пресет 4 у SVT-AV1 для «Тщательно» (0.9.2, [#1](https://github.com/remrem23/framewring/issues/1))
+Синтетический ролик 1080p на 6 секунд (с шумом), «Процессор · AV1», CRF 30 («Баланс»):
+
+| Пресет SVT-AV1 | Время | Размер |
+|---|---|---|
+| 6 («Обычно») | 4,2 с | 5,52 МБ |
+| 5 (прежнее «Тщательно») | 5,2 с | 4,98 МБ |
+| 4 (новое «Тщательно») | 7,1 с | 4,61 МБ |
+
+Пресет 4 даёт файл примерно на 16% меньше, чем «Обычно», и на ~7% меньше прежнего «Тщательно» при времени ~1,7× от «Обычно»
+(VMAF 98,2) — оправдано для режима, который выбирают, когда важен каждый гигабайт.
+
+#### 3. Резервные копии и уборка `.part.mp4` (0.9.2)
+- Настройки, история и очередь пишутся с резервными копиями (до 3; очередь — не чаще раза в 5 минут) и восстанавливаются
+  при запуске, если файл повреждён или папки данных нет. Установленная версия хранит их в `%LOCALAPPDATA%\Framewring\backup`,
+  отдельно от `%APPDATA%\Framewring`.
+- Путь к `.part.mp4` запоминается в задаче: файл удаляется при выходе посреди сжатия и при следующем запуске после сбоя
+  (только файлы на `.part.mp4`).
+- Проверка установщика и обновлений в «Песочнице Windows».
+
+#### 4. Замена оригиналов (0.9.3)
+Само сжатие места не освобождает, а удалять оригиналы вручную и долго, и рискованно. «⇄ Заменить оригиналы» делает это,
+но только для файлов, отмеченных пользователем (заранее ничего не отмечено), и только после полной проверки:
+- сжатый файл декодируется от начала до конца без ошибок; длительность и число звуковых дорожек совпадают с оригиналом;
+- размер и дата оригинала такие же, как при сжатии (`src_sig`), — это проверяется ещё раз прямо перед заменой;
+- сжатый файл переносится к оригиналу под временным именем, **оригинал уходит в корзину** (`SHFileOperationW` + `FOF_ALLOWUNDO`),
+  затем новый файл получает имя оригинала с `.mp4`;
+- любой сбой до шага с корзиной оставляет всё как было;
+- запреты: не меньше оригинала, оригинал изменён, файла нет, имя занято другим файлом, диск без корзины (сетевой/съёмный —
+  Windows удалила бы насовсем), уже заменён; предупреждения: не было «Теста», VMAF теста < 93, монтажный исходник, выигрыш < 20%.
+
+Проверено тестами: mp4 → mp4 на месте; mkv → mp4 рядом; отказ при совпадении имени; повреждённый сжатый файл
+пойман декодированием; изменённый оригинал отклонён; сбой на шаге с корзиной полностью откатывается.
+
+Ещё в 0.9.3: короткая подсказка «Как это работает» при первом запуске и «Экспорт… / Импорт…» истории (JSON в «Документах»;
+импорт добавляет записи и пропускает дубли).
+
+#### 5. Независимое ревью замены
+Замена — единственная функция Жмыха, которая убирает оригиналы, поэтому её прошёл ревьюер-«противник», искавший любой способ
+потерять файл. Он нашёл 10 проблем: квота корзины (файл больше свободного места корзины Windows удаляет насовсем); диски `subst`
+(удаление через букву диска шло мимо корзины); старые записи без отпечатков; подлинность сжатого файла не проверялась (его
+могли подменить); сдвиг номеров в истории после импорта; финальное переименование могло перезаписать файл; обрезанное видео
+проходило проверку, если звук был полной длины; о потерянных дорожках (субтитры, телеметрия, вложения) не предупреждали;
+не было защиты от замены файла, который сейчас сжимается; не было восстановления после сбоя посреди замены. Всё исправлено:
+`bin_check` (настройки корзины, политики, свободное место), настоящий путь для `subst` и подключённых дисков, `out_sig`,
+устойчивые ключи записей, переименование без перезаписи, отдельное полное декодирование видео до конца, предупреждения
+`stream_counts`, запрет `busy`, намерение в истории и `replace_recover()` при запуске, плюс проверка, что оригинал
+действительно в корзине.
+
+Покрыто 12 тестовыми сценариями: корзина мала → запрет; корзина отключена → запрет; диск `subst` → берётся настоящий путь;
+запись без отпечатков → запрет; сжатый файл подменён → запрет; импорт истории во время замены → отказ, ключи не сбиваются;
+целевое имя занято на последнем шаге → без перезаписи; обрезанное видео при полном звуке → поймано; нет дорожек
+субтитров/данных → предупреждение; файл в очереди → запрет; сбой до корзины → откат; сбой после корзины → доделано.

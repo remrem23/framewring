@@ -18,6 +18,23 @@ Ideas and requests are welcome in [Issues](https://github.com/remrem23/framewrin
 
 - No more results bigger than the original: compression stops early when it can't save space, and the video is marked **Kept as is**.
 
+## Done in 0.9.2
+
+- “Thorough” speed for *CPU · AV1* uses SVT-AV1 preset 4 ([#1](https://github.com/remrem23/framewring/issues/1)).
+- **Backups of your data:** settings, history and the queue are saved with up to 3 backup copies and restored automatically
+  if a file gets damaged or the data folder is deleted (the installed version keeps them in `%LOCALAPPDATA%\Framewringackup`).
+- Leftover `.part.mp4` files are removed on exit in the middle of compression and on the next start after a crash.
+- Installer and update tests in Windows Sandbox.
+
+## Done in 0.9.3
+
+- **⇄ Replace originals:** a compressed file takes the original's place (same folder and name, `.mp4`) — only for the files
+  you tick yourself. Each one is first fully verified (decoded from start to end, duration and audio tracks match the original);
+  the original goes to the Windows Recycle Bin, never deleted permanently. Warnings for untested quality, low VMAF,
+  editing sources and small savings; risky cases are blocked.
+- A short **How it works** hint on first run.
+- **History export and import.**
+
 ## Road to 1.0
 
 1.0 is about being **reliable on other people's computers** and finishing the main promise — actually freeing the space.
@@ -25,8 +42,8 @@ New big features wait until after 1.0.
 
 | Version | What's in it |
 |---|---|
-| **0.9.2** | “Thorough” speed for *CPU · AV1* uses SVT-AV1 preset 4 ([#1](https://github.com/remrem23/framewring/issues/1)); history and queue are saved with backup copies and restored automatically if a file gets damaged; leftover `.part.mp4` files from a crash are cleaned up; installer and update tests run in Windows Sandbox. |
-| **0.9.3** | Each finished file is verified (it opens, duration matches, no broken frames); a **Move originals to Recycle Bin** button for verified files, with a confirmation and the total space it frees (never a permanent delete); a short first-run hint; history export/import; install via `winget`. |
+| **0.9.2** ✓ | Done: SVT-AV1 preset 4 for “Thorough”, data backups, `.part.mp4` cleanup, Windows Sandbox tests. |
+| **0.9.3** ✓ | Done: full verification of compressed files and **⇄ Replace originals** (originals go to the Recycle Bin), first-run hint, history export/import. **Still pending:** install via `winget`. |
 | **1.0.0-rc1** | Release candidate for testers (marked as pre-release, so the built-in updater doesn't offer it to everyone). |
 | **1.0.0** | When the criteria below are met. |
 
@@ -85,6 +102,23 @@ and post the result in [Issues](https://github.com/remrem23/framewring/issues) �
 
 - Больше никаких результатов крупнее оригинала: если сжатие не экономит место, оно останавливается сразу, а видео помечается **«Оставлен как есть»**.
 
+### Сделано в 0.9.2
+
+- Скорость «Тщательно» для «Процессор · AV1» — пресет 4 у SVT-AV1 ([#1](https://github.com/remrem23/framewring/issues/1)).
+- **Резервные копии данных:** настройки, история и очередь сохраняются с резервными копиями (до 3 штук) и сами восстанавливаются,
+  если файл повреждён или папку данных удалили (установленная версия хранит их в `%LOCALAPPDATA%\Framewringackup`).
+- Недоделанный `.part.mp4` удаляется при выходе посреди сжатия и при следующем запуске после сбоя.
+- Проверка установщика и обновлений в «Песочнице Windows».
+
+### Сделано в 0.9.3
+
+- **«⇄ Заменить оригиналы»:** сжатый файл встаёт на место оригинала (та же папка и имя, `.mp4`) — только для файлов,
+  которые ты отметил сам. Каждый сначала полностью проверяется (декодируется от начала до конца, длительность и звуковые дорожки
+  совпадают с оригиналом); оригинал уходит в корзину Windows, насовсем не удаляется. Предупреждения о непроверенном качестве,
+  низком VMAF, монтажных исходниках и небольшом выигрыше; рискованные случаи заблокированы.
+- Короткая подсказка **«Как это работает»** при первом запуске.
+- **Экспорт и импорт истории.**
+
 ### Путь к 1.0
 
 1.0 — это **надёжность на чужих компьютерах** и выполненное до конца главное обещание: реально освобождать место.
@@ -92,8 +126,8 @@ and post the result in [Issues](https://github.com/remrem23/framewring/issues) �
 
 | Версия | Что входит |
 |---|---|
-| **0.9.2** | Скорость «Тщательно» для «Процессор · AV1» — пресет 4 у SVT-AV1 ([#1](https://github.com/remrem23/framewring/issues/1)); история и очередь сохраняются с резервными копиями и сами восстанавливаются при повреждении файла; уборка оставшихся после сбоя `.part.mp4`; проверка установщика и обновлений в «Песочнице Windows». |
-| **0.9.3** | Проверка каждого готового файла (открывается, длительность совпадает, нет битых кадров); кнопка **«Удалить оригиналы в корзину»** для проверенных файлов — с подтверждением и итогом, сколько места освободится (никогда не удаляет насовсем); короткая подсказка при первом запуске; экспорт и импорт истории; установка через `winget`. |
+| **0.9.2** ✓ | Сделано: пресет 4 у SVT-AV1 для «Тщательно», резервные копии данных, уборка `.part.mp4`, проверки в «Песочнице Windows». |
+| **0.9.3** ✓ | Сделано: полная проверка сжатых файлов и **«⇄ Заменить оригиналы»** (оригиналы уходят в корзину), подсказка при первом запуске, экспорт и импорт истории. **Ещё не сделано:** установка через `winget`. |
 | **1.0.0-rc1** | Кандидат в релиз для тестеров (помечен как предварительный, поэтому встроенное обновление не предлагает его всем). |
 | **1.0.0** | Когда выполнены условия ниже. |
 

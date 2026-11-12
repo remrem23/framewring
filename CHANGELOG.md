@@ -6,6 +6,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [Sem
 Detailed development history with measurements: [DEVLOG.md](DEVLOG.md).
 Each version is described in English first, then in Russian.
 
+## [0.9.3] — 2026-11-12
+
+### English
+
+#### Added
+- **Replace originals with compressed files — only when you choose to.** A finished file gets a **⇄ Replace original** button, and **⇄ Replace originals…** under the list opens a window with all compressed videos. Nothing is ticked by default; each row shows how much space it frees and warnings (quality not checked with **Test**, low VMAF, editing source such as ProRes, small saving). For every ticked file Framewring first **decodes the whole compressed file** and checks its duration and audio tracks against the original, makes sure the original hasn't changed since compression, then puts the compressed file in the original's place (same folder and name, `.mp4`) and sends the **original to the Windows Recycle Bin**, so it can be restored. If anything goes wrong before that step, nothing is changed. Replacing is not offered where Windows could delete the original permanently: drives without a Recycle Bin (network, removable) and files larger than the drive's Recycle Bin.
+- **“How it works”** hint on first start.
+- **History Export… / Import…**
+
+### Русский
+
+#### Добавлено
+- **Замена оригиналов сжатыми — только по твоему выбору.** У готового файла появилась кнопка **«⇄ Заменить оригинал»**, а **«⇄ Заменить оригиналы…»** под списком открывает окно со всеми сжатыми видео. По умолчанию ничего не отмечено; у каждой строки видно, сколько места освободится, и предупреждения (качество не проверено **«Тестом»**, низкий VMAF, монтажный исходник вроде ProRes, маленький выигрыш). Для каждого отмеченного файла Framewring сначала **декодирует сжатый файл целиком** и сверяет длительность и звуковые дорожки с оригиналом, убеждается, что оригинал не менялся после сжатия, затем ставит сжатый файл на место оригинала (та же папка и имя, `.mp4`), а **оригинал отправляет в корзину Windows** — его можно восстановить. Если что-то сорвётся до этого шага, ничего не меняется. Замена недоступна там, где Windows могла бы удалить оригинал навсегда: на дисках без корзины (сетевые, съёмные) и для файлов больше корзины диска.
+- Подсказка **«Как это работает»** при первом запуске.
+- **Экспорт и импорт истории.**
+
 ## [0.9.2] — 2026-11-12
 
 ### English
@@ -172,6 +188,7 @@ First public release.
 - Потеря готового файла, если его держал антивирус или плеер; коллизии имён результатов.
 - Черезстрочное видео, субтитры MKV, нечётное разрешение, обложка вместо видео, дата файла.
 
+[0.9.3]: https://github.com/remrem23/framewring/releases/tag/v0.9.3
 [0.9.2]: https://github.com/remrem23/framewring/releases/tag/v0.9.2
 [0.9.1]: https://github.com/remrem23/framewring/releases/tag/v0.9.1
 [0.9.0]: https://github.com/remrem23/framewring/releases/tag/v0.9.0

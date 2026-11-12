@@ -25,7 +25,7 @@ from pathlib import Path
 
 import i18n
 
-__version__ = "0.9.2"
+__version__ = "0.9.3"
 APP_NAMES = i18n.APP_NAMES  # заголовок окна: «Framewring Жмых» / «Framewring»
 REPO_URL = "https://github.com/remrem23/framewring"  # официальная страница программы
 DONATE_URL = REPO_URL + "/blob/main/DONATE.md"
@@ -1600,7 +1600,9 @@ def finalize(part, out, job):
             n = 2
             while True:  # возможно, занят именно старый результат: пробуем другое имя
                 alt = out.with_name("%s (%d).mp4" % (out.stem, n))
-                if not alt.exists():
+                with LOCK:
+                    free_name = OUT_OWNERS.get(_norm(alt)) in (None, _norm(job["path"]))
+                if not alt.exists() and free_name:
                     break
                 n += 1
         if waited > 600:  # 10 минут: сдаёмся, но работу не теряем
@@ -1666,6 +1668,10 @@ def do_full(job, s):
     with LOCK:
         OUT_OWNERS[_norm(out)] = _norm(job["path"])
     part = out.with_name(out.stem + ".part.mp4")
+    try:
+        job["src_sig"] = src_sig(job["path"])
+    except OSError:
+        job["src_sig"] = None
     with LOCK:
         job["part"], CUR["part"] = str(part), str(part)
     job.pop("_nogain", None)
@@ -1709,7 +1715,14 @@ def do_full(job, s):
                 add_note(job, M("note.image_subs", codecs=", ".join(sorted(set(img)))))
         with LOCK:
             job["status"], job["pct"], job["out_path"], job["out_size"] = "done", 100, str(out), out.stat().st_size
+        tv = (job.get("test") or {}).get("vmaf")
+        try:
+            out_sig = src_sig(str(out))
+        except OSError:
+            out_sig = None
         add_history({"t": time.time(), "src": job["path"], "out": str(out), "name": job["name"],
+                     "src_sig": job.get("src_sig"), "out_sig": out_sig, "src_codec": (job["info"] or {}).get("vcodec"),
+                     "vmaf": tv,
                      "size": job["size"], "out_size": job["out_size"], "duration": job["info"]["duration"],
                      "preset": s["preset"], "quality": s["quality"], "speed": s["speed"], "secs": round(took, 1)})
     else:
@@ -1719,6 +1732,534 @@ def do_full(job, s):
                 job["status"] = "cancelled"
             else:
                 job["status"], job["error"] = "error", err
+
+
+# ------------------------------------------------------------- Replace originals ----
+# Замена — только по явному выбору человека в окне «Заменить оригиналы». Порядок: полная проверка сжатого
+# файла → сверка отпечатков оригинала и сжатого → проверка, что оригинал ТОЧНО поместится в корзину →
+# сжатый файл рядом с оригиналом под временным именем (записано в историю как «намерение») → оригинал в
+# корзину Windows (и проверка, что он там) → временное имя становится именем оригинала (.mp4).
+# Любой сбой до корзины — ничего не меняется; сбой/закрытие посередине доделывается при следующем запуске.
+
+EDIT_CODECS = {"prores", "qtrle", "dnxhd", "cfhd", "ffv1", "huffyuv", "utvideo", "rawvideo", "v210", "png", "mjpeg"}
+REPLACE = {"running": False, "items": {}, "ver": 0}
+
+
+def src_sig(path):
+    """Отпечаток файла: размер и время изменения (с точностью до секунды)."""
+    st = os.stat(path)
+    return [st.st_size, int(st.st_mtime)]
+
+
+def _hkey(h):
+    """Устойчивый ключ записи истории (номер в списке может сдвинуться — например, после импорта)."""
+    return "%s|%s" % (h.get("t"), _norm(h.get("src") or ""))
+
+
+def _hist_find(key):
+    with LOCK:
+        return next((i for i, h in enumerate(HISTORY["items"]) if _hkey(h) == key), None)
+
+
+def _real_path(path):
+    """Настоящий путь: subst-диск → его папка, junction/символическая ссылка → цель, сетевой диск → \\\\сервер.
+    Корзина зависит от настоящего тома, а не от буквы, под которой его видно."""
+    p = os.path.abspath(str(path))
+    if IS_WIN:
+        drive, rest = os.path.splitdrive(p)
+        if len(drive) == 2 and drive[1] == ":":
+            buf = ctypes.create_unicode_buffer(2048)
+            if ctypes.windll.kernel32.QueryDosDeviceW(drive, buf, 2048) and buf.value.startswith("\\??\\"):
+                dev = buf.value[4:]
+                p = ("\\\\" + dev[4:] if dev.upper().startswith("UNC\\") else dev) + rest
+    try:
+        p = os.path.realpath(p)
+    except (OSError, ValueError):
+        pass
+    return p
+
+
+def has_recycle_bin(path):
+    """Корзина есть только на локальных несъёмных дисках (по настоящему пути, не по букве)."""
+    if not IS_WIN:
+        return False
+    try:
+        rp = _real_path(path)
+        if rp.startswith("\\\\"):
+            return False
+        root = os.path.splitdrive(rp)[0] + "\\"
+        return ctypes.windll.kernel32.GetDriveTypeW(ctypes.c_wchar_p(root)) == 3  # DRIVE_FIXED
+    except Exception:
+        return False
+
+
+def _bin_used(root):
+    class SHQUERYRBINFO(ctypes.Structure):
+        _fields_ = [("cbSize", ctypes.c_uint32), ("i64Size", ctypes.c_int64), ("i64NumItems", ctypes.c_int64)]
+    q = SHQUERYRBINFO(ctypes.sizeof(SHQUERYRBINFO), 0, 0)
+    if ctypes.windll.shell32.SHQueryRecycleBinW(ctypes.c_wchar_p(root), ctypes.byref(q)) != 0:
+        return None
+    return q.i64Size
+
+
+def bin_check(path, size):
+    """None — файл размера size с этого диска гарантированно попадёт в корзину. Иначе — причина.
+    Windows удаляет НАВСЕГДА, если файл больше свободного места корзины, корзина отключена
+    («удалять сразу») или диск сетевой/съёмный/subst — всё это проверяем заранее."""
+    if not has_recycle_bin(path):
+        return M("rep.b.no_bin")
+    try:
+        import winreg
+        rp = _real_path(path)
+        root = os.path.splitdrive(rp)[0] + "\\"
+        buf = ctypes.create_unicode_buffer(64)
+        if not ctypes.windll.kernel32.GetVolumeNameForVolumeMountPointW(ctypes.c_wchar_p(root), buf, 64):
+            return M("rep.b.no_bin")
+        m = re.search(r"\{[0-9A-Fa-f-]+\}", buf.value)
+        if not m:
+            return M("rep.b.no_bin")
+        total = shutil.disk_usage(root).total
+        nuke, cap = 0, None
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer"
+                                "\\BitBucket\\Volume\\" + m.group(0)) as k:
+                for name in ("NukeOnDelete", "MaxCapacity"):
+                    try:
+                        v = winreg.QueryValueEx(k, name)[0]
+                    except OSError:
+                        continue
+                    if name == "NukeOnDelete":
+                        nuke = v
+                    else:
+                        cap = v * 1024 * 1024
+        except OSError:
+            pass
+        for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):  # групповые политики
+            try:
+                with winreg.OpenKey(hive, "Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer") as k:
+                    try:
+                        if winreg.QueryValueEx(k, "NoRecycleFiles")[0]:
+                            nuke = 1
+                    except OSError:
+                        pass
+                    try:
+                        pc = winreg.QueryValueEx(k, "RecycleBinSize")[0]
+                        cap = min(cap if cap is not None else total, total * pc / 100.0)
+                    except OSError:
+                        pass
+            except OSError:
+                pass
+        if nuke:
+            return M("rep.b.bin_off")
+        if cap is None:
+            cap = total * 0.05  # настройки не найдены — считаем осторожно: 5% диска
+        used = _bin_used(root)
+        if used is None:
+            return M("rep.b.no_bin")
+        free = cap - used
+        if size > free:
+            return M("rep.b.bin_small", need=round(size / 1e9, 1), free=round(max(free, 0) / 1e9, 1))
+        return None
+    except Exception as e:
+        print(" bin_check: %s" % e)
+        return M("rep.b.no_bin")
+
+
+def recycle(path):
+    """Отправить файл в корзину Windows (SHFileOperation + FOF_ALLOWUNDO + FOF_WANTNUKEWARNING:
+    если Windows всё же решит удалить насовсем — она спросит, а не сделает молча)."""
+    from ctypes import wintypes
+
+    class SHFILEOPSTRUCTW(ctypes.Structure):
+        _fields_ = [("hwnd", wintypes.HWND), ("wFunc", wintypes.UINT), ("pFrom", wintypes.LPCWSTR),
+                    ("pTo", wintypes.LPCWSTR), ("fFlags", ctypes.c_uint16), ("fAnyOperationsAborted", wintypes.BOOL),
+                    ("hNameMappings", ctypes.c_void_p), ("lpszProgressTitle", wintypes.LPCWSTR)]
+    FO_DELETE = 3
+    FOF_SILENT, FOF_NOCONFIRMATION, FOF_ALLOWUNDO, FOF_NOERRORUI, FOF_WANTNUKEWARNING = 0x4, 0x10, 0x40, 0x400, 0x4000
+    # по НАСТОЯЩЕМУ пути: через букву subst-диска Windows удалила бы файл мимо корзины
+    owner = (_own_windows() or [None])[0]
+    op = SHFILEOPSTRUCTW(owner, FO_DELETE, _real_path(path) + "\0", None,
+                         FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO | FOF_NOERRORUI | FOF_WANTNUKEWARNING,
+                         False, None, None)
+    rc = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
+    return rc == 0 and not op.fAnyOperationsAborted and not os.path.exists(str(path))
+
+
+def in_recycle_bin(path, since):
+    """Есть ли в корзине запись об этом файле, удалённом после since (проверяем $I-записи корзины)."""
+    import struct
+    want = {os.path.normcase(os.path.abspath(str(path))), os.path.normcase(_real_path(path))}
+    root = os.path.splitdrive(_real_path(path))[0] + "\\"
+    base = os.path.join(root, "$Recycle.Bin")
+    try:
+        dirs = [os.path.join(base, d) for d in os.listdir(base)]
+    except OSError:
+        return False
+    for d in dirs:
+        try:
+            names = os.listdir(d)
+        except OSError:
+            continue
+        for f in names:
+            if not f.startswith("$I"):
+                continue
+            fp = os.path.join(d, f)
+            try:
+                b = open(fp, "rb").read()
+                # время удаления — внутри записи (FILETIME), а не дата самого $I-файла
+                deleted = (struct.unpack_from("<q", b, 16)[0] - 116444736000000000) / 1e7
+                if deleted < since - 5:
+                    continue
+                if struct.unpack_from("<q", b, 0)[0] == 2:
+                    n = struct.unpack_from("<i", b, 24)[0]
+                    orig = b[28:28 + n * 2].decode("utf-16-le").rstrip("\0")
+                else:
+                    orig = b[24:24 + 520].decode("utf-16-le").split("\0")[0]
+            except Exception:
+                continue
+            if os.path.normcase(orig) in want:
+                return True
+    return False
+
+
+_STREAMS_CACHE = {}
+
+
+def stream_counts(path):
+    """Сколько каких дорожек в файле: видео (без обложек), звук, субтитры, данные, вложения."""
+    try:
+        key = (_norm(path),) + tuple(src_sig(path))
+    except OSError:
+        return None
+    if key in _STREAMS_CACHE:
+        return _STREAMS_CACHE[key]
+    r = run_quiet([FFPROBE, "-v", "error", "-show_entries", "stream=codec_type:stream_disposition=attached_pic",
+                   "-of", "json", str(path)])
+    c = {"video": 0, "audio": 0, "subtitle": 0, "data": 0, "attachment": 0}
+    try:
+        for s in json.loads(r.stdout or "{}").get("streams", []):
+            t = s.get("codec_type")
+            if t == "video" and (s.get("disposition") or {}).get("attached_pic"):
+                continue
+            if t in c:
+                c[t] += 1
+    except Exception:
+        return None
+    _STREAMS_CACHE[key] = c
+    return c
+
+
+def _decode_check(out, maps, total, item=None):
+    """Декодирует выбранные дорожки целиком. Возвращает (ошибки_текстом, до_какой_секунды_дошёл)."""
+    p = subprocess.Popen([FFMPEG, "-hide_banner", "-nostdin", "-v", "error", "-i", str(out)] + maps +
+                         ["-f", "null", "-", "-progress", "pipe:1", "-nostats"],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=NO_WINDOW | BELOW_NORMAL)
+    errs, last = [], [0.0]
+    t = threading.Thread(target=lambda: errs.append(p.stderr.read().decode("utf-8", "replace")), daemon=True)
+    t.start()
+    for line in p.stdout:
+        line = line.decode("utf-8", "replace").strip()
+        if line.startswith("out_time_us="):
+            try:
+                last[0] = max(last[0], int(line.split("=")[1]) / 1e6)
+                if item is not None:
+                    item["pct"] = max(0.0, min(100.0, last[0] / total * 100))
+            except ValueError:
+                pass
+    p.wait()
+    t.join(5)
+    err = (errs[0] if errs else "").strip()
+    if p.returncode != 0 and not err:
+        err = "exit %d" % p.returncode
+    return err, last[0]
+
+
+def verify_output(out, src_info, item):
+    """Полная проверка сжатого файла: читается; длительность и число звуковых дорожек как у оригинала;
+    видео декодируется ЦЕЛИКОМ и доходит до конца (не обрезано); звук декодируется без ошибок.
+    None — всё хорошо, иначе сообщение."""
+    try:
+        oi = probe(str(out))
+    except Exception as e:
+        return M("verify.probe", detail=str(e)[:200])
+    sd, od = src_info.get("duration") or 0, oi.get("duration") or 0
+    tol = max(1.0, sd * 0.002)
+    if sd and abs(od - sd) > tol:
+        return M("verify.duration", a=round(sd, 1), b=round(od, 1))
+    if len(oi["audio"]) != len(src_info.get("audio") or []):
+        return M("verify.audio", a=len(src_info.get("audio") or []), b=len(oi["audio"]))
+    total = sd or od or 1
+    err, reached = _decode_check(out, ["-map", "0:V:0"], total, item)
+    if err:
+        return M("verify.decode", detail=err[-300:])
+    if sd and reached < sd - tol:
+        return M("verify.short", a=round(sd, 1), b=round(reached, 1))
+    if oi["audio"]:
+        err, _ = _decode_check(out, ["-map", "0:a"], total)
+        if err:
+            return M("verify.decode", detail=err[-300:])
+    return None
+
+
+def _replace_target(src):
+    """Куда встанет сжатый файл: та же папка и имя, что у оригинала, расширение .mp4."""
+    return Path(src).with_suffix(".mp4")
+
+
+def _tmp_for(src):
+    return Path(src).with_name(Path(src).stem + ".framewring-new.mp4")
+
+
+def _check_entry(h):
+    """Блокировки и предупреждения для одной записи истории (свежая проверка файлов на диске)."""
+    src, o = h.get("src"), h.get("out")
+    c = {"key": _hkey(h), "name": h.get("name") or Path(src).name, "src": src, "out": o,
+         "size": h.get("size") or 0, "out_size": h.get("out_size") or 0, "warn": [], "block": []}
+    if h.get("replaced"):
+        c["block"].append(M("rep.b.replaced"))
+        return c
+    if not os.path.isfile(src):
+        c["block"].append(M("rep.b.src_missing"))
+        return c
+    if not os.path.isfile(o):
+        c["block"].append(M("rep.b.out_missing"))
+        return c
+    c["size"], c["out_size"] = os.path.getsize(src), os.path.getsize(o)
+    if not h.get("src_sig") or not h.get("out_sig"):
+        c["block"].append(M("rep.b.old_entry"))  # запись старой версии: подлинность не подтвердить
+    else:
+        if src_sig(src) != h["src_sig"]:
+            c["block"].append(M("rep.b.src_changed"))
+        if src_sig(o) != h["out_sig"]:
+            c["block"].append(M("rep.b.out_changed"))
+    if c["out_size"] >= c["size"]:
+        c["block"].append(M("rep.b.not_smaller"))
+    with LOCK:
+        busy = any(_norm(j["path"]) == _norm(src) and j["status"] in ("queued", "running", "probing") for j in JOBS)
+    if busy:
+        c["block"].append(M("rep.b.busy"))
+    b = bin_check(src, c["size"])
+    if b:
+        c["block"].append(b)
+    tgt = _replace_target(src)
+    if tgt.exists() and not _same_file(tgt, src):
+        c["block"].append(M("rep.b.collision", name=tgt.name))
+    if _tmp_for(src).exists():
+        c["block"].append(M("rep.b.leftover", name=_tmp_for(src).name))
+    v = h.get("vmaf")
+    if v is None:
+        c["warn"].append(M("rep.w.no_test"))
+    elif v < 93:
+        c["warn"].append(M("rep.w.vmaf", v=round(v, 1)))
+    codec = h.get("src_codec")
+    if not codec:
+        try:
+            codec = probe_cached(src).get("vcodec")
+        except Exception:
+            codec = ""
+    if codec in EDIT_CODECS:
+        c["warn"].append(M("rep.w.edit", codec=codec))
+    sc, oc = stream_counts(src), stream_counts(o)
+    if sc and oc:
+        for kind, k in (("video", "rep.w.lost_video"), ("subtitle", "rep.w.lost_subs"),
+                        ("data", "rep.w.lost_data"), ("attachment", "rep.w.lost_att")):
+            if sc[kind] > oc[kind]:
+                c["warn"].append(M(k, n=sc[kind] - oc[kind]))
+    if c["size"] and c["out_size"] / c["size"] > 0.8 and not c["block"]:
+        c["warn"].append(M("rep.w.small", pct=round((1 - c["out_size"] / c["size"]) * 100)))
+    return c
+
+
+def replace_candidates():
+    """Что можно заменить: из истории (она переживает «Убрать готовые» и перезапуск); один оригинал — одна строка."""
+    with LOCK:
+        items = [dict(h) for h in HISTORY["items"]]
+    out, seen = [], set()
+    for h in reversed(items):
+        if not h.get("src") or not h.get("out") or _norm(h["src"]) in seen:
+            continue
+        seen.add(_norm(h["src"]))
+        c = _check_entry(h)
+        c["state"] = REPLACE["items"].get(c["key"])
+        out.append(c)
+    return out
+
+
+def _set_hist(key, **kw):
+    """Обновить запись истории по ключу и сохранить на диск."""
+    with LOCK:
+        i = next((n for n, h in enumerate(HISTORY["items"]) if _hkey(h) == key), None)
+        if i is None:
+            return False
+        for k, v in kw.items():
+            if v is None:
+                HISTORY["items"][i].pop(k, None)
+            else:
+                HISTORY["items"][i][k] = v
+        HISTORY["ver"] += 1
+        data = json.dumps(HISTORY["items"], ensure_ascii=False, indent=0)
+    write_json(HISTORY_FILE, data)
+    return True
+
+
+def _replace_one(key, item):
+    i = _hist_find(key)
+    if i is None:
+        raise _ItemError(M("rep.err.blocked"))
+    with LOCK:
+        h = dict(HISTORY["items"][i])
+    c = _check_entry(h)
+    if c["block"]:
+        raise _ItemError(c["block"][0])
+    src, out = Path(h["src"]), Path(h["out"])
+    item["state"] = "verify"
+    bad = verify_output(out, probe_cached(str(src)), item)
+    if bad:
+        _set_hist(key, verify_failed=True)
+        raise _ItemError(bad)
+    item["state"], item["pct"] = "replace", 100
+    # проверка шла долго: всё сверяем ещё раз прямо перед переносом
+    c = _check_entry(h)
+    if c["block"]:
+        raise _ItemError(c["block"][0])
+    target, tmp = _replace_target(src), _tmp_for(src)
+    same_vol = os.stat(str(out)).st_dev == os.stat(str(src.parent)).st_dev
+    _set_hist(key, replace_tmp=str(tmp), replace_copy=not same_vol)  # намерение: на случай сбоя посередине
+    try:
+        if same_vol:
+            os.rename(str(out), str(tmp))  # rename не перезаписывает: если место занято — ошибка
+        else:
+            shutil.copy2(str(out), str(tmp))
+            import filecmp
+            if not filecmp.cmp(str(out), str(tmp), shallow=False):
+                raise OSError("copy differs from the compressed file")
+        if os.path.getsize(str(tmp)) != h["out_sig"][0]:
+            raise OSError("size changed while moving")
+    except OSError as e:
+        try:
+            if same_vol and tmp.exists() and not out.exists():
+                os.rename(str(tmp), str(out))
+            elif not same_vol:
+                _rm(tmp)
+        except OSError:
+            pass
+        _set_hist(key, replace_tmp=None, replace_copy=None)
+        raise _ItemError(M("rep.err.move", detail=str(e)[:200]))
+    # оригинал — в корзину; перед этим ещё раз убеждаемся, что он туда поместится
+    b = bin_check(src, os.path.getsize(str(src)))
+    t0 = time.time()
+    if b or not recycle(src):
+        try:
+            if same_vol:
+                os.rename(str(tmp), str(out))
+            else:
+                _rm(tmp)
+        except OSError:
+            _set_hist(key, replace_tmp=str(tmp))
+            raise _ItemError(M("rep.err.rollback", tmp=str(tmp)))
+        _set_hist(key, replace_tmp=None, replace_copy=None)
+        raise _ItemError(b or M("rep.err.recycle"))
+    binned = False
+    for _ in range(15):  # Windows дописывает запись корзины чуть позже, чем завершается удаление
+        if in_recycle_bin(src, t0):
+            binned = True
+            break
+        time.sleep(0.3)
+    try:
+        os.rename(str(tmp), str(target))  # не перезапишет, если имя вдруг занято
+    except OSError as e:
+        raise _ItemError(M("rep.err.final", tmp=str(tmp), detail=str(e)[:200]))
+    if not same_vol:
+        _rm(out)
+    try:  # пустую папку compressed убираем
+        if not any(out.parent.iterdir()):
+            out.parent.rmdir()
+    except OSError:
+        pass
+    _set_hist(key, replaced=True, out=str(target), replaced_t=time.time(), out_size=os.path.getsize(str(target)),
+              replace_tmp=None, replace_copy=None, out_sig=src_sig(str(target)))
+    with LOCK:
+        OUT_OWNERS.pop(_norm(out), None)
+        OUT_OWNERS[_norm(target)] = _norm(str(src))
+        for j in JOBS:
+            if _norm(j["path"]) == _norm(str(src)):
+                j["replaced"], j["out_path"] = True, str(target)
+    if not binned:
+        raise _ItemError(M("rep.err.not_in_bin"))
+    item["state"] = "done"
+
+
+def replace_recover():
+    """При запуске: доделать или откатить замену, прерванную закрытием программы или сбоем."""
+    with LOCK:
+        pending = [dict(h) for h in HISTORY["items"] if h.get("replace_tmp")]
+    for h in pending:
+        key, src, out, tmp = _hkey(h), Path(h["src"]), Path(h["out"]), Path(h["replace_tmp"])
+        if os.path.normcase(str(tmp)) != os.path.normcase(str(_tmp_for(src))) or \
+                not str(tmp).lower().endswith(".framewring-new.mp4"):
+            _set_hist(key, replace_tmp=None, replace_copy=None)
+            continue
+        try:
+            if tmp.exists():
+                if src.exists():  # оригинал не тронут — возвращаем как было
+                    if h.get("replace_copy"):
+                        _rm(tmp)
+                    elif not out.exists():
+                        os.rename(str(tmp), str(out))
+                    _set_hist(key, replace_tmp=None, replace_copy=None)
+                else:  # оригинал уже в корзине — ставим сжатый на его место
+                    target = _replace_target(src)
+                    if not target.exists():
+                        os.rename(str(tmp), str(target))
+                        if h.get("replace_copy"):
+                            _rm(out)
+                        _set_hist(key, replaced=True, out=str(target), replaced_t=time.time(), replace_tmp=None,
+                                  replace_copy=None, out_sig=src_sig(str(target)))
+            else:
+                target = _replace_target(src)
+                if not src.exists() and target.exists() and h.get("out_sig") and \
+                        os.path.getsize(str(target)) == h["out_sig"][0]:
+                    _set_hist(key, replaced=True, out=str(target), replaced_t=time.time(), replace_tmp=None,
+                              replace_copy=None, out_sig=src_sig(str(target)))
+                elif src.exists():
+                    _set_hist(key, replace_tmp=None, replace_copy=None)
+        except OSError as e:
+            print(" replace_recover %s: %s" % (src, e))
+
+
+class _ItemError(Exception):
+    def __init__(self, m):
+        super().__init__(str(m))
+        self.m = m
+
+
+def replace_run(keys):
+    """Заменяет выбранные по очереди; каждый файл — сам по себе: ошибка в одном не трогает остальные."""
+    with LOCK:
+        if REPLACE["running"]:
+            raise UserError("rep.err.busy")
+        REPLACE["running"] = True
+        REPLACE["items"] = {k: {"state": "queued", "pct": 0, "err": None} for k in keys}
+        REPLACE["ver"] += 1
+
+    def run():
+        try:
+            for k in keys:
+                item = REPLACE["items"][k]
+                try:
+                    _replace_one(k, item)
+                except _ItemError as e:
+                    item.update(state="error", err=e.m)
+                except UserError as e:
+                    item.update(state="error", err=e.msg())
+                except Exception as e:
+                    item.update(state="error", err="%s: %s" % (type(e).__name__, e))
+                REPLACE["ver"] += 1
+        finally:
+            with LOCK:
+                REPLACE["running"] = False
+                REPLACE["ver"] += 1
+    threading.Thread(target=run, daemon=True).start()
 
 
 def do_test(job, s):
@@ -1815,7 +2356,7 @@ def add_history(entry):
 
 QUEUE_FILE = DATA_DIR / "queue.json"
 KEEP = ("id", "path", "name", "size", "status", "info", "error", "note", "out_path", "out_size", "test", "mode",
-        "part")
+        "part", "src_sig", "replaced")
 
 
 def _queue_payload():
@@ -1952,7 +2493,9 @@ _PICK_LOCK = threading.Lock()
 def _pick_webview(win, kind):
     import webview
     fd = getattr(webview, "FileDialog", None)
-    if kind == "files":
+    if kind == "history":
+        r = win.create_file_dialog(fd.OPEN if fd else webview.OPEN_DIALOG, file_types=("JSON (*.json)",))
+    elif kind == "files":
         r = win.create_file_dialog(fd.OPEN if fd else webview.OPEN_DIALOG, allow_multiple=True, file_types=(
             "%s (%s)" % (tr("pick.video"), VIDEO_MASK.replace(" ", ";")), "%s (*.*)" % tr("pick.all")))
     else:
@@ -1975,7 +2518,11 @@ def _pick_tk(kind):
             except Exception:
                 pass
             r.update()
-            if kind == "files":
+            if kind == "history":
+                f = filedialog.askopenfilename(parent=r, filetypes=[("JSON", "*.json")])
+                if f:
+                    out.append(f)
+            elif kind == "files":
                 out.extend(filedialog.askopenfilenames(parent=r, title=tr("pick.title_files"), filetypes=[
                     (tr("pick.video"), VIDEO_MASK), (tr("pick.all"), "*.*")]))
             else:
@@ -2073,7 +2620,9 @@ def snapshot(scan_ver=None):
             target = Path(os.path.expanduser(settings["outdir"]))
     return {"caps": caps, "jobs": jobs, "running": running, "settings": settings, "disk": disk_info(target),
             "presets": list(PRESETS), "sys_lang": SYS_LANG,
-            "quality": QUALITY, "scan": scan_public(scan_ver), "hist_ver": HISTORY["ver"], "version": __version__, "update": {k: UPDATE[k] for k in ("latest", "state", "pct", "err")},
+            "quality": QUALITY, "scan": scan_public(scan_ver), "hist_ver": HISTORY["ver"],
+            "replace": {"running": REPLACE["running"], "ver": REPLACE["ver"],
+                        "items": dict(REPLACE["items"])}, "version": __version__, "update": {k: UPDATE[k] for k in ("latest", "state", "pct", "err")},
             "install_kind": install_kind(), "repo": REPO_URL, "donate": DONATE_URL, "window": WINDOW["w"] is not None,
             "hist_count": len(HISTORY["items"])}
 
@@ -2298,6 +2847,53 @@ class H(BaseHTTPRequestHandler):
                     raise UserError("api.open_missing", path=str(target))
                 open_folder(target)
             return None
+        if path == "/api/replace_list":
+            return {"items": replace_candidates(), "running": REPLACE["running"]}
+        if path == "/api/replace":
+            keys = [k for k in (b.get("keys") or []) if isinstance(k, str)]
+            if not keys:
+                raise UserError("rep.err.none")
+            if any(_hist_find(k) is None for k in keys):
+                raise UserError("rep.err.blocked")
+            replace_run(keys)
+            return None
+        if path == "/api/hist_export":
+            docs = Path(os.path.expanduser("~")) / "Documents"
+            d = docs if docs.is_dir() else Path(os.path.expanduser("~"))
+            f = d / ("Framewring-history-%s.json" % time.strftime("%Y-%m-%d"))
+            with LOCK:
+                data = json.dumps(HISTORY["items"], ensure_ascii=False, indent=1)
+            f.write_text(data, encoding="utf-8")
+            open_folder(str(f))
+            return {"path": str(f)}
+        if path == "/api/hist_import":
+            if REPLACE["running"]:
+                raise UserError("rep.err.busy")
+            files = pick("history") if b.get("path") is None else [b.get("path")]
+            if not files:
+                return {"added": 0}
+            try:
+                items = json.loads(Path(files[0]).read_text(encoding="utf-8"))
+                if not isinstance(items, list):
+                    raise ValueError
+                items = [x for x in items if isinstance(x, dict) and isinstance(x.get("src"), str)
+                         and isinstance(x.get("out"), str) and x.get("src") and x.get("out")]
+                for x in items:  # импортированные записи заменять нельзя, пока файл не пересжат
+                    for k in ("replace_tmp", "replace_copy", "src_sig", "out_sig", "verify_failed"):
+                        x.pop(k, None)
+            except Exception:
+                raise UserError("hist.import_bad")
+            with LOCK:
+                have = {(_norm(h["src"]), _norm(h["out"]), h.get("t")) for h in HISTORY["items"]}
+                new = [x for x in items if (_norm(x["src"]), _norm(x["out"]), x.get("t")) not in have]
+                HISTORY["items"].extend(new)
+                HISTORY["items"].sort(key=lambda h: h.get("t") or 0)
+                HISTORY["ver"] += 1
+                data = json.dumps(HISTORY["items"], ensure_ascii=False, indent=0)
+                for h in new:
+                    OUT_OWNERS.setdefault(_norm(h["out"]), _norm(h["src"]))
+            write_json(HISTORY_FILE, data)
+            return {"added": len(new)}
         if path == "/api/history":
             with LOCK:
                 items = [dict(x, idx=i) for i, x in enumerate(HISTORY["items"])]
@@ -2360,6 +2956,9 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 .res{margin-top:8px;padding:10px;border-radius:10px;background:#0f1115;border:1px dashed var(--line);font-size:13px}
 .res b{color:var(--acc2)}.err{color:var(--err);white-space:pre-wrap;font:12px/1.4 ui-monospace,Consolas,monospace;max-height:160px;overflow:auto;margin-top:8px}
 .empty{color:var(--mut);text-align:center;padding:40px 10px;border:1px dashed var(--line);border-radius:12px}
+.ok{color:var(--acc2)}.intro{margin-bottom:16px;border-color:var(--acc)}.intro ol{margin:10px 0 0;padding-left:20px;line-height:1.7}
+.repbox{max-width:820px;width:94vw}.rrow{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:start;padding:8px 10px;border-bottom:1px solid var(--line)}
+.rrow:last-child{border-bottom:0}.rrow.off{opacity:.6}.rrow .err{margin-top:4px}.rrow .tag{margin:4px 6px 0 0;display:inline-block}
 .updbox{border:1px solid var(--acc);background:#7c5cff18;padding:10px 12px;border-radius:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .warnbox{border:1px solid var(--warn);background:#ffb34714;color:var(--warn);padding:12px;border-radius:12px;margin-bottom:14px}
 .foot{color:var(--mut);font-size:12px;margin-top:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
@@ -2417,6 +3016,7 @@ a{color:var(--acc)}:root{color-scheme:dark}.jh .btn{white-space:nowrap}
  </div>
 </div>
 <div class="col" id="rcol">
+<div id="intro"></div>
 <div class="card" id="scanCard" style="display:none;margin-bottom:16px">
   <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0" data-t="scan.title"></h2><button class="btn sm" onclick="toggleScan(false)" data-t="common.collapse"></button></div>
   <p class="hint" style="margin-top:8px" data-t="scan.hint"></p>
@@ -2433,6 +3033,7 @@ a{color:var(--acc)}:root{color-scheme:dark}.jh .btn{white-space:nowrap}
 <div class="card" id="histCard" style="display:none;margin-bottom:16px">
   <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0" data-t="hist.title"></h2><button class="btn sm" onclick="toggleHist(false)" data-t="common.collapse"></button></div>
   <div class="meta" id="histSum" style="margin-top:8px"></div>
+  <div class="row" style="margin-top:6px"><button class="btn sm" onclick="histExport()" data-t="hist.export"></button><button class="btn sm" onclick="histImport()" data-t="hist.import"></button></div>
   <div class="scanlist" id="histList" style="margin-top:8px"></div>
  </div>
  <div class="card">
@@ -2444,7 +3045,7 @@ a{color:var(--acc)}:root{color-scheme:dark}.jh .btn{white-space:nowrap}
   </div>
   <div class="row" style="margin-bottom:12px"><input type="text" id="manual" data-tp="manual.ph" style="flex:1"><button class="btn" onclick="addManual()" data-t="manual.add"></button></div>
   <div id="jobs"></div>
-  <div class="foot"><span><span id="disk"></span> <span id="qinfo" style="margin-left:10px"></span></span><a href="#" onclick="api('/api/clear');return false" style="color:var(--mut)" data-t="btn.clear"></a></div>
+  <div class="foot"><span><span id="disk"></span> <span id="qinfo" style="margin-left:10px"></span></span><span><a href="#" onclick="openReplace();return false" data-t="rep.btn_all"></a> · <a href="#" onclick="api('/api/clear');return false" style="color:var(--mut)" data-t="btn.clear"></a></span></div>
  </div>
 </div></div></div>
 <div class="modal" id="donate" onclick="if(event.target===this)donate(false)"><div class="mbox" role="dialog" data-ta="donate.title">
@@ -2452,6 +3053,12 @@ a{color:var(--acc)}:root{color-scheme:dark}.jh .btn{white-space:nowrap}
   <p style="margin:14px 0 10px" data-t="donate.ways"></p>
  <button class="btn pri" onclick="openUrl(S.donate)" data-t="donate.open"></button>
  <p class="hint" style="margin:14px 0 0"><span data-t="donate.official"></span> <b id="repoUrl">github.com/remrem23/framewring</b>. <span data-t="donate.official2"></span></p>
+</div></div>
+<div class="modal" id="replace" onclick="if(event.target===this)closeReplace()"><div class="mbox repbox" role="dialog" data-ta="rep.title">
+ <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap"><div><h3 data-t="rep.title"></h3><div class="meta" data-t="rep.text"></div></div><button class="btn sm" onclick="closeReplace()" data-ta="common.close">✕</button></div>
+ <div class="row" style="margin:10px 0 6px;align-items:center"><button class="btn sm" onclick="repPick('safe')" data-t="rep.pick_safe"></button><button class="btn sm" onclick="repPick('none')" data-t="rep.pick_none"></button></div>
+ <div id="repList" class="scanlist"></div>
+ <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><span id="repSum" class="meta"></span><button class="btn pri" id="repGo" onclick="doReplace()"></button></div>
 </div></div>
 <div class="modal" id="report" onclick="if(event.target===this)report(false)"><div class="mbox" role="dialog" data-ta="report.title">
  <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap"><div><h3 data-t="report.title"></h3><div class="meta" data-t="report.text"></div></div><button class="btn sm" onclick="report(false)" data-ta="common.close">✕</button></div>
@@ -2491,6 +3098,41 @@ function toasts(a){a=(a||[]).map(msg).filter(Boolean);if(a.length)toast(a.slice(
 ["dragover","drop"].forEach(ev=>window.addEventListener(ev,e=>{e.preventDefault();if(ev==="drop"&&!S?.window)toast(tr("drop.browser"))}));
 function donate(on){const d=$("donate");if(d)d.classList.toggle("on",on)}
 function report(on){const d=$("report");if(d)d.classList.toggle("on",on)}
+async function histExport(){const r=await api("/api/hist_export");if(r.path)toast(tr("hist.exported",{path:r.path}))}
+async function histImport(){const r=await api("/api/hist_import");if(r.added!=null){toast(tr("hist.imported",{n:r.added}));histVer=-1;if(histOpen)loadHist()}}
+function renderIntro(){const el=$("intro");if(!el)return;if(localStorage.getItem("fw_intro")==="1"){setHTML(el,"");return}
+ setHTML(el,`<div class="card intro"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:nowrap"><h2 style="margin:0">${esc(tr("intro.title"))}</h2><button class="btn sm" onclick="localStorage.setItem('fw_intro','1');renderIntro()">${esc(tr("intro.ok"))}</button></div>
+ <ol>${["intro.s1","intro.s2","intro.s3","intro.s4"].map(k=>`<li>${esc(tr(k))}</li>`).join("")}</ol></div>`)}
+// ---------------- замена оригиналов: только то, что человек отметил сам
+let repList=[],repSel=new Set(),repWasRunning=false;
+async function openReplace(pre){const r=await api("/api/replace_list");repList=r.items||[];repSel.clear();
+ if(pre){const c=repList.find(c=>pk(c.src)===pk(pre)&&!c.block.length);if(c)repSel.add(c.key)}
+ $("replace").classList.add("on");renderReplace()}
+function closeReplace(){$("replace").classList.remove("on")}
+function repPick(m){repSel.clear();if(m==="safe")for(const c of repList)if(!c.block.length&&!c.warn.length&&!repDone(c))repSel.add(c.key);renderReplace()}
+const repState=c=>((S&&S.replace&&S.replace.items)||{})[c.key];
+const repDone=c=>{const s=repState(c);return s&&s.state==="done"};
+function renderReplace(){if(!$("replace").classList.contains("on"))return;
+ const running=!!(S&&S.replace&&S.replace.running);
+ if(!repList.length){setHTML($("repList"),`<div class="empty">${esc(tr("rep.none"))}</div>`)}else
+ setHTML($("repList"),repList.map(c=>{const st=repState(c);const off=c.block.length||running||repDone(c);
+  const d=c.size?Math.round((1-c.out_size/c.size)*100):0;
+  let status="";if(st){status=st.state==="verify"?tr("rep.s.verify",{pct:nf(st.pct,0)}):st.state==="replace"?tr("rep.s.replace"):st.state==="done"?tr("rep.s.done"):st.state==="error"?tr("rep.s.error",{err:msg(st.err)}):tr("rep.s.queued");
+   status=`<div class="${st.state==="error"?"err":st.state==="done"?"ok":"meta"}">${esc(status)}</div>`}
+  return `<div class="rrow ${off?"off":""}"><input type="checkbox" data-k="${esc(c.key)}" ${repSel.has(c.key)&&!off?"checked":""} ${off?"disabled":""}>
+   <div><div class="sname">${esc(c.name)}</div><div class="meta">${esc(c.src.replace(/[\\/][^\\/]*$/,""))}</div>
+   ${c.warn.map(w=>`<span class="tag y">⚠ ${esc(msg(w))}</span>`).join("")}${st&&st.state==="done"?"":c.block.map(b=>b.k==="rep.b.replaced"?`<div class="ok">✓ ${esc(msg(b))}</div>`:`<div class="err">${esc(msg(b))}</div>`).join("")}${status}</div>
+   <div class="num"><b>${gb(c.size)} → ${gb(c.out_size)}</b><div class="meta">${c.out_size<c.size?"−"+d+"%":""}</div></div></div>`}).join(""));
+ const sel=repList.filter(c=>repSel.has(c.key)&&!c.block.length&&!repDone(c));
+ $("repSum").textContent=running?tr("rep.running"):tr("rep.summary",{n:sel.length,size:gb(sel.reduce((a,c)=>a+c.size-c.out_size,0))});
+ const g=$("repGo");g.textContent=tr("rep.go",{n:sel.length});g.disabled=running||!sel.length}
+async function doReplace(){const ks=repList.filter(c=>repSel.has(c.key)&&!c.block.length&&!repDone(c)).map(c=>c.key);if(!ks.length)return;
+ await api("/api/replace",{keys:ks});repWasRunning=true;refresh()}
+async function repTick(){const running=!!(S&&S.replace&&S.replace.running);
+ if(repWasRunning&&!running){repWasRunning=false;const it=Object.values(S.replace.items||{});
+  toast(tr("rep.done_sum",{ok:it.filter(x=>x.state==="done").length,n:it.length}));
+  const r=await api("/api/replace_list");const keep=repList;repList=r.items||keep;repSel.clear();histVer=-1}
+ renderReplace()}
 async function updInstall(){if(S.running&&!confirm(tr("upd.confirm_running")))return;await api("/api/update_install");refresh()}
 function renderUpd(){const u=S.update||{};let h="";
  if(u.latest&&localStorage.getItem("fw_upd_skip")!==u.latest){
@@ -2502,7 +3144,8 @@ function renderUpd(){const u=S.update||{};let h="";
    `<button class="btn sm" onclick="api('/api/update_page')">${esc(tr("upd.notes"))}</button><button class="btn sm" onclick="localStorage.setItem('fw_upd_skip','${esc(u.latest)}');renderUpd()">${esc(tr("upd.later"))}</button>`;
   h=`<div class="updbox"><b>${esc(tr("upd.available",{v:u.latest}))}</b><div class="row" style="align-items:center">${act}</div></div>`}
  setHTML($("upd"),h)}
-document.addEventListener("keydown",e=>{if(e.key==="Escape"){donate(false);report(false)}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){donate(false);report(false);closeReplace()}});
+$("repList").addEventListener("change",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k==null)return;e.target.checked?repSel.add(k):repSel.delete(k);renderReplace()});
 $("lng").addEventListener("change",e=>setLang(e.target.value));
 async function openUrl(u){if(u)await api("/api/url",{url:u})}
 function toast(m){const t=$("toast");if(!t)return;t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",5000)}
@@ -2533,7 +3176,7 @@ async function loadHist(){const r=await api("/api/history");if(!r.items)return;h
   return `<div class="hrow"><div class="meta">${esc(fdate(x.t))}</div><div><div class="sname">${esc(x.name)}</div><div class="meta">${esc(x.src.replace(/[\\/][^\\/]*$/,""))}</div></div>
   <div class="num"><b>${gb(x.size)} → ${gb(x.out_size)}</b><div class="meta">${pctS(d)}%${x.duration?" · "+dur(x.duration):""}</div></div>
   <div class="meta">${esc(pr?presetTitle(x.preset):(x.preset||tr("hist.unknown_mode")))}${x.secs?`<br>${esc(tr("hist.took",{t:tm(x.secs)}))}`:""}</div>
-  <div class="row" style="flex-wrap:nowrap"><button class="btn sm" title="${esc(tr("btn.open_out_title"))}" onclick="api('/api/open',{hist:${x.idx}})">${esc(tr("btn.open_out"))}</button><button class="btn sm" title="${esc(tr("btn.open_src_title"))}" onclick="api('/api/open',{hist:${x.idx},which:'src'})">${esc(tr("btn.open_src"))}</button></div></div>`}).join(""))}
+  <div class="row" style="flex-wrap:nowrap"><button class="btn sm" title="${esc(tr("btn.open_out_title"))}" onclick="api('/api/open',{hist:${x.idx}})">${esc(tr("btn.open_out"))}</button>${x.replaced?`<span class="meta" style="text-align:center">${esc(tr("hist.in_bin"))}</span>`:`<button class="btn sm" title="${esc(tr("btn.open_src_title"))}" onclick="api('/api/open',{hist:${x.idx},which:'src'})">${esc(tr("btn.open_src"))}</button>`}</div></div>`}).join(""))}
 async function retryJob(id){await api("/api/retry",{id});refresh()}
 async function removeJob(id){await api("/api/remove",{id});refresh()}
 let builtSettings=false;
@@ -2557,8 +3200,9 @@ function jobStatic(j){
  const i=j.info;
  const meta=i?`${i.width}×${i.height} · ${esc(nfm(i.fps,2))} fps · ${esc(i.vcodec.toUpperCase())} · ${esc(nf(i.bitrate/1e6,1))} ${esc(tr("unit.mbps"))} · ${dur(i.duration)} · ${gb(j.size)} · ${esc(tr("job.audio",{list:i.audio.map(a=>`${a.codec} ${a.bitrate?Math.round(a.bitrate/1000)+tr("unit.k"):""}`).join(", ")||tr("job.no_audio")}))}`:gb(j.size);
  let body="";
+ if(j.replaced){body=`<div class="res ok">${esc(tr("job.replaced"))} <button class="btn sm" onclick="api('/api/open',{id:${j.id}})">${esc(tr("btn.open_out"))}</button></div>`}else
  if(j.status==="done"||j.status==="skipped"){const d=(1-j.out_size/j.size)*100;const bigger=d<0;
-  body=`<div class="res">${j.status==="skipped"?esc(tr("job.skipped_prefix")):""}<b>${gb(j.size)} → ${gb(j.out_size)}</b> (${pctS(d)}%) <button class="btn sm" title="${esc(tr("btn.open_out_title"))}" onclick="api('/api/open',{id:${j.id}})">${esc(tr("btn.open_out"))}</button> <button class="btn sm" title="${esc(tr("btn.open_src_title"))}" onclick="api('/api/open',{id:${j.id},which:'src'})">${esc(tr("btn.open_src"))}</button>${bigger?`<div class="note">${esc(tr("job.bigger"))}</div>`:""}</div>`}
+  body=`<div class="res">${j.status==="skipped"?esc(tr("job.skipped_prefix")):""}<b>${gb(j.size)} → ${gb(j.out_size)}</b> (${pctS(d)}%) <button class="btn sm" title="${esc(tr("btn.open_out_title"))}" onclick="api('/api/open',{id:${j.id}})">${esc(tr("btn.open_out"))}</button> <button class="btn sm" title="${esc(tr("btn.open_src_title"))}" onclick="api('/api/open',{id:${j.id},which:'src'})">${esc(tr("btn.open_src"))}</button>${!bigger&&j.status==="done"?` <button class="btn sm" title="${esc(tr("rep.btn_one_title"))}" onclick="openReplace(${esc(JSON.stringify(j.path))})">${esc(tr("rep.btn_one"))}</button>`:""}${bigger?`<div class="note">${esc(tr("job.bigger"))}</div>`:""}</div>`}
  if(j.test){const x=j.test;const tb=x.ratio>=1;const label=x.preset?`${presetTitle(x.preset)} · ${tr("quality.name."+x.quality)}`:(x.label||"");
   body+=`<div class="res">${esc(tr("test.head",{label:"\u0001"}))
    .replace("\u0001",`<i>${esc(label)}</i>`)}<br>${esc(tr("test.clip",{a:gb(x.ref_size),b:gb(x.test_size),pct:pctS((1-x.ratio)*100)}))} <b>${esc(tr("test.forecast",{size:gb(x.est_size)}))}</b>${esc(tr("test.time",{t:tm(x.est_time)}))}
@@ -2594,7 +3238,7 @@ function renderJobs(){
  });
  for(const [id,n] of el._map)if(!seen.has(id)){n.remove();el._map.delete(id)}
 }
-function render(){renderUpd();
+function render(){renderUpd();repTick();renderIntro();
  const c=S.caps;$("ver").textContent=c.ffmpeg?(c.version||tr("ver.found")).replace(/Copyright.*/,"").slice(0,60):tr("ver.missing");
  setHTML($("warn"),!c.ffmpeg||!c.ffprobe?`<div class="warnbox"><b>${esc(tr("warn.ffmpeg_t"))}</b> ${esc(tr("warn.ffmpeg_1"))}<br>Windows: <code>winget install Gyan.FFmpeg</code> · Mac: <code>brew install ffmpeg</code><br>${esc(tr("warn.ffmpeg_2"))}</div>`:c.pagefile_off&&localStorage.getItem("fw_nopf")!=="1"?`<div class="warnbox"><button class="btn sm" style="float:right;margin-left:10px" title="${esc(tr("common.close"))}" onclick="localStorage.setItem('fw_nopf','1');render()">✕</button><b>${esc(tr("warn.pf_t"))}</b> ${esc(tr("warn.pf_1"))}<br>Win+R → <code>sysdm.cpl</code> ${esc(tr("warn.pf_2"))}</div>`:"");
  renderSettings();renderJobs();
@@ -3034,6 +3678,7 @@ def main():
                 return
             continue
     load_history()
+    replace_recover()
     n = load_queue()
     threading.Thread(target=detect_caps, daemon=True).start()
     threading.Thread(target=worker, daemon=True).start()

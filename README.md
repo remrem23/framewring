@@ -20,7 +20,10 @@ Free, local, no limits: your files never leave your computer.
    every big video with the space compressing it would free. Duplicates and editing sources are marked.
 2. **Test (2 min)** — compresses a short piece and shows the final size and quality (VMAF) before you commit.
 3. **Compress all** — the compressed copies appear next to the originals in a `compressed` folder.
-   Framewring never deletes anything: when you're happy with the result, delete the originals yourself.
+   The originals are not touched.
+4. **⇄ Replace originals…** — when you're happy with the result, the compressed files take the originals' place.
+   Originals are only ever replaced when you choose to: only the files you tick, each fully verified first,
+   and the originals go to the Windows Recycle Bin, so you can restore them.
 
 Under the hood it's FFmpeg on an
 Nvidia, AMD or Intel GPU (NVENC / AMF / Quick Sync, AV1 or H.265) or on the CPU (x265, SVT-AV1). The interface is in English, Russian, German, French, Spanish, Portuguese and Simplified Chinese
@@ -84,10 +87,19 @@ Copies from other sites may be modified.
   without it a multi-threaded folder scan is used automatically.
 - **GPU compression** (AV1 / H.265 on Nvidia, AMD or Intel; on Nvidia, 5–7× faster than the CPU) or **CPU compression** (x265, SVT-AV1) when every gigabyte counts.
 - **Test on a piece of the video:** predicted final size, time and VMAF quality score before the full run.
-- **A queue that survives restarts**, a *↻ Retry* button for failed files, **history** of everything compressed with the total space freed.
+- **Replace originals** — only the ones you tick (nothing is ticked by default): every compressed file is first fully
+  decoded and checked against the original (duration, audio tracks, the video must reach the end), then it takes the
+  original's place (same folder and name, `.mp4`) and the original goes to the **Windows Recycle Bin** — never a permanent
+  delete: replacing is blocked when the Recycle Bin is off or too small for the file, on drives without one, and when the
+  original or the compressed file changed after compression. Files with untested quality, low VMAF, editing sources or
+  tracks the compressed file lacks (subtitles, telemetry…) are flagged. A replacement interrupted by a crash is finished
+  or rolled back on the next start.
+- **A queue that survives restarts**, a *↻ Retry* button for failed files, **history** of everything compressed with the total space freed,
+  **history export/import** (a JSON file in *Documents*).
 - **Drag & drop** files and folders onto the app window to add them.
-- **Safe for your files:** originals are never modified or deleted, other files are never overwritten,
-  the result is written to a temporary file and appears only when complete. Audio, text subtitles and the file date are kept;
+- **Safe for your files:** compression never modifies originals, other files are never overwritten,
+  the result is written to a temporary file and appears only when complete; an original leaves its place only through
+  *Replace originals* and only into the Recycle Bin. Settings, history and the queue are kept with up to 3 backup copies. Audio, text subtitles and the file date are kept;
   interlaced video is deinterlaced; variable-frame-rate recordings keep their timing.
 - **Reliable:** free-space check, automatic retry on memory errors, works even if an antivirus or a player holds the file.
 - **Updates in one click:** once per launch the app checks GitHub for a new version (can be turned off in settings).
@@ -101,6 +113,10 @@ Copies from other sites may be modified.
 1. **Find heavy videos** — or **+ Files** / **+ Folder**, or drag files onto the window.
 2. **Test (2 min)** — see the predicted size and quality.
 3. **Compress all.** Results go to a `compressed` subfolder next to each original (you can change the **Output folder**).
+4. Optional: **⇄ Replace originals…** under the list (or **⇄ Replace original** on a finished file) — tick the files,
+   and the compressed ones take the originals' place; the originals go to the Recycle Bin.
+
+A short **How it works** hint is shown on first run (hide it with **Got it**).
 
 Full guide: [docs/USER-GUIDE.md](docs/USER-GUIDE.md) (also shipped with the app as `README.txt`).
 
@@ -116,6 +132,10 @@ The folder holds `settings.json`, `queue.json`, `history.json`, `probe_cache.jso
 they never leave your computer) and, for the exe, `framewring.log`. Uninstalling keeps this folder so history is not lost;
 delete it by hand if you want a clean slate.
 
+Settings, history and the queue are also saved as up to 3 backup copies in a `backup` subfolder (the installed version keeps
+them separately, in `%LOCALAPPDATA%\Framewring\backup`); if a file is damaged or the data folder is deleted, Framewring
+restores it from the newest good copy on the next start.
+
 ## FAQ
 
 **Windows says "Windows protected your PC".** See *Download* above: *More info* → *Run anyway*, and check the SHA-256 if in doubt.
@@ -128,9 +148,12 @@ program's `ffmpeg\bin` folder (installed: `%LOCALAPPDATA%\Programs\Framewring\ff
 **Do I need Everything?** No. It only makes the search faster (seconds instead of minutes). Without it Framewring scans folders itself.
 If Everything is installed but not running, Framewring starts it in the tray for the search and closes it afterwards.
 
-**Will it touch my original files?** No. Originals are only read, and a result can never replace an original.
-If the output folder is the source folder, the result gets a `_compressed` suffix; in a common output folder you choose,
-existing files from elsewhere are never overwritten (a number is added). Deleting originals is up to you, after you check the result.
+**Will it touch my original files?** Compression doesn't: originals are only read, and a compressed result is never written
+over an original. If the output folder is the source folder, the result gets a `_compressed` suffix; in a common output folder
+you choose, existing files from elsewhere are never overwritten (a number is added). An original is replaced only when you
+choose it in **⇄ Replace originals…**: the compressed file is fully verified first, and the original goes to the Windows Recycle Bin.
+On network and removable drives (no Recycle Bin), with the Recycle Bin turned off, or when the original is bigger than the free
+space of the Recycle Bin (Windows would delete it permanently) replacing is not available.
 
 **What about variable frame rate (phones, OBS, screen recorders)?** Frames are passed through with their original timestamps —
 nothing is dropped or duplicated, and the test VMAF compares the right frames.
@@ -208,7 +231,10 @@ The builds include [FFmpeg](https://ffmpeg.org) (Gyan build, GPL v3) and other c
    каждое большое видео и сколько места освободит его сжатие. Дубликаты и монтажные исходники помечены.
 2. **«Тест на 2 мин»** — сжимает короткий кусок и показывает итоговый размер и качество (VMAF) до полного сжатия.
 3. **«Сжать всё»** — сжатые копии появляются рядом с оригиналами, в папке `compressed`.
-   Framewring ничего не удаляет: когда результат устроит, оригиналы удаляешь сам.
+   Оригиналы не трогаются.
+4. **«⇄ Заменить оригиналы…»** — когда результат устроит, сжатые файлы встают на место оригиналов.
+   Оригиналы заменяются только по твоему выбору: только отмеченные файлы, каждый сначала полностью проверяется,
+   а оригиналы уходят в корзину Windows — их можно восстановить.
 
 Framewring Жмых (английское название — *Framewring*) — программа для Windows на основе FFmpeg. Сжимает
 на видеокарте Nvidia, AMD или Intel (NVENC / AMF / Quick Sync, AV1 или H.265) или на процессоре (x265, SVT-AV1). Интерфейс: русский, английский, немецкий, французский, испанский, португальский и китайский (упрощённый)
@@ -271,10 +297,18 @@ FFmpeg уже внутри, ничего доустанавливать не н�
   Если установлен бесплатный [Everything](https://www.voidtools.com/), поиск занимает секунды; без него автоматически работает многопоточный обход папок.
 - **Сжатие на видеокарте** (AV1 / H.265 на Nvidia, AMD или Intel; на Nvidia — в 5–7 раз быстрее процессора) или **на процессоре** (x265, SVT-AV1), когда важен каждый гигабайт.
 - **Тест на куске видео:** прогноз итогового размера, времени и оценка качества VMAF до полного сжатия.
-- **Очередь, которая переживает перезапуск**, кнопка «↻ Повторить» у неудачных файлов, **история** всего сжатого с итогом освобождённого места.
+- **Замена оригиналов** — только отмеченных тобой (по умолчанию ничего не отмечено): каждый сжатый файл сначала полностью
+  декодируется и сверяется с оригиналом (длительность, звуковые дорожки, видео должно дойти до конца), затем встаёт на место
+  оригинала (та же папка и имя, `.mp4`), а оригинал уходит в **корзину Windows** — насовсем ничего не удаляется: замена
+  заблокирована, если корзина отключена или файл в неё не помещается, на дисках без корзины и если оригинал или сжатый файл
+  изменили после сжатия. Файлы с непроверенным качеством, низким VMAF, монтажные исходники и файлы, в сжатой версии которых
+  нет части дорожек (субтитры, телеметрия…), помечены. Замена, прерванная сбоем, доделывается или откатывается при следующем запуске.
+- **Очередь, которая переживает перезапуск**, кнопка «↻ Повторить» у неудачных файлов, **история** всего сжатого с итогом освобождённого места,
+  **экспорт и импорт истории** (JSON-файл в «Документах»).
 - **Перетаскивание** файлов и папок прямо в окно программы.
-- **Бережно к файлам:** оригиналы не изменяются и не удаляются, чужие файлы не перезаписываются,
-  результат пишется во временный файл и появляется только целым. Сохраняются звук, текстовые субтитры и дата файла;
+- **Бережно к файлам:** при сжатии оригиналы не изменяются, чужие файлы не перезаписываются,
+  результат пишется во временный файл и появляется только целым; оригинал покидает своё место только через
+  «Заменить оригиналы» и только в корзину. Настройки, история и очередь хранятся с резервными копиями (до 3 штук). Сохраняются звук, текстовые субтитры и дата файла;
   черезстрочное видео деинтерлейсится; у видео с переменной частотой кадров сохраняется исходный тайминг.
 - **Надёжность:** проверка свободного места, повтор при сбоях памяти, корректная работа, если файл держит антивирус или плеер.
 - **Обновление в один клик:** при запуске программа один раз проверяет на GitHub, нет ли новой версии (можно отключить
@@ -288,6 +322,10 @@ FFmpeg уже внутри, ничего доустанавливать не н�
 1. «Найти тяжёлые видео» — или «+ Файлы» / «+ Папка», или перетащи файлы в окно.
 2. «Тест на 2 мин» — посмотреть прогноз размера и качество.
 3. «Сжать всё». Результат — в подпапке `compressed` рядом с оригиналом (папку можно поменять в «Куда сохранять»).
+4. По желанию: «⇄ Заменить оригиналы…» под списком (или «⇄ Заменить оригинал» у готового файла) — отметь файлы,
+   и сжатые встанут на место оригиналов; оригиналы уйдут в корзину.
+
+При первом запуске показывается короткая подсказка «Как это работает» (скрыть — «Понятно»).
 
 Подробная инструкция — [docs/USER-GUIDE.md](docs/USER-GUIDE.md#русский) (в программе — файл `README.txt`).
 
@@ -303,6 +341,10 @@ FFmpeg уже внутри, ничего доустанавливать не н�
 они никуда не отправляются) и у exe-версии — журнал `framewring.log`. При удалении программы папка сохраняется, чтобы
 не потерять историю; удали её вручную, если нужно начать с чистого листа.
 
+Настройки, история и очередь дополнительно сохраняются в резервные копии (до 3 штук) в подпапке `backup` (установленная версия
+хранит их отдельно, в `%LOCALAPPDATA%\Framewring\backup`); если файл повреждён или папку данных удалили, при следующем запуске
+Framewring восстановит всё из последней целой копии.
+
 ### Частые вопросы
 
 **«Windows защитила ваш компьютер».** См. «Скачать» выше: «Подробнее» → «Выполнить в любом случае»; при сомнениях сверь SHA-256.
@@ -316,9 +358,11 @@ FFmpeg уже внутри, ничего доустанавливать не н�
 **Обязателен ли Everything?** Нет, он только ускоряет поиск (секунды вместо минут). Без него Framewring обходит папки сам.
 Если Everything установлен, но закрыт, Framewring запустит его в трей на время поиска и потом закроет.
 
-**Тронет ли программа оригиналы?** Нет, оригиналы только читаются, и результат никогда не может заменить оригинал.
-Если папка вывода совпадает с папкой оригинала, к имени добавляется `_compressed`; в общей папке вывода, которую ты указал,
-чужие файлы не перезаписываются (к имени добавляется номер). Удалять оригиналы — тебе, после проверки результата.
+**Тронет ли программа оригиналы?** Сжатие — нет: оригиналы только читаются, и сжатый результат никогда не пишется поверх
+оригинала. Если папка вывода совпадает с папкой оригинала, к имени добавляется `_compressed`; в общей папке вывода, которую ты указал,
+чужие файлы не перезаписываются (к имени добавляется номер). Оригинал заменяется, только если ты выбрал его в «⇄ Заменить оригиналы…»:
+сжатый файл сначала полностью проверяется, а оригинал уходит в корзину Windows. На сетевых и съёмных дисках (без корзины), при
+отключённой корзине или если оригинал больше свободного места в корзине (Windows удалила бы его насовсем) замена недоступна.
 
 **Видео с переменной частотой кадров (телефоны, OBS, запись экрана)?** Кадры передаются с исходными метками времени —
 ничего не выбрасывается и не дублируется, а VMAF в тесте сравнивает правильные кадры.

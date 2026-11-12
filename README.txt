@@ -28,8 +28,52 @@ QUICK START
      To compare by eye, open the files in compressed\_tests full screen.
   4. Happy with it - "Compress all". Results go to the "compressed"
      subfolder next to each original ("Output folder" changes this).
-  5. Originals are NOT deleted or modified. Delete them yourself after you
-     have checked the result. A result never replaces an original.
+  5. Compression does NOT delete or modify originals. When you have checked
+     the result, "Replace originals..." can put the compressed files in
+     their place (see below). A short "How it works" hint is shown on
+     first run; "Got it" hides it.
+
+REPLACE ORIGINALS
+  "Replace original" on a finished file, or "Replace originals..." under
+  the list, opens the window "Replace originals with compressed files".
+  Nothing is ticked by default - only the files you tick are replaced
+  ("Tick those without warnings" ticks the safe ones). For each file:
+  - the compressed file is fully checked: its duration and number of
+    audio tracks must match the original; the video is decoded completely
+    and must reach the original's duration; the audio is decoded too;
+  - the original and the compressed file must be unchanged since
+    compression (size, date) - checked again right before moving;
+  - the compressed file takes the original's place: same folder and name,
+    with .mp4 (for video.mkv a video.mp4 appears next to it); nothing is
+    ever overwritten, a copy from another drive is compared byte by byte;
+  - the ORIGINAL GOES TO THE WINDOWS RECYCLE BIN - you can restore it.
+    Framewring then checks that it really is in the Recycle Bin.
+  If anything fails before the Recycle Bin step, nothing changes. If the
+  program is closed or crashes in the middle, the replacement is rolled
+  back (original still in place) or finished (original already in the
+  Recycle Bin) on the next start. History import waits until it ends.
+  Warnings: quality not checked with "Test", Test VMAF below 93, editing
+  source (ProRes etc.), small saving (under 20%), tracks of the original
+  missing from the compressed file (extra video, subtitles, data such as
+  GoPro telemetry or timecode, attachments).
+  Not possible: the compressed file is not smaller; the original or the
+  compressed file was changed after compression; entry from an older
+  version (compress again with "Retry"); a file is missing; the file is
+  queued or being compressed; the name is taken by another file; a
+  leftover "name.framewring-new.mp4" from an unfinished replacement;
+  network or removable drives (no Recycle Bin there; subst and mapped
+  drives are judged by the drive they really point to); Recycle Bin
+  turned off for the drive; the original
+  is bigger than the free space of the Recycle Bin (Windows would delete
+  it permanently - empty the bin or enlarge it); already replaced.
+  Replaced files show "The original is replaced (it's in the Recycle
+  Bin)"; in History the Original button becomes "original in the Recycle
+  Bin". After you empty the Recycle Bin the originals are gone for good.
+
+HISTORY
+  "History" shows everything compressed and the space freed. "Export..."
+  saves it to Documents\Framewring-history-YYYY-MM-DD.json; "Import..."
+  adds entries from such a file, skipping duplicates.
 
 FIND HEAVY VIDEOS
   Tick drives (or type a folder), choose the minimum size, start the search.
@@ -70,6 +114,9 @@ DATA AND LOG
   Portable:   data\ next to Framewring.exe
   settings.json, queue.json, history.json, probe_cache.json and the log
   framewring.log (attach it to bug reports). Uninstalling keeps this folder.
+  Settings, history and the queue also have up to 3 backup copies
+  (installed: %LOCALAPPDATA%\Framewring\backup; otherwise data\backup);
+  a damaged or deleted file is restored from them on the next start.
 
 TROUBLESHOOTING
   "Access denied" in Documents/Videos/Desktop: Windows "Controlled folder
@@ -79,6 +126,8 @@ TROUBLESHOOTING
   Memory errors: turn the Windows page file back on. If you keep it off on
   purpose, hide the warning with its "x" button (remembered).
   Your own FFmpeg: replace ffmpeg.exe and ffprobe.exe in ffmpeg\bin.
+  A file can't be ticked in "Replace originals": the reason is shown under
+  its name. Want an original back: restore it from the Recycle Bin.
 
 REPORT A BUG
   "Report a bug" in the header opens a small window:
@@ -139,8 +188,51 @@ Framewring Жмых находит на дисках тяжёлые видео �
      Сравнить глазами: открой файлы из compressed\_tests на полном экране.
   4. Устраивает - «Сжать всё». Результат в подпапке compressed рядом
      с оригиналом (папку меняет настройка «Куда сохранять»).
-  5. Оригиналы НЕ удаляются и не изменяются. Удаляй сам, когда проверишь
-     результат. Результат никогда не заменяет оригинал.
+  5. Сжатие НЕ удаляет и не изменяет оригиналы. Когда проверишь результат,
+     «Заменить оригиналы…» может поставить сжатые файлы на их место
+     (см. ниже). При первом запуске показывается короткая подсказка
+     «Как это работает»; «Понятно» скрывает её.
+
+ЗАМЕНА ОРИГИНАЛОВ
+  «Заменить оригинал» у готового файла или «Заменить оригиналы…» под
+  списком открывает окно «Заменить оригиналы сжатыми». По умолчанию ничего
+  не отмечено - заменяются только отмеченные тобой файлы («Отметить без
+  предупреждений» отмечает безопасные). Для каждого файла:
+  - сжатый файл полностью проверяется: длительность и число звуковых
+    дорожек должны совпасть с оригиналом; видео декодируется целиком и
+    должно дойти до длительности оригинала; звук тоже декодируется;
+  - оригинал и сжатый файл не должны меняться после сжатия (размер,
+    дата) - это проверяется ещё раз прямо перед переносом;
+  - сжатый файл встаёт на место оригинала: та же папка и имя, .mp4
+    (для видео.mkv рядом появится видео.mp4); ничего не перезаписывается,
+    копия с другого диска сверяется побайтно;
+  - ОРИГИНАЛ УХОДИТ В КОРЗИНУ WINDOWS - его можно восстановить.
+    Затем Framewring проверяет, что он действительно в корзине.
+  Если что-то не вышло до шага с корзиной, ничего не меняется. Если
+  программу закрыли или она упала посередине, при следующем запуске
+  замена откатывается (оригинал на месте) или доделывается (оригинал уже
+  в корзине). Импорт «Истории» ждёт, пока замена не закончится.
+  Предупреждения: качество не проверено «Тестом», VMAF теста ниже 93,
+  монтажный исходник (ProRes и т.п.), небольшой выигрыш (меньше 20%),
+  в сжатом файле нет части дорожек оригинала (доп. видео, субтитры,
+  данные вроде телеметрии GoPro или таймкода, вложения).
+  Нельзя: сжатый файл не меньше; оригинал или сжатый файл изменили после
+  сжатия; запись из старой версии (сожми заново - «Повторить»); файла
+  нет; файл в очереди или сжимается; имя занято другим файлом; остался
+  «имя.framewring-new.mp4» от незавершённой замены; сетевые и съёмные
+  диски (там нет корзины; subst и подключённые диски оцениваются по
+  диску, на который они на самом деле указывают); корзина отключена для
+  диска; оригинал больше свободного места в корзине
+  (Windows удалила бы его насовсем - очисти корзину или увеличь её);
+  уже заменён.
+  У заменённых файлов написано «Оригинал заменён (он в корзине)», в
+  «Истории» вместо кнопки «Оригинал» - «оригинал в корзине». После очистки
+  корзины оригиналов больше нет.
+
+ИСТОРИЯ
+  «История» - всё сжатое и сколько места освобождено. «Экспорт…» сохраняет
+  её в Документы\Framewring-history-ГГГГ-ММ-ДД.json; «Импорт…» добавляет
+  записи из такого файла, пропуская дубли.
 
 НАЙТИ ТЯЖЁЛЫЕ ВИДЕО
   Отметь диски (или впиши папку), выбери минимальный размер, нажми «Искать».
@@ -184,6 +276,9 @@ Framewring Жмых находит на дисках тяжёлые видео �
   settings.json, queue.json, history.json, probe_cache.json и журнал
   framewring.log (приложи его к сообщению об ошибке). При удалении
   программы папка сохраняется.
+  У настроек, истории и очереди есть до 3 резервных копий (установленная
+  версия: %LOCALAPPDATA%\Framewring\backup; иначе data\backup);
+  повреждённый или удалённый файл восстанавливается из них при запуске.
 
 ЕСЛИ ЧТО-ТО НЕ ТАК
   «Отказано в доступе» в «Документах»/«Видео»/на рабочем столе: мешает
@@ -194,6 +289,8 @@ Framewring Жмых находит на дисках тяжёлые видео �
   Сбои памяти: включи файл подкачки Windows. Если он выключен намеренно,
   скрой предупреждение крестиком (программа это запомнит).
   Свой FFmpeg: замени ffmpeg.exe и ffprobe.exe в папке ffmpeg\bin.
+  Файл нельзя отметить в «Заменить оригиналы»: причина написана под его
+  именем. Нужно вернуть оригинал: восстанови его из корзины.
 
 СООБЩИТЬ ОБ ОШИБКЕ
   Кнопка «Сообщить об ошибке» в шапке открывает небольшое окно:
