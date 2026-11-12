@@ -8,7 +8,7 @@ scattered across folders, often in several copies.
 
 **Framewring finds them, shows how much space each one wastes, and compresses them several times smaller with no
 visible loss of quality.** You keep every video — it just takes a fraction of the space.
-Real example: a 76.6 GB screen recording became 7.3 GB; overall more then 200 GB freed already.
+Real example: a 76.6 GB screen recording became 7.3 GB; more than 200 GB freed overall so far.
 
 Free, local, no limits: your files never leave your computer.
 
