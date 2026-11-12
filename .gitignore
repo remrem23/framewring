@@ -37,3 +37,5 @@ data/
 framewring.log
 portable.txt
 *.spec
+# резервные копии данных при запуске из исходников
+backup/

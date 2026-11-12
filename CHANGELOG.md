@@ -6,6 +6,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [Sem
 Detailed development history with measurements: [DEVLOG.md](DEVLOG.md).
 Each version is described in English first, then in Russian.
 
+## [0.9.2] — 2026-11-12
+
+### English
+
+#### Changed
+- **Thorough** speed for **CPU · AV1** now uses SVT-AV1 preset 4 instead of 5: on a 1080p test the file is ~7% smaller than before (~16% smaller than **Normal**) and encoding takes ~1.7× as long as **Normal** ([#1](https://github.com/remrem23/framewring/issues/1)).
+
+#### Added
+- **Backups of your data.** Settings, history and the queue are saved with up to 3 backup copies. If a file is damaged or the data folder is deleted, Framewring restores it from the newest good copy on the next start. The installed version keeps the backups in `%LOCALAPPDATA%\Framewring\backup` — separately from the data folder.
+
+#### Fixed
+- An unfinished `.part.mp4` is no longer left behind when you quit in the middle of compression or after a crash: it is removed on exit, or on the next start.
+
+### Русский
+
+#### Изменено
+- Скорость **«Тщательно»** для **«Процессор · AV1»** теперь использует пресет 4 у SVT-AV1 вместо 5: на тесте 1080p файл на ~7% меньше прежнего (на ~16% меньше, чем **«Обычно»**), а сжатие идёт примерно в 1,7 раза дольше, чем **«Обычно»** ([#1](https://github.com/remrem23/framewring/issues/1)).
+
+#### Добавлено
+- **Резервные копии данных.** Настройки, история и очередь сохраняются с резервными копиями (до 3 штук). Если файл повреждён или папку данных удалили, при следующем запуске Framewring восстановит всё из последней целой копии. Установленная версия хранит копии в `%LOCALAPPDATA%\Framewring\backup` — отдельно от папки данных.
+
+#### Исправлено
+- Недоделанный `.part.mp4` больше не остаётся, если выйти посреди сжатия или после сбоя: он удаляется при выходе или при следующем запуске.
+
 ## [0.9.1] — 2026-11-11
 
 ### English
@@ -148,6 +172,7 @@ First public release.
 - Потеря готового файла, если его держал антивирус или плеер; коллизии имён результатов.
 - Черезстрочное видео, субтитры MKV, нечётное разрешение, обложка вместо видео, дата файла.
 
+[0.9.2]: https://github.com/remrem23/framewring/releases/tag/v0.9.2
 [0.9.1]: https://github.com/remrem23/framewring/releases/tag/v0.9.1
 [0.9.0]: https://github.com/remrem23/framewring/releases/tag/v0.9.0
 

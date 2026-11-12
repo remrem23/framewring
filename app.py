@@ -25,7 +25,7 @@ from pathlib import Path
 
 import i18n
 
-__version__ = "0.9.1"
+__version__ = "0.9.2"
 APP_NAMES = i18n.APP_NAMES  # заголовок окна: «Framewring Жмых» / «Framewring»
 REPO_URL = "https://github.com/remrem23/framewring"  # официальная страница программы
 DONATE_URL = REPO_URL + "/blob/main/DONATE.md"
@@ -313,7 +313,7 @@ QUALITY = {
 }
 SPEED = {
     "x265": {"slow": "slow", "normal": "medium", "fast": "fast"},
-    "av1": {"slow": "5", "normal": "6", "fast": "8"},
+    "av1": {"slow": "4", "normal": "6", "fast": "8"},
     # NVENC: (пресет, multipass). Замер на 2560×1440: p6+fullres в 2× медленнее p5+qres при том же
     # размере и VMAF, поэтому «Обычно» = p5+qres.
     "nvenc_hevc": {"slow": ("p7", "fullres"), "normal": ("p5", "qres"), "fast": ("p4", "disabled")},
@@ -498,19 +498,87 @@ def probe(path):
 LOCK = threading.RLock()
 JOBS = []
 WAKE = threading.Event()
-CUR = {"proc": None, "cancel": False}
+CUR = {"proc": None, "cancel": False, "part": None}
 DEFAULT_SETTINGS = {"preset": "x265", "quality": "balanced", "speed": "normal", "audio": "auto",
                     "outdir": "", "lowprio": True, "nosleep": True, "skip": True, "testlen": 120,
                     "update_check": True,
                     "lang": ""}  # lang: "" = как в системе, иначе "ru" / "en"
 
 
-def load_settings():
-    s = dict(DEFAULT_SETTINGS)
+def _backup_dir():
+    """Резервные копии — отдельно от папки данных: установленная версия держит их в %LOCALAPPDATA%,
+    поэтому даже удалённая целиком папка %APPDATA%\\Framewring восстанавливается при запуске."""
+    if FROZEN and IS_WIN and not (BASE_DIR / "portable.txt").exists():
+        return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "Framewring" / "backup"
+    return DATA_DIR / "backup"
+
+
+BACKUP_DIR = _backup_dir()
+BACKUP_KEEP = 3
+_BK_LAST = {}
+
+
+def _backup(path, text, every=0):
+    """Копия файла данных в BACKUP_DIR: <имя>.1.json — самая свежая, до BACKUP_KEEP штук.
+    every — не чаще, чем раз в столько секунд (очередь сохраняется каждые 2 с)."""
+    now = time.time()
+    if every and now - _BK_LAST.get(path.name, 0) < every:
+        return
+    _BK_LAST[path.name] = now
     try:
-        s.update(json.loads(SETTINGS_FILE.read_text(encoding="utf-8")))
-    except Exception:
-        pass
+        BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        newest = BACKUP_DIR / ("%s.1.json" % path.stem)
+        if newest.exists() and newest.read_text(encoding="utf-8") == text:
+            return
+        for i in range(BACKUP_KEEP, 1, -1):
+            a = BACKUP_DIR / ("%s.%d.json" % (path.stem, i - 1))
+            if a.exists():
+                os.replace(str(a), str(BACKUP_DIR / ("%s.%d.json" % (path.stem, i))))
+        tmp = newest.with_suffix(".tmp")
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(str(tmp), str(newest))
+    except Exception as e:
+        print(" backup %s: %s" % (path.name, e))
+
+
+def write_json(path, text, backup_every=0):
+    """Атомарная запись (через .tmp) + резервная копия."""
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(str(tmp), str(path))
+    _backup(path, text, backup_every)
+
+
+def read_json(path, kind):
+    """Читает файл данных; если его нет или он испорчен — самую свежую целую резервную копию.
+    Возвращает (данные, из_копии)."""
+    cands = [path] + [BACKUP_DIR / ("%s.%d.json" % (path.stem, i)) for i in range(1, BACKUP_KEEP + 1)]
+    for i, c in enumerate(cands):
+        try:
+            d = json.loads(c.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(d, kind):
+            if i:
+                print(" %s: восстановлено из резервной копии %s" % (path.name, c))
+            return d, bool(i)
+    return None, False
+
+
+_RAW_SETTINGS = None
+
+
+def load_settings():
+    global _RAW_SETTINGS
+    s = dict(DEFAULT_SETTINGS)
+    raw, from_bak = read_json(SETTINGS_FILE, dict)
+    _RAW_SETTINGS = raw or {}
+    s.update(_RAW_SETTINGS)
+    if from_bak:
+        try:
+            SETTINGS_FILE.write_text(json.dumps(raw, ensure_ascii=False, indent=1), encoding="utf-8")
+        except Exception:
+            pass
     return s
 
 
@@ -519,9 +587,7 @@ SETTINGS = load_settings()
 
 def save_settings():
     try:
-        tmp = SETTINGS_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(SETTINGS, ensure_ascii=False, indent=1), encoding="utf-8")
-        os.replace(str(tmp), str(SETTINGS_FILE))
+        write_json(SETTINGS_FILE, json.dumps(SETTINGS, ensure_ascii=False, indent=1))
     except Exception:
         pass
 
@@ -561,7 +627,7 @@ def clean_settings(b):
 
 _raw = dict(SETTINGS)
 try:
-    PRESET_CHOSEN = "preset" in json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+    PRESET_CHOSEN = "preset" in (_RAW_SETTINGS or {})
 except Exception:
     PRESET_CHOSEN = False
 SETTINGS.clear()
@@ -1475,6 +1541,24 @@ def encode(job, s, src, dst, total, phase, extra, subs=False):
             job["note"] = M("note.av1_lp_retry", lp=lp)
 
 
+def _rm_part(p):
+    """Удалить недоделанный результат — только наш «*.part.mp4», ничего другого."""
+    if p and str(p).lower().endswith(".part.mp4"):
+        _rm(p)
+
+
+def _stop_current():
+    """Выход посреди сжатия: остановить ffmpeg и убрать недоделанный .part.mp4."""
+    p, part = CUR.get("proc"), CUR.get("part")
+    if p:
+        try:
+            p.terminate()
+            p.wait(5)
+        except Exception:
+            pass
+    _rm_part(part)
+
+
 def _rm(p):
     try:
         Path(p).unlink()
@@ -1582,6 +1666,8 @@ def do_full(job, s):
     with LOCK:
         OUT_OWNERS[_norm(out)] = _norm(job["path"])
     part = out.with_name(out.stem + ".part.mp4")
+    with LOCK:
+        job["part"], CUR["part"] = str(part), str(part)
     job.pop("_nogain", None)
     stop = threading.Event()
     threading.Thread(target=_gain_watch, args=(job, job["size"], stop), daemon=True).start()
@@ -1590,6 +1676,8 @@ def do_full(job, s):
                                ["-map_metadata", "0", "-movflags", "+faststart"], subs=True)
     finally:
         stop.set()
+        with LOCK:
+            job["part"], CUR["part"] = "", None
     if not ok and job.get("_nogain") and err != "cancel":
         _rm(part)
         with LOCK:
@@ -1699,12 +1787,14 @@ HISTORY = {"items": [], "ver": 0}
 
 
 def load_history():
-    try:
-        items = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
-        if isinstance(items, list):
-            HISTORY["items"] = [x for x in items if isinstance(x, dict) and x.get("src")]
-    except Exception:
-        pass
+    items, from_bak = read_json(HISTORY_FILE, list)
+    if items is not None:
+        HISTORY["items"] = [x for x in items if isinstance(x, dict) and x.get("src")]
+        if from_bak:  # основной файл пропал или испорчен — сразу возвращаем его на место
+            try:
+                write_json(HISTORY_FILE, json.dumps(HISTORY["items"], ensure_ascii=False, indent=0))
+            except Exception:
+                pass
     with LOCK:  # результаты прошлых сеансов принадлежат своим исходникам
         for h in HISTORY["items"]:
             if h.get("out"):
@@ -1718,15 +1808,14 @@ def add_history(entry):
         HISTORY["ver"] += 1
         data = json.dumps(HISTORY["items"], ensure_ascii=False, indent=0)
     try:
-        tmp = HISTORY_FILE.with_suffix(".tmp")
-        tmp.write_text(data, encoding="utf-8")
-        os.replace(str(tmp), str(HISTORY_FILE))
+        write_json(HISTORY_FILE, data)
     except Exception:
         pass
 
 
 QUEUE_FILE = DATA_DIR / "queue.json"
-KEEP = ("id", "path", "name", "size", "status", "info", "error", "note", "out_path", "out_size", "test", "mode")
+KEEP = ("id", "path", "name", "size", "status", "info", "error", "note", "out_path", "out_size", "test", "mode",
+        "part")
 
 
 def _queue_payload():
@@ -1745,9 +1834,7 @@ def save_queue(payload=None):
 def _save_queue(payload=None):
     try:
         data = json.dumps(payload if payload is not None else _queue_payload(), ensure_ascii=False)
-        tmp = QUEUE_FILE.with_suffix(".tmp")
-        tmp.write_text(data, encoding="utf-8")
-        os.replace(str(tmp), str(QUEUE_FILE))
+        write_json(QUEUE_FILE, data, backup_every=300)
         return data
     except Exception:
         return None
@@ -1767,9 +1854,8 @@ def queue_saver():
 
 def load_queue():
     """Восстанавливаем список прошлого сеанса. Что было «в работе» или «в очереди», ждёт «Сжать всё»."""
-    try:
-        saved = json.loads(QUEUE_FILE.read_text(encoding="utf-8"))
-    except Exception:
+    saved, _ = read_json(QUEUE_FILE, list)
+    if saved is None:
         return 0
     restored = []
     for d in saved if isinstance(saved, list) else []:
@@ -1782,6 +1868,8 @@ def load_queue():
                    "test": d.get("test"), "settings": None, "mode": d.get("mode"), "fin": None}
         except (KeyError, TypeError):
             continue
+        if d.get("status") == "running" and d.get("part"):  # прошлый сеанс оборвался посреди сжатия
+            _rm_part(d.get("part"))
         if job["status"] in ("running", "queued", "probing"):
             job["status"] = "cancelled" if job["status"] == "running" else "ready"
             if d.get("status") == "running":
@@ -2813,9 +2901,7 @@ def quit_app():
     time.sleep(0.3)
     try:
         save_queue()
-        p = CUR.get("proc")
-        if p:
-            p.terminate()
+        _stop_current()
     finally:
         os._exit(0)
 
@@ -2981,12 +3067,7 @@ def main():
         pass
     finally:
         save_queue()
-        p = CUR.get("proc")
-        if p:
-            try:
-                p.terminate()
-            except Exception:
-                pass
+        _stop_current()
 
 
 if __name__ == "__main__":
