@@ -33,47 +33,80 @@ QUICK START
      their place (see below). A short "How it works" hint is shown on
      first run; "Got it" hides it.
 
+KEPT AS IS
+  If a video is already encoded efficiently, compressing it won't save
+  space. Framewring compares the output with the part of the original
+  that ffmpeg has already read (the same part of the video) and stops
+  early when the result is clearly heading to be no smaller; a finished
+  result that is not at least 3% smaller is deleted. The video is marked
+  "Kept as is": the original is untouched and no extra file is left.
+  "Retry" (e.g. with "Compact") stays available.
+
 REPLACE ORIGINALS
-  "Replace original" on a finished file, or "Replace originals..." under
-  the list, opens the window "Replace originals with compressed files".
-  Nothing is ticked by default - only the files you tick are replaced
-  ("Tick those without warnings" ticks the safe ones). For each file:
-  - the compressed file is fully checked: its duration and number of
-    audio tracks must match the original; the video is decoded completely
-    and must reach the original's duration; the audio is decoded too;
+  "Replace originals..." under the list opens the window "Replace
+  originals with compressed files"; nothing is ticked. "Replace original"
+  on a finished file opens the same window with that file highlighted and
+  ticked only if it has no warnings. Only the files you tick are replaced
+  ("Tick those without warnings" ticks the safe ones); ticking files with
+  warnings asks for confirmation and lists them. Each row shows the
+  compressed file's path. For each file:
+  - right after compression Framewring computed a SHA-256 checksum of the
+    compressed file ("Computing the checksum"); it is checked again before
+    replacing - any changed byte stops the replacement;
+  - the compressed file is fully checked: its duration (tolerance 0.1% of
+    the length, at least 1 s and at most 3 s) and number of audio tracks
+    must match the original; the video is decoded completely and must
+    reach the original's duration; the audio is decoded too and must be
+    as long as the original's;
   - the original and the compressed file must be unchanged since
     compression (size, date) - checked again right before moving;
   - the compressed file takes the original's place: same folder and name,
     with .mp4 (for video.mkv a video.mp4 appears next to it); nothing is
     ever overwritten, a copy from another drive is compared byte by byte;
   - the ORIGINAL GOES TO THE WINDOWS RECYCLE BIN - you can restore it.
-    Framewring then checks that it really is in the Recycle Bin.
+    This is checked beforehand (Recycle Bin present, turned on, enough
+    free space, path not too long); if Windows would still delete
+    permanently, it asks first. Afterwards Framewring confirms the
+    original is in the Recycle Bin and warns if not;
+  - an empty "compressed" folder is removed (never an output folder you
+    chose yourself).
+  Result per file: "replaced, the original is in the Recycle Bin"; a
+  warning (⚠) - the original is in the Recycle Bin, but something needs
+  attention (it was not found in the bin, or the new file kept its
+  temporary name); an error - the original was not replaced.
   If anything fails before the Recycle Bin step, nothing changes. If the
   program is closed or crashes in the middle, the replacement is rolled
   back (original still in place) or finished (original already in the
   Recycle Bin) on the next start. History import waits until it ends.
-  Warnings: quality not checked with "Test", Test VMAF below 93, editing
-  source (ProRes etc.), small saving (under 20%), tracks of the original
-  missing from the compressed file (extra video, subtitles, data such as
-  GoPro telemetry or timecode, attachments).
+  Warnings: quality not checked with "Test" (a Test counts only if it
+  used the same mode and quality as the compression), Test VMAF below 93,
+  editing source (ProRes etc.), small saving (under 20%), tracks of the
+  original missing from the compressed file (extra video, subtitles, data
+  such as GoPro telemetry or timecode, attachments).
   Not possible: the compressed file is not smaller; the original or the
   compressed file was changed after compression; entry from an older
-  version (compress again with "Retry"); a file is missing; the file is
-  queued or being compressed; the name is taken by another file; a
-  leftover "name.framewring-new.mp4" from an unfinished replacement;
-  network or removable drives (no Recycle Bin there; subst and mapped
-  drives are judged by the drive they really point to); Recycle Bin
-  turned off for the drive; the original
-  is bigger than the free space of the Recycle Bin (Windows would delete
-  it permanently - empty the bin or enlarge it); already replaced.
+  version without a checksum (compress again with "Retry"); entry
+  imported from another history file (compress again); a file is
+  missing; the file is queued or being compressed; the name is taken by
+  another file; a leftover "name.framewring-new.mp4" from an unfinished
+  replacement; network or removable drives (no Recycle Bin there; subst
+  and mapped drives are judged by the drive they really point to);
+  Recycle Bin turned off for the drive; the original is bigger than the
+  free space of the Recycle Bin (Windows would delete it permanently -
+  empty the bin or enlarge it); a path longer than ~250 characters
+  (Windows would delete the original permanently instead of recycling
+  it); already replaced.
   Replaced files show "The original is replaced (it's in the Recycle
   Bin)"; in History the Original button becomes "original in the Recycle
   Bin". After you empty the Recycle Bin the originals are gone for good.
 
 HISTORY
   "History" shows everything compressed and the space freed. "Export..."
-  saves it to Documents\Framewring-history-YYYY-MM-DD.json; "Import..."
-  adds entries from such a file, skipping duplicates.
+  saves it to Documents\Framewring-history-YYYY-MM-DD_HH-MM-SS.json (the
+  real Documents folder, also when it is moved to OneDrive; earlier
+  exports are not overwritten); "Import..." adds entries from such a
+  file, skipping duplicates. Imported entries can't be used to replace
+  originals - compress the file again to replace it.
 
 FIND HEAVY VIDEOS
   Tick drives (or type a folder), choose the minimum size, start the search.
@@ -193,46 +226,79 @@ Framewring Жмых находит на дисках тяжёлые видео �
      (см. ниже). При первом запуске показывается короткая подсказка
      «Как это работает»; «Понятно» скрывает её.
 
+«ОСТАВЛЕН КАК ЕСТЬ»
+  Если видео уже сжато эффективно, сжатие не сэкономит места. Жмых
+  сравнивает результат с той частью оригинала, которую ffmpeg уже
+  прочитал (тот же участок видео), и останавливается раньше, когда ясно,
+  что меньше не выйдет; готовый результат, который меньше оригинала не
+  хотя бы на 3%, удаляется. Видео помечается «Оставлен как есть»:
+  оригинал не тронут, лишний файл не остаётся. «Повторить» (например,
+  с «Компактным») остаётся доступной.
+
 ЗАМЕНА ОРИГИНАЛОВ
-  «Заменить оригинал» у готового файла или «Заменить оригиналы…» под
-  списком открывает окно «Заменить оригиналы сжатыми». По умолчанию ничего
-  не отмечено - заменяются только отмеченные тобой файлы («Отметить без
-  предупреждений» отмечает безопасные). Для каждого файла:
-  - сжатый файл полностью проверяется: длительность и число звуковых
-    дорожек должны совпасть с оригиналом; видео декодируется целиком и
-    должно дойти до длительности оригинала; звук тоже декодируется;
+  «Заменить оригиналы…» под списком открывает окно «Заменить оригиналы
+  сжатыми»; ничего не отмечено. «Заменить оригинал» у готового файла
+  открывает то же окно с подсвеченным файлом и отмечает его, только если
+  у него нет предупреждений. Заменяются только отмеченные тобой файлы
+  («Отметить без предупреждений» отмечает безопасные); если отмечены
+  файлы с предупреждениями, программа перечислит их и переспросит.
+  В каждой строке виден путь к сжатому файлу. Для каждого файла:
+  - сразу после сжатия Жмых посчитал контрольную сумму SHA-256 сжатого
+    файла («Считаю контрольную сумму»); перед заменой она сверяется ещё
+    раз - любой изменённый байт останавливает замену;
+  - сжатый файл полностью проверяется: длительность (допуск - 0,1%
+    длины, не меньше 1 с и не больше 3 с) и число звуковых дорожек должны
+    совпасть с оригиналом; видео декодируется целиком и должно дойти до
+    длительности оригинала; звук тоже декодируется и должен быть не
+    короче, чем в оригинале;
   - оригинал и сжатый файл не должны меняться после сжатия (размер,
     дата) - это проверяется ещё раз прямо перед переносом;
   - сжатый файл встаёт на место оригинала: та же папка и имя, .mp4
     (для видео.mkv рядом появится видео.mp4); ничего не перезаписывается,
     копия с другого диска сверяется побайтно;
   - ОРИГИНАЛ УХОДИТ В КОРЗИНУ WINDOWS - его можно восстановить.
-    Затем Framewring проверяет, что он действительно в корзине.
+    Это проверяется заранее (корзина есть, включена, в ней хватает места,
+    путь не слишком длинный); если Windows всё же собралась бы удалить
+    насовсем, она сначала спросит. После замены Жмых проверяет, что
+    оригинал в корзине, и предупреждает, если нет;
+  - пустая папка compressed удаляется (папка вывода, которую ты выбрал
+    сам, - никогда).
+  Итог по файлу: «заменён, оригинал в корзине»; предупреждение (⚠) -
+  оригинал в корзине, но что-то требует внимания (его не нашли в корзине
+  или новый файл остался с временным именем); ошибка - оригинал не
+  заменён.
   Если что-то не вышло до шага с корзиной, ничего не меняется. Если
   программу закрыли или она упала посередине, при следующем запуске
   замена откатывается (оригинал на месте) или доделывается (оригинал уже
   в корзине). Импорт «Истории» ждёт, пока замена не закончится.
-  Предупреждения: качество не проверено «Тестом», VMAF теста ниже 93,
-  монтажный исходник (ProRes и т.п.), небольшой выигрыш (меньше 20%),
-  в сжатом файле нет части дорожек оригинала (доп. видео, субтитры,
-  данные вроде телеметрии GoPro или таймкода, вложения).
+  Предупреждения: качество не проверено «Тестом» (тест учитывается,
+  только если он сделан с теми же режимом и качеством, что и сжатие),
+  VMAF теста ниже 93, монтажный исходник (ProRes и т.п.), небольшой
+  выигрыш (меньше 20%), в сжатом файле нет части дорожек оригинала
+  (доп. видео, субтитры, данные вроде телеметрии GoPro или таймкода,
+  вложения).
   Нельзя: сжатый файл не меньше; оригинал или сжатый файл изменили после
-  сжатия; запись из старой версии (сожми заново - «Повторить»); файла
-  нет; файл в очереди или сжимается; имя занято другим файлом; остался
-  «имя.framewring-new.mp4» от незавершённой замены; сетевые и съёмные
-  диски (там нет корзины; subst и подключённые диски оцениваются по
-  диску, на который они на самом деле указывают); корзина отключена для
-  диска; оригинал больше свободного места в корзине
+  сжатия; запись из старой версии без контрольной суммы (сожми заново -
+  «Повторить»); запись импортирована из другого файла истории (сожми
+  заново); файла нет; файл в очереди или сжимается; имя занято другим
+  файлом; остался «имя.framewring-new.mp4» от незавершённой замены;
+  сетевые и съёмные диски (там нет корзины; subst и подключённые диски
+  оцениваются по диску, на который они на самом деле указывают); корзина
+  отключена для диска; оригинал больше свободного места в корзине
   (Windows удалила бы его насовсем - очисти корзину или увеличь её);
-  уже заменён.
+  путь длиннее ~250 символов (Windows удалила бы оригинал насовсем, мимо
+  корзины); уже заменён.
   У заменённых файлов написано «Оригинал заменён (он в корзине)», в
   «Истории» вместо кнопки «Оригинал» - «оригинал в корзине». После очистки
   корзины оригиналов больше нет.
 
 ИСТОРИЯ
   «История» - всё сжатое и сколько места освобождено. «Экспорт…» сохраняет
-  её в Документы\Framewring-history-ГГГГ-ММ-ДД.json; «Импорт…» добавляет
-  записи из такого файла, пропуская дубли.
+  её в Документы\Framewring-history-ГГГГ-ММ-ДД_ЧЧ-ММ-СС.json (настоящая
+  папка «Документы», в том числе перенесённая в OneDrive; прежние
+  экспорты не перезаписываются); «Импорт…» добавляет записи из такого
+  файла, пропуская дубли. Импортированными записями нельзя заменить
+  оригиналы - чтобы заменить, сожми файл заново.
 
 НАЙТИ ТЯЖЁЛЫЕ ВИДЕО
   Отметь диски (или впиши папку), выбери минимальный размер, нажми «Искать».

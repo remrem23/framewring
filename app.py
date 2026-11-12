@@ -541,12 +541,24 @@ def _backup(path, text, every=0):
         print(" backup %s: %s" % (path.name, e))
 
 
+_WRITE_LOCK = threading.RLock()
+
+
 def write_json(path, text, backup_every=0):
-    """Атомарная запись (через .tmp) + резервная копия."""
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(str(tmp), str(path))
-    _backup(path, text, backup_every)
+    """Атомарная запись (через временный файл) + резервная копия. Одна запись за раз: история может
+    обновляться одновременно из сжатия и из замены."""
+    with _WRITE_LOCK:
+        tmp = path.with_name("%s.%d.tmp" % (path.name, threading.get_ident()))
+        tmp.write_text(text, encoding="utf-8")
+        for i in range(10):
+            try:
+                os.replace(str(tmp), str(path))
+                break
+            except PermissionError:  # файл на миг занят антивирусом/индексатором
+                if i == 9:
+                    raise
+                time.sleep(0.2)
+        _backup(path, text, backup_every)
 
 
 def read_json(path, kind):
@@ -1348,6 +1360,22 @@ def keep_awake(on):
 
 # --------------------------------------------------------------- Encoding ----
 
+def proc_io(p):
+    """(прочитано, записано) байт процессом; None, если ОС не говорит."""
+    try:
+        if IS_WIN:
+            class IOC(ctypes.Structure):
+                _fields_ = [(n, ctypes.c_uint64) for n in ("RO", "WO", "OO", "RB", "WB", "OB")]
+            c = IOC()
+            k32 = ctypes.WinDLL("kernel32")
+            k32.GetProcessIoCounters.argtypes = [wintypes.HANDLE, ctypes.c_void_p]
+            if k32.GetProcessIoCounters(int(p._handle), ctypes.byref(c)):
+                return c.RB, c.WB
+    except Exception:
+        pass
+    return None
+
+
 def proc_written(p):
     """Сколько байт процесс уже записал на диск (None, если ОС не говорит)."""
     try:
@@ -1618,20 +1646,33 @@ NO_GAIN = 0.97  # результат больше 97% оригинала — с�
 def _gain_watch(job, size, stop):
     """Следит за размером во время сжатия. Если уже видно, что результат выйдет не меньше оригинала
     (исходник и так сжат эффективно), останавливает ffmpeg — не тратим часы на файл, который не уменьшится."""
+    # Доля времени обманывает: у видео со сложным началом и статичным продолжением результат растёт
+    # неравномерно. Поэтому сравниваем записанное с уже ПРОЧИТАННЫМ из исходника (тот же участок видео).
     while not stop.wait(2):
-        pct, cur = job.get("pct") or 0, job.get("cur_size") or 0
-        if job.get("fin") or pct < 10 or cur <= 0:
+        if job.get("fin"):
             continue
-        proj = cur / (pct / 100.0)
-        if proj >= size * (1.05 if pct < 25 else 0.99):
+        with LOCK:
+            p = CUR.get("proc")
+        if p is None or p.poll() is not None:  # между попытками (повтор после сбоя памяти) — не трогаем
+            continue
+        cur = job.get("cur_size") or 0
+        io = proc_io(p)
+        if io and io[0] > 0:
+            rd = io[0]
+            ratio = cur / float(rd)
+            frac = rd / float(size) if size else 0
+            hit = (frac >= 0.10 and ratio >= 1.10) or (frac >= 0.30 and ratio >= 1.02)
+            done_pct, proj = job.get("pct") or frac * 100, ratio * 100  # в заметке — ход сжатия, а не чтения наперёд
+        else:  # счётчиков чтения нет — останавливаем, только когда результат уже не меньше оригинала
+            hit = cur >= size * NO_GAIN
+            done_pct, proj = job.get("pct") or 0, cur * 100.0 / size if size else 0
+        if hit:
             with LOCK:
-                job["_nogain"] = (round(pct), round(proj * 100.0 / size))
-                p = CUR.get("proc")
-            if p:
-                try:
-                    p.terminate()
-                except Exception:
-                    pass
+                job["_nogain"] = (round(min(done_pct, 99)), round(proj))
+            try:
+                p.terminate()
+            except Exception:
+                pass
             return
 
 
@@ -1670,6 +1711,7 @@ def do_full(job, s):
     part = out.with_name(out.stem + ".part.mp4")
     try:
         job["src_sig"] = src_sig(job["path"])
+        job["size"] = job["src_sig"][0]  # файл мог дорасти после добавления в список
     except OSError:
         job["src_sig"] = None
     with LOCK:
@@ -1715,13 +1757,19 @@ def do_full(job, s):
                 add_note(job, M("note.image_subs", codecs=", ".join(sorted(set(img)))))
         with LOCK:
             job["status"], job["pct"], job["out_path"], job["out_size"] = "done", 100, str(out), out.stat().st_size
-        tv = (job.get("test") or {}).get("vmaf")
+        tst = job.get("test") or {}
+        # VMAF теста считаем, только если тест был с теми же режимом и качеством, что и сжатие
+        tv = tst.get("vmaf") if tst.get("preset") == s["preset"] and tst.get("quality") == s["quality"] else None
         try:
             out_sig = src_sig(str(out))
         except OSError:
             out_sig = None
+        with LOCK:
+            job["phase"] = M("phase.hash")
+        out_hash = file_sha256(str(out), job)
         add_history({"t": time.time(), "src": job["path"], "out": str(out), "name": job["name"],
-                     "src_sig": job.get("src_sig"), "out_sig": out_sig, "src_codec": (job["info"] or {}).get("vcodec"),
+                     "src_sig": job.get("src_sig"), "out_sig": out_sig, "out_hash": out_hash,
+                     "src_codec": (job["info"] or {}).get("vcodec"),
                      "vmaf": tv,
                      "size": job["size"], "out_size": job["out_size"], "duration": job["info"]["duration"],
                      "preset": s["preset"], "quality": s["quality"], "speed": s["speed"], "secs": round(took, 1)})
@@ -1974,7 +2022,7 @@ def _decode_check(out, maps, total, item=None):
     return err, last[0]
 
 
-def verify_output(out, src_info, item):
+def verify_output(out, src_info, item, src_path=None):
     """Полная проверка сжатого файла: читается; длительность и число звуковых дорожек как у оригинала;
     видео декодируется ЦЕЛИКОМ и доходит до конца (не обрезано); звук декодируется без ошибок.
     None — всё хорошо, иначе сообщение."""
@@ -1983,7 +2031,7 @@ def verify_output(out, src_info, item):
     except Exception as e:
         return M("verify.probe", detail=str(e)[:200])
     sd, od = src_info.get("duration") or 0, oi.get("duration") or 0
-    tol = max(1.0, sd * 0.002)
+    tol = max(1.0, min(3.0, sd * 0.001))  # перекодирование не меняет длительность больше чем на долю секунды
     if sd and abs(od - sd) > tol:
         return M("verify.duration", a=round(sd, 1), b=round(od, 1))
     if len(oi["audio"]) != len(src_info.get("audio") or []):
@@ -1995,10 +2043,53 @@ def verify_output(out, src_info, item):
     if sd and reached < sd - tol:
         return M("verify.short", a=round(sd, 1), b=round(reached, 1))
     if oi["audio"]:
-        err, _ = _decode_check(out, ["-map", "0:a"], total)
+        err, out_a = _decode_check(out, ["-map", "0:a"], total)
         if err:
             return M("verify.decode", detail=err[-300:])
+        _, src_a = _decode_check(src_path, ["-map", "0:a"], total)  # сколько звука в оригинале
+        if src_a and out_a < src_a - tol:
+            return M("verify.audio_short", a=round(src_a, 1), b=round(out_a, 1))
     return None
+
+
+def _documents_dir():
+    """Папка «Документы» пользователя (в т.ч. перенесённая OneDrive)."""
+    if IS_WIN:
+        try:
+            class GUID(ctypes.Structure):
+                _fields_ = [("a", ctypes.c_uint32), ("b", ctypes.c_uint16), ("c", ctypes.c_uint16),
+                            ("d", ctypes.c_ubyte * 8)]
+            g = GUID(0xFDD39AD0, 0x238F, 0x46AF, (ctypes.c_ubyte * 8)(0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7))
+            ptr = ctypes.c_wchar_p()
+            if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(g), 0, None, ctypes.byref(ptr)) == 0:
+                path = ptr.value
+                ctypes.windll.ole32.CoTaskMemFree(ptr)
+                if path and os.path.isdir(path):
+                    return Path(path)
+        except Exception:
+            pass
+    docs = Path(os.path.expanduser("~")) / "Documents"
+    return docs if docs.is_dir() else Path(os.path.expanduser("~"))
+
+
+def file_sha256(path, job=None, item=None):
+    """SHA-256 файла (для сжатого — сразу после сжатия; перед заменой сверяем: любое изменение байт видно)."""
+    import hashlib
+    h = hashlib.sha256()
+    total = os.path.getsize(path) or 1
+    done = 0
+    with open(path, "rb") as f:
+        while True:
+            b = f.read(8 << 20)
+            if not b:
+                break
+            h.update(b)
+            done += len(b)
+            if item is not None:
+                item["pct"] = done * 100.0 / total
+            elif job is not None:
+                job["pct"] = 100
+    return h.hexdigest()
 
 
 def _replace_target(src):
@@ -2025,7 +2116,9 @@ def _check_entry(h):
         c["block"].append(M("rep.b.out_missing"))
         return c
     c["size"], c["out_size"] = os.path.getsize(src), os.path.getsize(o)
-    if not h.get("src_sig") or not h.get("out_sig"):
+    if h.get("imported"):
+        c["block"].append(M("rep.b.imported"))  # из чужого файла истории: подлинность не подтвердить
+    elif not h.get("src_sig") or not h.get("out_sig") or not h.get("out_hash"):
         c["block"].append(M("rep.b.old_entry"))  # запись старой версии: подлинность не подтвердить
     else:
         if src_sig(src) != h["src_sig"]:
@@ -2034,6 +2127,11 @@ def _check_entry(h):
             c["block"].append(M("rep.b.out_changed"))
     if c["out_size"] >= c["size"]:
         c["block"].append(M("rep.b.not_smaller"))
+    # пути длиннее ~260 символов Windows «удаляет в корзину» мимо корзины — навсегда (проверено)
+    if max(len(_real_path(src)), len(str(_tmp_for(src))), len(str(_replace_target(src)))) >= 250:
+        c["block"].append(M("rep.b.long_path"))
+    if c["block"]:  # дальше дорогие проверки (ffprobe, корзина) — для заблокированных не нужны
+        return c
     with LOCK:
         busy = any(_norm(j["path"]) == _norm(src) and j["status"] in ("queued", "running", "probing") for j in JOBS)
     if busy:
@@ -2079,7 +2177,12 @@ def replace_candidates():
         if not h.get("src") or not h.get("out") or _norm(h["src"]) in seen:
             continue
         seen.add(_norm(h["src"]))
-        c = _check_entry(h)
+        try:
+            c = _check_entry(h)
+        except Exception as e:  # одна запись не должна ломать всё окно
+            c = {"key": _hkey(h), "name": h.get("name") or "", "src": h.get("src"), "out": h.get("out"),
+                 "size": h.get("size") or 0, "out_size": h.get("out_size") or 0, "warn": [],
+                 "block": [M("rep.b.check_failed", detail=str(e)[:150])]}
         c["state"] = REPLACE["items"].get(c["key"])
         out.append(c)
     return out
@@ -2113,7 +2216,11 @@ def _replace_one(key, item):
         raise _ItemError(c["block"][0])
     src, out = Path(h["src"]), Path(h["out"])
     item["state"] = "verify"
-    bad = verify_output(out, probe_cached(str(src)), item)
+    if file_sha256(str(out), item=item) != h["out_hash"]:  # любое изменение байт после сжатия
+        _set_hist(key, verify_failed=True)
+        raise _ItemError(M("verify.hash"))
+    item["pct"] = 0
+    bad = verify_output(out, probe_cached(str(src)), item, src_path=str(src))
     if bad:
         _set_hist(key, verify_failed=True)
         raise _ItemError(bad)
@@ -2168,11 +2275,11 @@ def _replace_one(key, item):
     try:
         os.rename(str(tmp), str(target))  # не перезапишет, если имя вдруг занято
     except OSError as e:
-        raise _ItemError(M("rep.err.final", tmp=str(tmp), detail=str(e)[:200]))
+        raise _ItemError(M("rep.err.final", tmp=str(tmp), detail=str(e)[:200]), after=True)
     if not same_vol:
         _rm(out)
-    try:  # пустую папку compressed убираем
-        if not any(out.parent.iterdir()):
+    try:  # пустую папку compressed убираем (выбранную тобой папку вывода — никогда)
+        if out.parent.name.lower() == "compressed" and not any(out.parent.iterdir()):
             out.parent.rmdir()
     except OSError:
         pass
@@ -2185,7 +2292,7 @@ def _replace_one(key, item):
             if _norm(j["path"]) == _norm(str(src)):
                 j["replaced"], j["out_path"] = True, str(target)
     if not binned:
-        raise _ItemError(M("rep.err.not_in_bin"))
+        raise _ItemError(M("rep.err.not_in_bin"), after=True)
     item["state"] = "done"
 
 
@@ -2194,11 +2301,19 @@ def replace_recover():
     with LOCK:
         pending = [dict(h) for h in HISTORY["items"] if h.get("replace_tmp")]
     for h in pending:
+        try:
+            _recover_one(h)
+        except Exception as e:
+            print(" replace_recover: %s" % e)
+
+
+def _recover_one(h):
+    if True:
         key, src, out, tmp = _hkey(h), Path(h["src"]), Path(h["out"]), Path(h["replace_tmp"])
         if os.path.normcase(str(tmp)) != os.path.normcase(str(_tmp_for(src))) or \
                 not str(tmp).lower().endswith(".framewring-new.mp4"):
             _set_hist(key, replace_tmp=None, replace_copy=None)
-            continue
+            return
         try:
             if tmp.exists():
                 if src.exists():  # оригинал не тронут — возвращаем как было
@@ -2221,6 +2336,11 @@ def replace_recover():
                         os.path.getsize(str(target)) == h["out_sig"][0]:
                     _set_hist(key, replaced=True, out=str(target), replaced_t=time.time(), replace_tmp=None,
                               replace_copy=None, out_sig=src_sig(str(target)))
+                elif src.exists() and h.get("out_sig") and target == src and \
+                        os.path.getsize(str(src)) == h["out_sig"][0] and src_sig(str(src)) != h.get("src_sig"):
+                    # .mp4-оригинал: на его месте уже сжатый файл — замена завершилась
+                    _set_hist(key, replaced=True, out=str(src), replaced_t=time.time(), replace_tmp=None,
+                              replace_copy=None, out_sig=src_sig(str(src)))
                 elif src.exists():
                     _set_hist(key, replace_tmp=None, replace_copy=None)
         except OSError as e:
@@ -2228,9 +2348,9 @@ def replace_recover():
 
 
 class _ItemError(Exception):
-    def __init__(self, m):
+    def __init__(self, m, after=False):
         super().__init__(str(m))
-        self.m = m
+        self.m, self.after = m, after  # after — оригинал уже в корзине, сжатый файл на месте
 
 
 def replace_run(keys):
@@ -2249,7 +2369,7 @@ def replace_run(keys):
                 try:
                     _replace_one(k, item)
                 except _ItemError as e:
-                    item.update(state="error", err=e.m)
+                    item.update(state="warn" if e.after else "error", err=e.m)
                 except UserError as e:
                     item.update(state="error", err=e.msg())
                 except Exception as e:
@@ -2330,7 +2450,8 @@ HISTORY = {"items": [], "ver": 0}
 def load_history():
     items, from_bak = read_json(HISTORY_FILE, list)
     if items is not None:
-        HISTORY["items"] = [x for x in items if isinstance(x, dict) and x.get("src")]
+        HISTORY["items"] = [x for x in items if isinstance(x, dict) and isinstance(x.get("src"), str)
+                            and isinstance(x.get("out"), str) and x.get("src") and x.get("out")]
         if from_bak:  # основной файл пропал или испорчен — сразу возвращаем его на место
             try:
                 write_json(HISTORY_FILE, json.dumps(HISTORY["items"], ensure_ascii=False, indent=0))
@@ -2393,41 +2514,55 @@ def queue_saver():
                 last = cur
 
 
+def _restore_job(d):
+    """Одна запись очереди прошлого сеанса → задача (или None, если запись испорчена)."""
+    if not isinstance(d, dict):
+        return None
+    path = d.get("path")
+    if not isinstance(path, str) or not path:
+        return None
+    job = {"id": 0, "path": path, "name": d.get("name") or Path(path).name, "size": d.get("size") or 0,
+           "status": d.get("status") or "ready", "info": d.get("info") if isinstance(d.get("info"), dict) else None,
+           "error": d.get("error") or "", "note": d.get("note") or "", "pct": 0, "fps": 0, "speed": 0, "eta": None,
+           "cur_size": 0, "elapsed": 0, "phase": "", "out_path": d.get("out_path") or "",
+           "out_size": d.get("out_size") or 0, "test": d.get("test"), "settings": None, "mode": d.get("mode"),
+           "fin": None, "replaced": bool(d.get("replaced")), "src_sig": d.get("src_sig")}
+    if d.get("status") == "running" and d.get("part"):  # прошлый сеанс оборвался посреди сжатия
+        _rm_part(d.get("part"))
+    if job["status"] in ("running", "queued", "probing"):
+        job["status"] = "cancelled" if job["status"] == "running" else "ready"
+        if d.get("status") == "running":
+            job["note"] = M("note.interrupted")
+    if not os.path.isfile(path):
+        if job["status"] not in ("done", "skipped", "kept"):
+            job["status"], job["error"] = "error", M("err.file_gone")
+    elif not job["replaced"]:
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            size = job["size"]
+        if size != job["size"] or not job["info"]:  # файл подменили: перечитаем параметры
+            job["size"], job["info"] = size, None
+            if job["status"] not in ("done", "skipped", "kept"):
+                job["status"] = "probing"
+    return job
+
+
 def load_queue():
-    """Восстанавливаем список прошлого сеанса. Что было «в работе» или «в очереди», ждёт «Сжать всё»."""
+    """Восстанавливаем список прошлого сеанса. Что было «в работе» или «в очереди», ждёт «Сжать всё».
+    Испорченная запись пропускается — она не должна мешать запуску."""
     saved, _ = read_json(QUEUE_FILE, list)
     if saved is None:
         return 0
     restored = []
-    for d in saved if isinstance(saved, list) else []:
+    for d in saved:
         try:
-            path = d["path"]
-            job = {"id": 0, "path": path, "name": d.get("name") or Path(path).name, "size": d.get("size") or 0,
-                   "status": d.get("status") or "ready", "info": d.get("info"), "error": d.get("error") or "",
-                   "note": d.get("note") or "", "pct": 0, "fps": 0, "speed": 0, "eta": None, "cur_size": 0,
-                   "elapsed": 0, "phase": "", "out_path": d.get("out_path") or "", "out_size": d.get("out_size") or 0,
-                   "test": d.get("test"), "settings": None, "mode": d.get("mode"), "fin": None}
-        except (KeyError, TypeError):
-            continue
-        if d.get("status") == "running" and d.get("part"):  # прошлый сеанс оборвался посреди сжатия
-            _rm_part(d.get("part"))
-        if job["status"] in ("running", "queued", "probing"):
-            job["status"] = "cancelled" if job["status"] == "running" else "ready"
-            if d.get("status") == "running":
-                job["note"] = M("note.interrupted")
-        if not os.path.isfile(path):
-            if job["status"] not in ("done", "skipped"):
-                job["status"], job["error"] = "error", M("err.file_gone")
-        else:
-            try:
-                size = os.path.getsize(path)
-            except OSError:
-                size = job["size"]
-            if size != job["size"] or not job["info"]:  # файл подменили: перечитаем параметры
-                job["size"], job["info"] = size, None
-                if job["status"] not in ("done", "skipped"):
-                    job["status"] = "probing"
-        restored.append(job)
+            job = _restore_job(d)
+        except Exception as e:
+            print(" queue entry skipped: %s" % e)
+            job = None
+        if job:
+            restored.append(job)
     with LOCK:
         for job in restored:
             job["id"] = _next_id[0]
@@ -2858,9 +2993,8 @@ class H(BaseHTTPRequestHandler):
             replace_run(keys)
             return None
         if path == "/api/hist_export":
-            docs = Path(os.path.expanduser("~")) / "Documents"
-            d = docs if docs.is_dir() else Path(os.path.expanduser("~"))
-            f = d / ("Framewring-history-%s.json" % time.strftime("%Y-%m-%d"))
+            d = _documents_dir()
+            f = d / ("Framewring-history-%s.json" % time.strftime("%Y-%m-%d_%H-%M-%S"))
             with LOCK:
                 data = json.dumps(HISTORY["items"], ensure_ascii=False, indent=1)
             f.write_text(data, encoding="utf-8")
@@ -2879,8 +3013,9 @@ class H(BaseHTTPRequestHandler):
                 items = [x for x in items if isinstance(x, dict) and isinstance(x.get("src"), str)
                          and isinstance(x.get("out"), str) and x.get("src") and x.get("out")]
                 for x in items:  # импортированные записи заменять нельзя, пока файл не пересжат
-                    for k in ("replace_tmp", "replace_copy", "src_sig", "out_sig", "verify_failed"):
+                    for k in ("replace_tmp", "replace_copy", "src_sig", "out_sig", "out_hash", "verify_failed"):
                         x.pop(k, None)
+                    x["imported"] = True
             except Exception:
                 raise UserError("hist.import_bad")
             with LOCK:
@@ -2957,8 +3092,9 @@ input[type=text]{width:100%;background:#0f1115;border:1px solid var(--line);colo
 .res b{color:var(--acc2)}.err{color:var(--err);white-space:pre-wrap;font:12px/1.4 ui-monospace,Consolas,monospace;max-height:160px;overflow:auto;margin-top:8px}
 .empty{color:var(--mut);text-align:center;padding:40px 10px;border:1px dashed var(--line);border-radius:12px}
 .ok{color:var(--acc2)}.intro{margin-bottom:16px;border-color:var(--acc)}.intro ol{margin:10px 0 0;padding-left:20px;line-height:1.7}
-.repbox{max-width:820px;width:94vw}.rrow{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:start;padding:8px 10px;border-bottom:1px solid var(--line)}
-.rrow:last-child{border-bottom:0}.rrow.off{opacity:.6}.rrow .err{margin-top:4px}.rrow .tag{margin:4px 6px 0 0;display:inline-block}
+.mbox.repbox{max-width:820px;width:94vw}.rrow{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:start;padding:8px 10px;border-bottom:1px solid var(--line)}
+.rrow:last-child{border-bottom:0}.rrow.off>input,.rrow.off .sname,.rrow.off .num{opacity:.55}.rrow .tag{margin:4px 6px 0 0;display:inline-block;white-space:normal}
+.rrow .blk{color:var(--err);font-size:12px;margin-top:4px}.rrow .wrn{color:var(--warn);font-size:12px;margin-top:4px}.rrow.pre{outline:1px solid var(--acc);outline-offset:-1px}
 .updbox{border:1px solid var(--acc);background:#7c5cff18;padding:10px 12px;border-radius:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .warnbox{border:1px solid var(--warn);background:#ffb34714;color:var(--warn);padding:12px;border-radius:12px;margin-bottom:14px}
 .foot{color:var(--mut);font-size:12px;margin-top:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
@@ -3016,7 +3152,6 @@ a{color:var(--acc)}:root{color-scheme:dark}.jh .btn{white-space:nowrap}
  </div>
 </div>
 <div class="col" id="rcol">
-<div id="intro"></div>
 <div class="card" id="scanCard" style="display:none;margin-bottom:16px">
   <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0" data-t="scan.title"></h2><button class="btn sm" onclick="toggleScan(false)" data-t="common.collapse"></button></div>
   <p class="hint" style="margin-top:8px" data-t="scan.hint"></p>
@@ -3044,7 +3179,8 @@ a{color:var(--acc)}:root{color-scheme:dark}.jh .btn{white-space:nowrap}
    <button class="btn red" id="btnStop" onclick="cancel()" style="display:none" data-t="common.stop"></button></div>
   </div>
   <div class="row" style="margin-bottom:12px"><input type="text" id="manual" data-tp="manual.ph" style="flex:1"><button class="btn" onclick="addManual()" data-t="manual.add"></button></div>
-  <div id="jobs"></div>
+  <div id="intro"></div>
+<div id="jobs"></div>
   <div class="foot"><span><span id="disk"></span> <span id="qinfo" style="margin-left:10px"></span></span><span><a href="#" onclick="openReplace();return false" data-t="rep.btn_all"></a> · <a href="#" onclick="api('/api/clear');return false" style="color:var(--mut)" data-t="btn.clear"></a></span></div>
  </div>
 </div></div></div>
@@ -3054,9 +3190,9 @@ a{color:var(--acc)}:root{color-scheme:dark}.jh .btn{white-space:nowrap}
  <button class="btn pri" onclick="openUrl(S.donate)" data-t="donate.open"></button>
  <p class="hint" style="margin:14px 0 0"><span data-t="donate.official"></span> <b id="repoUrl">github.com/remrem23/framewring</b>. <span data-t="donate.official2"></span></p>
 </div></div>
-<div class="modal" id="replace" onclick="if(event.target===this)closeReplace()"><div class="mbox repbox" role="dialog" data-ta="rep.title">
+<div class="modal" id="replace" onclick="if(event.target===this)closeReplace()"><div class="mbox repbox" role="dialog" aria-modal="true" data-ta="rep.title">
  <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap"><div><h3 data-t="rep.title"></h3><div class="meta" data-t="rep.text"></div></div><button class="btn sm" onclick="closeReplace()" data-ta="common.close">✕</button></div>
- <div class="row" style="margin:10px 0 6px;align-items:center"><button class="btn sm" onclick="repPick('safe')" data-t="rep.pick_safe"></button><button class="btn sm" onclick="repPick('none')" data-t="rep.pick_none"></button></div>
+ <div class="row" style="margin:10px 0 6px;align-items:center"><button class="btn sm" id="repSafe" onclick="repPick('safe')" data-t="rep.pick_safe"></button><button class="btn sm" id="repNone" onclick="repPick('none')" data-t="rep.pick_none"></button></div>
  <div id="repList" class="scanlist"></div>
  <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><span id="repSum" class="meta"></span><button class="btn pri" id="repGo" onclick="doReplace()"></button></div>
 </div></div>
@@ -3105,32 +3241,45 @@ function renderIntro(){const el=$("intro");if(!el)return;if(localStorage.getItem
  <ol>${["intro.s1","intro.s2","intro.s3","intro.s4"].map(k=>`<li>${esc(tr(k))}</li>`).join("")}</ol></div>`)}
 // ---------------- замена оригиналов: только то, что человек отметил сам
 let repList=[],repSel=new Set(),repWasRunning=false;
-async function openReplace(pre){const r=await api("/api/replace_list");repList=r.items||[];repSel.clear();
- if(pre){const c=repList.find(c=>pk(c.src)===pk(pre)&&!c.block.length);if(c)repSel.add(c.key)}
- $("replace").classList.add("on");renderReplace()}
+let repPre=null,repLoading=false,repFailed=false;
+async function openReplace(pre,preOut){repSel.clear();repPre=null;repLoading=true;repFailed=false;repList=[];
+ $("replace").classList.add("on");renderReplace();setTimeout(()=>{const b=$("repNone");if(b)b.focus()},0);
+ const r=await api("/api/replace_list");repLoading=false;repFailed=!r.items;repList=r.items||[];
+ // кнопка у файла: подсвечиваем его строку; отмечаем сами только без предупреждений
+ if(pre){const c=repList.find(c=>pk(c.src)===pk(pre)&&(!preOut||pk(c.out)===pk(preOut)));
+  if(c){repPre=c.key;if(!c.block.length&&!c.warn.length)repSel.add(c.key)}}
+ renderReplace();if(repPre){const el=document.querySelector(`#repList [data-k="${CSS.escape(repPre)}"]`);if(el)el.closest(".rrow").scrollIntoView({block:"center"})}}
 function closeReplace(){$("replace").classList.remove("on")}
 function repPick(m){repSel.clear();if(m==="safe")for(const c of repList)if(!c.block.length&&!c.warn.length&&!repDone(c))repSel.add(c.key);renderReplace()}
 const repState=c=>((S&&S.replace&&S.replace.items)||{})[c.key];
 const repDone=c=>{const s=repState(c);return s&&s.state==="done"};
 function renderReplace(){if(!$("replace").classList.contains("on"))return;
  const running=!!(S&&S.replace&&S.replace.running);
- if(!repList.length){setHTML($("repList"),`<div class="empty">${esc(tr("rep.none"))}</div>`)}else
+ $("repSafe").disabled=$("repNone").disabled=running||repLoading;
+ if(repLoading||repFailed||!repList.length){setHTML($("repList"),`<div class="empty">${esc(tr(repLoading?"rep.loading":repFailed?"rep.load_failed":"rep.none"))}</div>`)}else
  setHTML($("repList"),repList.map(c=>{const st=repState(c);const off=c.block.length||running||repDone(c);
+  const fin=(st&&(st.state==="done"||st.state==="warn"))||c.block.some(b=>b.k==="rep.b.replaced");
   const d=c.size?Math.round((1-c.out_size/c.size)*100):0;
-  let status="";if(st){status=st.state==="verify"?tr("rep.s.verify",{pct:nf(st.pct,0)}):st.state==="replace"?tr("rep.s.replace"):st.state==="done"?tr("rep.s.done"):st.state==="error"?tr("rep.s.error",{err:msg(st.err)}):tr("rep.s.queued");
-   status=`<div class="${st.state==="error"?"err":st.state==="done"?"ok":"meta"}">${esc(status)}</div>`}
-  return `<div class="rrow ${off?"off":""}"><input type="checkbox" data-k="${esc(c.key)}" ${repSel.has(c.key)&&!off?"checked":""} ${off?"disabled":""}>
+  let status="";if(st){status=st.state==="verify"?tr("rep.s.verify",{pct:nf(st.pct,0)}):st.state==="replace"?tr("rep.s.replace"):st.state==="done"?tr("rep.s.done"):st.state==="error"?tr("rep.s.error",{err:msg(st.err)}):st.state==="warn"?tr("rep.s.warn",{err:msg(st.err)}):tr("rep.s.queued");
+   status=`<div class="${st.state==="error"?"blk":st.state==="done"?"ok":st.state==="warn"?"wrn":"meta"}">${esc(status)}</div>`}
+  const checked=repSel.has(c.key)&&(!off||(running&&st));
+  return `<div class="rrow ${off?"off":""} ${c.key===repPre?"pre":""}"><input type="checkbox" data-k="${esc(c.key)}" ${checked?"checked":""} ${off?"disabled":""}>
    <div><div class="sname">${esc(c.name)}</div><div class="meta">${esc(c.src.replace(/[\\/][^\\/]*$/,""))}</div>
-   ${c.warn.map(w=>`<span class="tag y">⚠ ${esc(msg(w))}</span>`).join("")}${st&&st.state==="done"?"":c.block.map(b=>b.k==="rep.b.replaced"?`<div class="ok">✓ ${esc(msg(b))}</div>`:`<div class="err">${esc(msg(b))}</div>`).join("")}${status}</div>
+   <div class="meta">→ ${esc(c.out||"")}</div>
+   ${fin?"":c.warn.map(w=>`<span class="tag y">⚠ ${esc(msg(w))}</span>`).join("")}${st&&st.state==="done"?"":c.block.map(b=>b.k==="rep.b.replaced"?`<div class="ok">✓ ${esc(msg(b))}</div>`:`<div class="blk">${esc(msg(b))}</div>`).join("")}${status}</div>
    <div class="num"><b>${gb(c.size)} → ${gb(c.out_size)}</b><div class="meta">${c.out_size<c.size?"−"+d+"%":""}</div></div></div>`}).join(""));
  const sel=repList.filter(c=>repSel.has(c.key)&&!c.block.length&&!repDone(c));
  $("repSum").textContent=running?tr("rep.running"):tr("rep.summary",{n:sel.length,size:gb(sel.reduce((a,c)=>a+c.size-c.out_size,0))});
- const g=$("repGo");g.textContent=tr("rep.go",{n:sel.length});g.disabled=running||!sel.length}
-async function doReplace(){const ks=repList.filter(c=>repSel.has(c.key)&&!c.block.length&&!repDone(c)).map(c=>c.key);if(!ks.length)return;
- await api("/api/replace",{keys:ks});repWasRunning=true;refresh()}
+ const g=$("repGo");g.textContent=running?tr("rep.s.replace"):tr("rep.go",{n:sel.length});g.disabled=running||repLoading||!sel.length}
+async function doReplace(){const sel=repList.filter(c=>repSel.has(c.key)&&!c.block.length&&!repDone(c));if(!sel.length)return;
+ const warned=sel.filter(c=>c.warn.length);
+ if(warned.length&&!confirm(tr("rep.confirm_warn",{list:warned.map(c=>"• "+c.name+" — "+c.warn.map(msg).join("; ")).join("\n")})))return;
+ const g=$("repGo");g.disabled=true;
+ const r=await api("/api/replace",{keys:sel.map(c=>c.key)});
+ if(r&&!r.error&&!r.msg)repWasRunning=true;else g.disabled=false;refresh()}
 async function repTick(){const running=!!(S&&S.replace&&S.replace.running);
  if(repWasRunning&&!running){repWasRunning=false;const it=Object.values(S.replace.items||{});
-  toast(tr("rep.done_sum",{ok:it.filter(x=>x.state==="done").length,n:it.length}));
+  const okN=it.filter(x=>x.state==="done").length;toast(tr(okN===it.length?"rep.done_sum":"rep.done_partial",{ok:okN,n:it.length}));
   const r=await api("/api/replace_list");const keep=repList;repList=r.items||keep;repSel.clear();histVer=-1}
  renderReplace()}
 async function updInstall(){if(S.running&&!confirm(tr("upd.confirm_running")))return;await api("/api/update_install");refresh()}
@@ -3202,7 +3351,7 @@ function jobStatic(j){
  let body="";
  if(j.replaced){body=`<div class="res ok">${esc(tr("job.replaced"))} <button class="btn sm" onclick="api('/api/open',{id:${j.id}})">${esc(tr("btn.open_out"))}</button></div>`}else
  if(j.status==="done"||j.status==="skipped"){const d=(1-j.out_size/j.size)*100;const bigger=d<0;
-  body=`<div class="res">${j.status==="skipped"?esc(tr("job.skipped_prefix")):""}<b>${gb(j.size)} → ${gb(j.out_size)}</b> (${pctS(d)}%) <button class="btn sm" title="${esc(tr("btn.open_out_title"))}" onclick="api('/api/open',{id:${j.id}})">${esc(tr("btn.open_out"))}</button> <button class="btn sm" title="${esc(tr("btn.open_src_title"))}" onclick="api('/api/open',{id:${j.id},which:'src'})">${esc(tr("btn.open_src"))}</button>${!bigger&&j.status==="done"?` <button class="btn sm" title="${esc(tr("rep.btn_one_title"))}" onclick="openReplace(${esc(JSON.stringify(j.path))})">${esc(tr("rep.btn_one"))}</button>`:""}${bigger?`<div class="note">${esc(tr("job.bigger"))}</div>`:""}</div>`}
+  body=`<div class="res">${j.status==="skipped"?esc(tr("job.skipped_prefix")):""}<b>${gb(j.size)} → ${gb(j.out_size)}</b> (${pctS(d)}%) <button class="btn sm" title="${esc(tr("btn.open_out_title"))}" onclick="api('/api/open',{id:${j.id}})">${esc(tr("btn.open_out"))}</button> <button class="btn sm" title="${esc(tr("btn.open_src_title"))}" onclick="api('/api/open',{id:${j.id},which:'src'})">${esc(tr("btn.open_src"))}</button>${!bigger&&j.status==="done"?` <button class="btn sm" title="${esc(tr("rep.btn_one_title"))}" onclick="openReplace(${esc(JSON.stringify(j.path))},${esc(JSON.stringify(j.out_path))})">${esc(tr("rep.btn_one"))}</button>`:""}${bigger?`<div class="note">${esc(tr("job.bigger"))}</div>`:""}</div>`}
  if(j.test){const x=j.test;const tb=x.ratio>=1;const label=x.preset?`${presetTitle(x.preset)} · ${tr("quality.name."+x.quality)}`:(x.label||"");
   body+=`<div class="res">${esc(tr("test.head",{label:"\u0001"}))
    .replace("\u0001",`<i>${esc(label)}</i>`)}<br>${esc(tr("test.clip",{a:gb(x.ref_size),b:gb(x.test_size),pct:pctS((1-x.ratio)*100)}))} <b>${esc(tr("test.forecast",{size:gb(x.est_size)}))}</b>${esc(tr("test.time",{t:tm(x.est_time)}))}
@@ -3562,12 +3711,18 @@ _MUTEX = []
 
 
 def _hold_mutex():
-    """Именованный мьютекс: по нему установщик понимает, что программа запущена (AppMutex)."""
+    """Именованный мьютекс: по нему установщик понимает, что программа запущена (AppMutex), а второй
+    запуск — что первая копия уже работает (даже если она ещё не успела открыть сервер). True — уже есть."""
     if IS_WIN:
         try:
-            _MUTEX.append(ctypes.windll.kernel32.CreateMutexW(None, False, "FramewringRunning"))
+            k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            h = k32.CreateMutexW(None, False, "FramewringRunning")
+            already = ctypes.get_last_error() == 183  # ERROR_ALREADY_EXISTS
+            _MUTEX.append(h)
+            return already
         except Exception:
             pass
+    return False
 
 
 def _setup_log():
@@ -3663,6 +3818,16 @@ def run_window(url):
 
 def main():
     _setup_log()
+    if _hold_mutex():  # уже запущена другая копия: найти её и показать, а самим выйти
+        for _ in range(20):
+            port = next((pt for pt in range(8765, 8800) if zhmyh_at(pt)), None)
+            if port:
+                print(tr("con.already", url="http://127.0.0.1:%d/" % port))
+                if "--no-browser" not in sys.argv:
+                    ask_show(port)
+                return
+            time.sleep(0.5)
+        return
     srv = None
     for port in range(8765, 8800):
         try:
@@ -3689,7 +3854,6 @@ def main():
         sys.exit(1)
     url = "http://127.0.0.1:%d/?t=%s" % (srv.server_address[1], TOKEN)
     APP_URL["url"] = url
-    _hold_mutex()
     print("=" * 60)
     print(tr("con.started", name=app_name(), ver=__version__, url=url.split("?")[0]))
     print(tr("con.data", dir=str(DATA_DIR)))

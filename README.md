@@ -87,19 +87,26 @@ Copies from other sites may be modified.
   without it a multi-threaded folder scan is used automatically.
 - **GPU compression** (AV1 / H.265 on Nvidia, AMD or Intel; on Nvidia, 5–7× faster than the CPU) or **CPU compression** (x265, SVT-AV1) when every gigabyte counts.
 - **Test on a piece of the video:** predicted final size, time and VMAF quality score before the full run.
-- **Replace originals** — only the ones you tick (nothing is ticked by default): every compressed file is first fully
-  decoded and checked against the original (duration, audio tracks, the video must reach the end), then it takes the
-  original's place (same folder and name, `.mp4`) and the original goes to the **Windows Recycle Bin** — never a permanent
-  delete: replacing is blocked when the Recycle Bin is off or too small for the file, on drives without one, and when the
-  original or the compressed file changed after compression. Files with untested quality, low VMAF, editing sources or
-  tracks the compressed file lacks (subtitles, telemetry…) are flagged. A replacement interrupted by a crash is finished
-  or rolled back on the next start.
+- **Kept as is:** if a video is already encoded efficiently and compressing it won't save space, Framewring stops early
+  (it compares the output with the part of the original already read) or deletes a finished result that isn't at least
+  3% smaller. The original is untouched, no bigger "compressed" file is left, and hours aren't wasted.
+- **Replace originals** — only the ones you tick (nothing is ticked by default; **⇄ Replace original** on a finished file
+  opens the same window with that file highlighted, pre-ticked only if it has no warnings). Every compressed file is
+  checked first: its SHA-256 checksum, taken right after compression, must still match (any changed byte blocks it), and
+  it is fully decoded and compared with the original (duration, audio tracks and their length, the video must reach the
+  end). Then it takes the original's place (same folder and name, `.mp4`) and the original goes to the **Windows Recycle
+  Bin**. This is checked beforehand (Recycle Bin present, turned on, enough free space, path not too long); if Windows
+  would still delete permanently it asks first; afterwards Framewring confirms the original is in the Recycle Bin and
+  warns if not. Replacing is also blocked when the original or the compressed file changed after compression, and for
+  history entries from older versions or imported from another history file. Files with untested quality, low VMAF,
+  editing sources or tracks the compressed file lacks (subtitles, telemetry…) are flagged, and ticking them asks for
+  confirmation. A replacement interrupted by a crash is finished or rolled back on the next start.
 - **A queue that survives restarts**, a *↻ Retry* button for failed files, **history** of everything compressed with the total space freed,
   **history export/import** (a JSON file in *Documents*).
 - **Drag & drop** files and folders onto the app window to add them.
 - **Safe for your files:** compression never modifies originals, other files are never overwritten,
   the result is written to a temporary file and appears only when complete; an original leaves its place only through
-  *Replace originals* and only into the Recycle Bin. Settings, history and the queue are kept with up to 3 backup copies. Audio, text subtitles and the file date are kept;
+  *Replace originals*, which sends it to the Recycle Bin. Settings, history and the queue are kept with up to 3 backup copies. Audio, text subtitles and the file date are kept;
   interlaced video is deinterlaced; variable-frame-rate recordings keep their timing.
 - **Reliable:** free-space check, automatic retry on memory errors, works even if an antivirus or a player holds the file.
 - **Updates in one click:** once per launch the app checks GitHub for a new version (can be turned off in settings).
@@ -152,8 +159,10 @@ If Everything is installed but not running, Framewring starts it in the tray for
 over an original. If the output folder is the source folder, the result gets a `_compressed` suffix; in a common output folder
 you choose, existing files from elsewhere are never overwritten (a number is added). An original is replaced only when you
 choose it in **⇄ Replace originals…**: the compressed file is fully verified first, and the original goes to the Windows Recycle Bin.
-On network and removable drives (no Recycle Bin), with the Recycle Bin turned off, or when the original is bigger than the free
-space of the Recycle Bin (Windows would delete it permanently) replacing is not available.
+On network and removable drives (no Recycle Bin), with the Recycle Bin turned off, when the original is bigger than the free
+space of the Recycle Bin, or when the path is longer than ~250 characters (Windows would delete it permanently) replacing is
+not available. If Windows would still delete permanently, it asks first; afterwards Framewring confirms the original is in the
+Recycle Bin and warns if not.
 
 **What about variable frame rate (phones, OBS, screen recorders)?** Frames are passed through with their original timestamps —
 nothing is dropped or duplicated, and the test VMAF compares the right frames.
@@ -297,18 +306,26 @@ FFmpeg уже внутри, ничего доустанавливать не н�
   Если установлен бесплатный [Everything](https://www.voidtools.com/), поиск занимает секунды; без него автоматически работает многопоточный обход папок.
 - **Сжатие на видеокарте** (AV1 / H.265 на Nvidia, AMD или Intel; на Nvidia — в 5–7 раз быстрее процессора) или **на процессоре** (x265, SVT-AV1), когда важен каждый гигабайт.
 - **Тест на куске видео:** прогноз итогового размера, времени и оценка качества VMAF до полного сжатия.
-- **Замена оригиналов** — только отмеченных тобой (по умолчанию ничего не отмечено): каждый сжатый файл сначала полностью
-  декодируется и сверяется с оригиналом (длительность, звуковые дорожки, видео должно дойти до конца), затем встаёт на место
-  оригинала (та же папка и имя, `.mp4`), а оригинал уходит в **корзину Windows** — насовсем ничего не удаляется: замена
-  заблокирована, если корзина отключена или файл в неё не помещается, на дисках без корзины и если оригинал или сжатый файл
-  изменили после сжатия. Файлы с непроверенным качеством, низким VMAF, монтажные исходники и файлы, в сжатой версии которых
-  нет части дорожек (субтитры, телеметрия…), помечены. Замена, прерванная сбоем, доделывается или откатывается при следующем запуске.
+- **«Оставлен как есть»:** если видео уже сжато эффективно и сжатие не сэкономит места, Жмых останавливается раньше
+  (сравнивает результат с уже прочитанной частью оригинала) или удаляет готовый результат, который меньше оригинала не
+  хотя бы на 3%. Оригинал не тронут, файл крупнее оригинала не остаётся, часы не тратятся впустую.
+- **Замена оригиналов** — только отмеченных тобой (по умолчанию ничего не отмечено; «⇄ Заменить оригинал» у готового файла
+  открывает то же окно с подсвеченным файлом и отмечает его, только если у него нет предупреждений). Каждый сжатый файл
+  сначала проверяется: его контрольная сумма SHA-256, посчитанная сразу после сжатия, должна совпасть (любой изменённый байт
+  блокирует замену), а сам файл полностью декодируется и сверяется с оригиналом (длительность, звуковые дорожки и их длина,
+  видео должно дойти до конца). Затем он встаёт на место оригинала (та же папка и имя, `.mp4`), а оригинал уходит в **корзину
+  Windows**. Это проверяется заранее (корзина есть, включена, в ней хватает места, путь не слишком длинный); если Windows
+  всё же собралась бы удалить насовсем, она сначала спросит; после замены Жмых проверяет, что оригинал в корзине, и
+  предупреждает, если нет. Замена также заблокирована, если оригинал или сжатый файл изменили после сжатия, и для записей
+  истории старых версий или импортированных из другого файла истории. Файлы с непроверенным качеством, низким VMAF, монтажные
+  исходники и файлы, в сжатой версии которых нет части дорожек (субтитры, телеметрия…), помечены, а при их выборе программа
+  переспрашивает. Замена, прерванная сбоем, доделывается или откатывается при следующем запуске.
 - **Очередь, которая переживает перезапуск**, кнопка «↻ Повторить» у неудачных файлов, **история** всего сжатого с итогом освобождённого места,
   **экспорт и импорт истории** (JSON-файл в «Документах»).
 - **Перетаскивание** файлов и папок прямо в окно программы.
 - **Бережно к файлам:** при сжатии оригиналы не изменяются, чужие файлы не перезаписываются,
   результат пишется во временный файл и появляется только целым; оригинал покидает своё место только через
-  «Заменить оригиналы» и только в корзину. Настройки, история и очередь хранятся с резервными копиями (до 3 штук). Сохраняются звук, текстовые субтитры и дата файла;
+  «Заменить оригиналы», которая отправляет его в корзину. Настройки, история и очередь хранятся с резервными копиями (до 3 штук). Сохраняются звук, текстовые субтитры и дата файла;
   черезстрочное видео деинтерлейсится; у видео с переменной частотой кадров сохраняется исходный тайминг.
 - **Надёжность:** проверка свободного места, повтор при сбоях памяти, корректная работа, если файл держит антивирус или плеер.
 - **Обновление в один клик:** при запуске программа один раз проверяет на GitHub, нет ли новой версии (можно отключить
@@ -362,7 +379,9 @@ Framewring восстановит всё из последней целой ко
 оригинала. Если папка вывода совпадает с папкой оригинала, к имени добавляется `_compressed`; в общей папке вывода, которую ты указал,
 чужие файлы не перезаписываются (к имени добавляется номер). Оригинал заменяется, только если ты выбрал его в «⇄ Заменить оригиналы…»:
 сжатый файл сначала полностью проверяется, а оригинал уходит в корзину Windows. На сетевых и съёмных дисках (без корзины), при
-отключённой корзине или если оригинал больше свободного места в корзине (Windows удалила бы его насовсем) замена недоступна.
+отключённой корзине, если оригинал больше свободного места в корзине или путь длиннее ~250 символов (Windows удалила бы его
+насовсем) замена недоступна. Если Windows всё же собралась бы удалить насовсем, она сначала спросит; после замены Жмых проверяет,
+что оригинал в корзине, и предупреждает, если нет.
 
 **Видео с переменной частотой кадров (телефоны, OBS, запись экрана)?** Кадры передаются с исходными метками времени —
 ничего не выбрасывается и не дублируется, а VMAF в тесте сравнивает правильные кадры.

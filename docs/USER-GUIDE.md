@@ -102,12 +102,18 @@ instead, which opens the release page.
 - **↻ Retry** next to failed or cancelled files puts that file back into the queue.
 - **📂 Compressed** / **📂 Original** show the file in Explorer. **Clear finished** removes completed items from the list.
 - The list survives restarts: close the app and everything is still there next time.
-- If compression can't make a file smaller, it stops early and the video is marked **Kept as is** — no result bigger
-  than the original is ever left behind.
+- If compression can't make a file smaller, the video is marked **Kept as is** — no result bigger than the original is
+  ever left behind. While compressing, Framewring compares the output size with the bytes of the original that FFmpeg has
+  already read (the same part of the video), so a video with a complex beginning and a static rest isn't stopped by mistake.
+  It stops early when the output is at least 110% of what was read after at least 10% of the file is read, or at least 102%
+  after at least 30%; where these read counters aren't available (outside Windows), it stops only when the output already
+  reaches 97% of the original. A finished result that is not at least 3% smaller is deleted. The original is untouched;
+  **↻ Retry** (e.g. with **Compact**) stays available.
 - **⇄ Replace original** on a finished file and **⇄ Replace originals…** under the list — see section 7.
 - **History** shows everything ever compressed and the total space freed. **Export…** saves it to
-  `Documents\Framewring-history-YYYY-MM-DD.json` and shows the file in Explorer; **Import…** adds entries from such a file
-  (for example from another PC or after a reinstall), skipping the ones already there.
+  `Documents\Framewring-history-YYYY-MM-DD_HH-MM-SS.json` (the real *Documents* folder, also when it is moved to OneDrive;
+  earlier exports are never overwritten) and shows the file in Explorer; **Import…** adds entries from such a file
+  (for example from another PC or after a reinstall), skipping the ones already there. Imported entries can't be used to replace originals (section 7) — compress the file again to replace it.
 - After 100% the app shows a short "finishing the file" stage: FFmpeg rewrites the file so it starts playing instantly.
   On an HDD this takes from seconds to a minute.
 
@@ -115,7 +121,7 @@ instead, which opens the release page.
 
 - Supported input: `.mp4 .mkv .mov .avi .webm .flv .ts .m2ts .m4v .wmv .mts`. Output: `.mp4` (H.265 or AV1, 10-bit).
 - Compression only reads originals, it never modifies or deletes them. An original leaves its place only when you choose
-  **⇄ Replace originals…**, and only into the Windows Recycle Bin (section 7).
+  **⇄ Replace originals…**, which sends it to the Windows Recycle Bin (section 7).
 - A result is never written over an original. In the default `compressed` folder the result keeps the original name;
   if the output folder is the source folder, the result gets a `_compressed` suffix; in a common output folder you choose,
   files from elsewhere are never overwritten — a number is added instead.
@@ -132,31 +138,50 @@ instead, which opens the release page.
 Compressing alone frees no space — the original is still there. When you are happy with the result, **Replace originals**
 puts the compressed file in the original's place and moves the original to the Windows Recycle Bin.
 
-**How to start.** **⇄ Replace original** on a finished file opens the window with that file already ticked (if it can be
-replaced); **⇄ Replace originals…** under the list opens it with nothing ticked. The window, *Replace originals with
-compressed files*, lists everything from **History** (so it works after **Clear finished** and after a restart), one line per
-original, with sizes before → after and the saving.
+**How to start.** **⇄ Replace originals…** under the list opens the window with nothing ticked. **⇄ Replace original** on a
+finished file opens the same window with that file highlighted; it is ticked only if it has no warnings (and can be
+replaced). The window, *Replace originals with compressed files*, lists everything from **History** (so it works after
+**Clear finished** and after a restart), one line per original, with the compressed file's path, sizes before → after and
+the saving.
 
 **Only what you tick.** Nothing is ticked by default. **Tick those without warnings** ticks only the files that have no
 warnings and no blocks; **Untick all** clears the selection. The bottom line shows how many files are selected and how much
-space they free; the button says **Replace (N)**.
+space they free; the button says **Replace (N)**. If any ticked file has warnings, Framewring lists those files and asks
+for confirmation before starting.
+
+**Checksum.** Right after compression Framewring computes a SHA-256 checksum of the compressed file (the stage is shown as
+*Computing the checksum*) and records it in History. It is used to make sure the file you replace with is byte for byte the
+file that was compressed.
 
 **What happens to each ticked file**, one after another:
 
-1. **Full check of the compressed file:** its duration and number of audio tracks must match the original; the video track
-   is decoded completely, without a single error, and must reach the original's duration (so a video cut short is caught
-   even if the audio is full length); the audio is decoded separately, also without errors. Progress is shown as
+1. **The checksum is checked again:** if even one byte of the compressed file has changed since compression, the file is
+   not replaced.
+2. **Full check of the compressed file:** its duration must match the original's (tolerance: 0.1% of the length, at least
+   1 s and at most 3 s) and so must the number of audio tracks; the video track is decoded completely, without a single
+   error, and must reach the original's duration (so a video cut short is caught even if the audio is full length); the
+   audio is decoded separately, also without errors, and must be as long as the original's audio. Progress is shown as
    *checking the compressed file… N%*.
-2. **Everything is checked again right before moving** (the check may take a while): the original's and the compressed file's
+3. **Everything is checked again right before moving** (the check may take a while): the original's and the compressed file's
    size and date must be the same as recorded at compression, and none of the blocks below may have appeared.
-3. Framewring writes into History what it is about to do — so an interrupted replacement can be sorted out later.
-4. The compressed file is moved next to the original under a temporary name (`name.framewring-new.mp4`); a move never
+4. Framewring writes into History what it is about to do — so an interrupted replacement can be sorted out later.
+5. The compressed file is moved next to the original under a temporary name (`name.framewring-new.mp4`); a move never
    overwrites anything. From another drive it is copied and the copy is compared with the compressed file byte by byte.
-5. **The original goes to the Windows Recycle Bin** — you can restore it from there. Right before that, Framewring checks once
-   more that the original fits in the drive's Recycle Bin.
-6. Framewring checks that the original is really in the Recycle Bin (it reads the bin's own records) and tells you if it isn't.
-7. The new file takes the original's name with `.mp4`: `video.mp4` stays `video.mp4`; for `video.mkv` a `video.mp4` appears
-   in the same folder (this rename too never overwrites an existing file). An empty `compressed` folder is removed.
+6. **The original goes to the Windows Recycle Bin** — you can restore it from there. This is checked beforehand (Recycle Bin
+   present, turned on, enough free space, path not too long), and once more right before this step; if Windows would still
+   delete the file permanently, it asks first.
+7. Framewring confirms that the original is really in the Recycle Bin (it reads the bin's own records) and warns you if it
+   isn't.
+8. The new file takes the original's name with `.mp4`: `video.mp4` stays `video.mp4`; for `video.mkv` a `video.mp4` appears
+   in the same folder (this rename too never overwrites an existing file). If the compressed file was in a folder named
+   `compressed` and that folder is now empty, it is removed; an output folder you chose yourself is never removed.
+
+**Result of each file** (shown in its row):
+
+- *✓ replaced, the original is in the Recycle Bin* — done;
+- *⚠ …* — the original is in the Recycle Bin, but something after that needs your attention: it was not found in the
+  Recycle Bin, or the new file kept its temporary name (the message says where it is);
+- *not replaced: …* — an error; the original was not replaced.
 
 If anything fails before the Recycle Bin step, **nothing changes**: the original stays, and the compressed file goes back where
 it was. A problem with one file does not stop the others. While it runs, don't move or open these files; importing History
@@ -167,7 +192,8 @@ in place, everything is rolled back; if the original is already in the Recycle B
 
 **Warnings** (you can still replace, but think twice):
 
-- *quality not checked with “Test”* — there was no **Test (2 min)** for this video;
+- *quality not checked with “Test”* — there was no **Test (2 min)** for this video, or the Test was made with a different
+  mode or quality than the compression (its VMAF doesn't describe this file);
 - *Test VMAF below 93* — the quality loss may be visible;
 - *editing source* (ProRes, DNxHD, …) — such files are usually worth keeping as they are;
 - *small saving* — the compressed file is less than 20% smaller;
@@ -178,9 +204,11 @@ in place, everything is rolled back; if the original is already in the Recycle B
 
 - the compressed file is not smaller than the original;
 - the original was changed after compression;
-- the compressed file was changed or swapped after compression (its size and date are recorded in History);
-- the entry is from an older version of Framewring, without these records — compress the file again (**↻ Retry**) to be able
-  to replace it;
+- the compressed file was changed or swapped after compression (its size, date and checksum are recorded in History);
+- the entry is from an older version of Framewring, without these records (no checksum) — compress the file again
+  (**↻ Retry**) to be able to replace it;
+- the entry was imported from another history file (**Import…**), so it can't be verified — compress the file again to be
+  able to replace it;
 - the original or the compressed file is not found;
 - the file is queued or being compressed right now;
 - a different file with the target name (`name.mp4`) already exists in the original's folder;
@@ -190,6 +218,8 @@ in place, everything is rolled back; if the original is already in the Recycle B
 - the Recycle Bin is turned off for this drive (*Don't move files to the Recycle Bin*);
 - the original is bigger than the free space of this drive's Recycle Bin — Windows would delete it permanently. Empty the
   Recycle Bin or increase its size in its properties;
+- the path is too long (more than ~250 characters, counting the temporary and the final name) — Windows would delete the
+  original permanently instead of moving it to the Recycle Bin (verified). Move or rename the folder to shorten the path;
 - the original has already been replaced.
 
 **After replacing**, the file in the list shows *“✓ The original is replaced (it's in the Recycle Bin)”*, and in **History**
@@ -232,10 +262,16 @@ An unfinished `name.part.mp4` is removed when you quit in the middle of compress
   removable drive copy the original to a local drive first, or delete it yourself after checking the result.
 - **"Not replaced: errors while decoding the compressed file".** The compressed file is damaged — nothing was changed.
   Compress the video again (**↻ Retry**) and replace it then.
+- **"Not replaced: the compressed file has changed since compression (checksum differs)".** Something modified the
+  compressed file after it was made (an editor, a tag tool, a copy that went wrong) — nothing was changed. Compress again.
 - **"The new file is in place, but the original was NOT found in the Recycle Bin".** Windows reported success, but the bin
   has no record of the original. Look for it in the Recycle Bin by name; if it isn't there, it can't be restored from the bin.
 - **I want an original back.** Restore it from the Windows Recycle Bin (it is there until you empty the bin).
 - **History after reinstalling or on another PC.** Use **Export…** in History on the old setup and **Import…** on the new one.
+  Each export gets its own timestamped name in your *Documents* folder (also when it is moved to OneDrive), so earlier exports
+  are kept. Imported entries appear in History, but they can't be used to replace originals: an
+  entry from another history file can't be verified (the import drops its checksum and file records). Compress the file
+  again (**↻ Retry**) to replace it.
 
 ## 10. Reporting a problem
 
@@ -357,12 +393,19 @@ VMAF в тесте: 95+ — разницу практически не отли�
 - **«↻ Повторить»** у неудачных и отменённых файлов ставит файл в очередь заново.
 - **«📂 Сжатый»** / **«📂 Оригинал»** показывают файл в проводнике. «Убрать готовые из списка» убирает завершённые.
 - Список переживает перезапуск: закрыл программу — в следующий раз всё на месте.
-- Если сжатие не может сделать файл меньше, оно останавливается сразу, а видео помечается **«Оставлен как есть»** —
-  результат крупнее оригинала никогда не остаётся.
+- Если сжатие не может сделать файл меньше, видео помечается **«Оставлен как есть»** — результат крупнее оригинала никогда
+  не остаётся. Во время сжатия Framewring сравнивает размер результата с объёмом оригинала, который FFmpeg уже прочитал
+  (тот же участок видео), поэтому видео со сложным началом и статичным продолжением не останавливается по ошибке.
+  Сжатие останавливается раньше, если результат не меньше 110% прочитанного, когда прочитано не меньше 10% файла, или не
+  меньше 102%, когда прочитано не меньше 30%; если счётчиков чтения нет (не в Windows), — только когда результат уже достиг
+  97% оригинала. Готовый результат, который меньше оригинала не хотя бы на 3%, удаляется. Оригинал не тронут;
+  **«↻ Повторить»** (например, с **«Компактным»**) остаётся доступной.
 - **«⇄ Заменить оригинал»** у готового файла и **«⇄ Заменить оригиналы…»** под списком — см. раздел 7.
 - **«История»** — всё, что когда-либо сжато, и сколько места освобождено. **«Экспорт…»** сохраняет её в
-  `Документы\Framewring-history-ГГГГ-ММ-ДД.json` и показывает файл в проводнике; **«Импорт…»** добавляет записи из такого файла
-  (например, с другого компьютера или после переустановки), пропуская те, что уже есть.
+  `Документы\Framewring-history-ГГГГ-ММ-ДД_ЧЧ-ММ-СС.json` (настоящая папка «Документы», в том числе перенесённая в OneDrive;
+  прежние экспорты никогда не перезаписываются) и показывает файл в проводнике; **«Импорт…»** добавляет записи из такого файла
+  (например, с другого компьютера или после переустановки), пропуская те, что уже есть. Импортированными записями нельзя
+  заменить оригиналы (раздел 7) — чтобы заменить, сожми файл заново.
 - После 100% идёт короткий этап «Дописываю файл»: FFmpeg переписывает файл, чтобы он сразу начинал играть.
   На HDD это от секунд до минуты.
 
@@ -370,7 +413,7 @@ VMAF в тесте: 95+ — разницу практически не отли�
 
 - Поддерживаются: `.mp4 .mkv .mov .avi .webm .flv .ts .m2ts .m4v .wmv .mts`. Результат: `.mp4` (H.265 или AV1, 10 бит).
 - При сжатии оригиналы только читаются: не изменяются и не удаляются. Оригинал покидает своё место, только если ты выбрал
-  **«⇄ Заменить оригиналы…»**, и только в корзину Windows (раздел 7).
+  **«⇄ Заменить оригиналы…»**, которая отправляет его в корзину Windows (раздел 7).
 - Результат никогда не пишется поверх оригинала. В папке `compressed` результат получает имя оригинала;
   если папка вывода — это папка оригинала, к имени добавляется `_compressed`; в общей папке вывода, которую ты указал,
   чужие файлы не перезаписываются — к имени добавляется номер.
@@ -387,30 +430,47 @@ VMAF в тесте: 95+ — разницу практически не отли�
 Само сжатие места не освобождает — оригинал никуда не делся. Когда результат устраивает, **«Заменить оригиналы»** ставит
 сжатый файл на место оригинала, а оригинал отправляет в корзину Windows.
 
-**Как открыть.** «⇄ Заменить оригинал» у готового файла открывает окно, где этот файл уже отмечен (если его можно заменить);
-«⇄ Заменить оригиналы…» под списком открывает окно без отметок. В окне «Заменить оригиналы сжатыми» — всё из **«Истории»**
-(поэтому оно работает и после «Убрать готовые из списка», и после перезапуска), по одной строке на оригинал, с размером
-до → после и выигрышем.
+**Как открыть.** «⇄ Заменить оригиналы…» под списком открывает окно без отметок. «⇄ Заменить оригинал» у готового файла
+открывает то же окно с подсвеченным файлом; он отмечен, только если у него нет предупреждений (и его можно заменить).
+В окне «Заменить оригиналы сжатыми» — всё из **«Истории»** (поэтому оно работает и после «Убрать готовые из списка», и после
+перезапуска), по одной строке на оригинал, с путём к сжатому файлу, размером до → после и выигрышем.
 
 **Только то, что ты отметил.** По умолчанию ничего не отмечено. «Отметить без предупреждений» отмечает только файлы без
 предупреждений и без запретов; «Снять все» снимает отметки. Внизу видно, сколько файлов выбрано и сколько места освободится;
-на кнопке — «Заменить (N)».
+на кнопке — «Заменить (N)». Если у отмеченных файлов есть предупреждения, Framewring перечислит эти файлы и переспросит
+перед началом.
+
+**Контрольная сумма.** Сразу после сжатия Framewring считает контрольную сумму SHA-256 сжатого файла (этап «Считаю
+контрольную сумму») и записывает её в «Историю». По ней видно, что на место оригинала встаёт байт в байт тот самый файл,
+который получился при сжатии.
 
 **Что происходит с каждым отмеченным файлом**, по очереди:
 
-1. **Полная проверка сжатого файла:** длительность и число звуковых дорожек должны совпасть с оригиналом; видеодорожка
-   декодируется целиком, без единой ошибки, и должна дойти до длительности оригинала (так ловится обрезанное видео, даже если
-   звук полной длины); звук декодируется отдельно, тоже без ошибок. Ход видно как «проверяю сжатый файл… N%».
-2. **Прямо перед переносом всё проверяется ещё раз** (проверка могла идти долго): размер и дата оригинала и сжатого файла
+1. **Контрольная сумма сверяется ещё раз:** если после сжатия в сжатом файле изменился хотя бы один байт, файл не заменяется.
+2. **Полная проверка сжатого файла:** длительность должна совпасть с оригиналом (допуск — 0,1% длины, не меньше 1 с и не
+   больше 3 с), число звуковых дорожек тоже; видеодорожка декодируется целиком, без единой ошибки, и должна дойти до
+   длительности оригинала (так ловится обрезанное видео, даже если звук полной длины); звук декодируется отдельно, тоже без
+   ошибок, и должен быть не короче звука оригинала. Ход видно как «проверяю сжатый файл… N%».
+3. **Прямо перед переносом всё проверяется ещё раз** (проверка могла идти долго): размер и дата оригинала и сжатого файла
    должны быть такими же, как записано при сжатии, и не должен появиться ни один из запретов ниже.
-3. Framewring записывает в «Историю», что собирается сделать, — чтобы прерванную замену можно было потом разобрать.
-4. Сжатый файл переносится к оригиналу под временным именем (`имя.framewring-new.mp4`); перенос никогда ничего
+4. Framewring записывает в «Историю», что собирается сделать, — чтобы прерванную замену можно было потом разобрать.
+5. Сжатый файл переносится к оригиналу под временным именем (`имя.framewring-new.mp4`); перенос никогда ничего
    не перезаписывает. С другого диска файл копируется, и копия сверяется со сжатым файлом побайтно.
-5. **Оригинал уходит в корзину Windows** — оттуда его можно восстановить. Прямо перед этим Framewring ещё раз проверяет,
-   что оригинал поместится в корзину этого диска.
-6. Framewring проверяет, что оригинал действительно в корзине (читает собственные записи корзины), и сообщает, если его там нет.
-7. Новый файл получает имя оригинала с `.mp4`: `видео.mp4` остаётся `видео.mp4`; для `видео.mkv` рядом появляется `видео.mp4`
-   (и это переименование никогда не перезаписывает существующий файл). Опустевшая папка `compressed` убирается.
+6. **Оригинал уходит в корзину Windows** — оттуда его можно восстановить. Это проверяется заранее (корзина есть, включена,
+   в ней хватает места, путь не слишком длинный) и ещё раз прямо перед этим шагом; если Windows всё же собралась бы удалить
+   файл насовсем, она сначала спросит.
+7. Framewring проверяет, что оригинал действительно в корзине (читает собственные записи корзины), и предупреждает, если его
+   там нет.
+8. Новый файл получает имя оригинала с `.mp4`: `видео.mp4` остаётся `видео.mp4`; для `видео.mkv` рядом появляется `видео.mp4`
+   (и это переименование никогда не перезаписывает существующий файл). Если сжатый файл лежал в папке `compressed` и она
+   опустела, она убирается; папка вывода, которую ты выбрал сам, не удаляется никогда.
+
+**Итог по каждому файлу** (виден в его строке):
+
+- «✓ заменён, оригинал в корзине» — готово;
+- «⚠ …» — оригинал в корзине, но что-то после этого требует внимания: его не нашли в корзине или новый файл остался
+  с временным именем (в сообщении написано, где он);
+- «не заменён: …» — ошибка; оригинал не заменён.
 
 Если что-то не получилось до шага с корзиной, **ничего не меняется**: оригинал остаётся на месте, сжатый файл возвращается туда,
 где был. Ошибка с одним файлом не мешает остальным. Пока идёт замена, не перемещай и не открывай эти файлы; импорт «Истории»
@@ -421,7 +481,8 @@ VMAF в тесте: 95+ — разницу практически не отли�
 
 **Предупреждения** (заменить можно, но стоит подумать):
 
-- «качество не проверено „Тестом“» — для этого видео не было «Теста на 2 мин»;
+- «качество не проверено „Тестом“» — для этого видео не было «Теста на 2 мин» или тест сделан с другими режимом или
+  качеством, чем сжатие (его VMAF ничего не говорит об этом файле);
 - «VMAF теста» ниже 93 — потеря качества может быть заметна;
 - «монтажный исходник» (ProRes, DNxHD, …) — такие файлы обычно стоит оставить;
 - «выигрыш небольшой» — сжатый файл меньше оригинала менее чем на 20%;
@@ -432,8 +493,11 @@ VMAF в тесте: 95+ — разницу практически не отли�
 
 - сжатый файл не меньше оригинала;
 - оригинал изменили после сжатия;
-- сжатый файл изменили или подменили после сжатия (его размер и дата записаны в «Истории»);
-- запись из старой версии Framewring, без этих данных, — сожми файл заново («↻ Повторить»), чтобы его можно было заменить;
+- сжатый файл изменили или подменили после сжатия (его размер, дата и контрольная сумма записаны в «Истории»);
+- запись из старой версии Framewring, без этих данных (без контрольной суммы), — сожми файл заново («↻ Повторить»), чтобы
+  его можно было заменить;
+- запись импортирована из другого файла истории («Импорт…»), её подлинность не подтвердить — сожми файл заново, чтобы его
+  можно было заменить;
 - оригинал или сжатый файл не найден;
 - файл сейчас в очереди или сжимается;
 - в папке оригинала уже есть другой файл с нужным именем (`имя.mp4`);
@@ -443,6 +507,8 @@ VMAF в тесте: 95+ — разницу практически не отли�
 - для этого диска корзина отключена («Уничтожать файлы сразу после удаления»);
 - оригинал больше свободного места в корзине этого диска — Windows удалила бы его насовсем. Очисти корзину или увеличь
   её размер в её свойствах;
+- путь слишком длинный (больше ~250 символов, с учётом временного и итогового имени) — Windows удалила бы оригинал
+  насовсем, мимо корзины (проверено). Перемести или переименуй папку, чтобы путь стал короче;
 - оригинал уже заменён.
 
 **После замены** у файла в списке написано «✓ Оригинал заменён (он в корзине).», а в **«Истории»** вместо кнопки
@@ -486,10 +552,16 @@ VMAF в тесте: 95+ — разницу практически не отли�
   диске сначала скопируй оригинал на локальный диск — или удали его сам, когда проверишь результат.
 - **«Не заменён: ошибки при декодировании сжатого файла».** Сжатый файл повреждён — ничего не изменено.
   Сожми видео заново («↻ Повторить») и замени после этого.
+- **«Не заменён: сжатый файл изменился после сжатия (контрольная сумма не совпадает)».** Что-то изменило сжатый файл после
+  сжатия (редактор, программа для тегов, неудачное копирование) — ничего не изменено. Сожми заново.
 - **«Новый файл на месте, но оригинал НЕ найден в корзине».** Windows сообщила об успехе, но в корзине нет записи
   об оригинале. Поищи его в корзине по имени; если его там нет, из корзины его не восстановить.
 - **Нужно вернуть оригинал.** Восстанови его из корзины Windows (он там, пока корзину не очистили).
 - **История после переустановки или на другом компьютере.** «Экспорт…» в «Истории» на старом месте и «Импорт…» на новом.
+  Каждый экспорт получает своё имя с датой и временем в папке «Документы» (в том числе перенесённой в OneDrive), так что
+  прежние экспорты сохраняются. Импортированные записи видны в «Истории», но заменить по ним оригиналы нельзя: запись из
+  другого файла истории не подтвердить (при импорте её контрольная сумма и данные о файлах отбрасываются). Сожми файл
+  заново («↻ Повторить»), чтобы его заменить.
 
 ### 10. Как сообщить о проблеме
 

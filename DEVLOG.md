@@ -193,7 +193,8 @@ Re-encoding an already efficient video (e.g. HEVC at a modest bitrate) could pro
 Now the output size is watched during compression: if after 10–25% of the file it is clear the result won't be smaller,
 ffmpeg is stopped; a finished result that is not at least 3% smaller is deleted. The video gets the new status
 **Kept as is** (original untouched, **↻ Retry** available). Checked: an efficient HEVC was stopped at 17% with no files left;
-an ordinary clip went 302 → 100 MB as before.
+an ordinary clip went 302 → 100 MB as before. (In 0.9.3 the early stop was reworked to compare with the bytes already
+read — see section 6.)
 
 ### 2. SVT-AV1 preset 4 for “Thorough” (0.9.2, [#1](https://github.com/remrem23/framewring/issues/1))
 6-second synthetic 1080p clip (with noise), *CPU · AV1*, CRF 30 (*Balanced*):
@@ -249,6 +250,27 @@ Covered by 12 test scenarios: bin too small → blocked; bin turned off → bloc
 without fingerprints → blocked; compressed file swapped → blocked; history import during a replacement → refused, keys stay
 valid; target name taken at the final step → no overwrite; truncated video with full audio → caught; missing subtitle/data
 tracks → warned; file in the queue → blocked; crash before the Recycle Bin → rolled back; crash after it → finished.
+
+### 6. Second pass before release (0.9.3)
+- **Early stop without false alarms.** Comparing the output with the elapsed percentage stopped videos with a complex
+  beginning and a static rest (the output grows fast at first, then barely). Now `_gain_watch` compares the output with the
+  bytes of the original that ffmpeg has already read (`GetProcessIoCounters`) — the same part of the video: it stops when
+  output ≥ 110% of what was read after ≥ 10% read, or ≥ 102% after ≥ 30%; without read counters (outside Windows) only when
+  the output already reaches 97% of the original. The final check (not ≥ 3% smaller → deleted) is unchanged.
+- **Checksum.** Size and date can't prove the compressed file is the same file, so a SHA-256 is computed right after
+  compression (*Computing the checksum*) and checked again before replacing; entries without it count as old entries.
+- **Stricter verification:** the compressed file's audio must be as long as the original's; the duration tolerance is now
+  max(1 s, min(3 s, 0.1% of the length)); the Test VMAF is used only if the Test had the same mode and quality as the
+  compression.
+- **Long paths:** with a path longer than ~250 characters Windows deleted the original permanently instead of recycling it
+  (verified), so such files are blocked.
+- **Imported history entries** lose their fingerprints and checksum on import and are blocked with their own message.
+- **Replace window:** the per-file button highlights its file and pre-ticks it only without warnings; ticking files with
+  warnings asks for confirmation; rows show the compressed file's path; results are done / ⚠ warning (original in the bin,
+  but not found there or the new file kept its temporary name) / error; only an empty `compressed` folder is removed.
+- **Startup and data:** a damaged queue or history entry is skipped instead of preventing start; history writes are
+  serialized (no lost updates between compression and replacement); the single-instance mutex is taken before anything
+  else; history export goes to the real *Documents* folder (incl. OneDrive) with a timestamped name.
 
 ---
 
@@ -447,7 +469,8 @@ FFmpeg 8.1.1 (сборка Gyan), Windows 11, 3 NVMe SSD + 4 HDD.
 оригинала. Теперь размер результата отслеживается во время сжатия: если через 10–25% файла видно, что меньше не выйдет,
 ffmpeg останавливается; готовый результат, который не меньше оригинала хотя бы на 3%, удаляется. Видео получает новый статус
 **«Оставлен как есть»** (оригинал не тронут, «↻ Повторить» доступна). Проверено: эффективный HEVC остановлен на 17%, файлов
-не осталось; обычный ролик, как и раньше, сжат 302 → 100 МБ.
+не осталось; обычный ролик, как и раньше, сжат 302 → 100 МБ. (В 0.9.3 ранняя остановка переделана: сравнение с уже
+прочитанными байтами — см. раздел 6.)
 
 #### 2. Пресет 4 у SVT-AV1 для «Тщательно» (0.9.2, [#1](https://github.com/remrem23/framewring/issues/1))
 Синтетический ролик 1080p на 6 секунд (с шумом), «Процессор · AV1», CRF 30 («Баланс»):
@@ -502,3 +525,25 @@ ffmpeg останавливается; готовый результат, кот
 запись без отпечатков → запрет; сжатый файл подменён → запрет; импорт истории во время замены → отказ, ключи не сбиваются;
 целевое имя занято на последнем шаге → без перезаписи; обрезанное видео при полном звуке → поймано; нет дорожек
 субтитров/данных → предупреждение; файл в очереди → запрет; сбой до корзины → откат; сбой после корзины → доделано.
+
+#### 6. Второй проход перед релизом (0.9.3)
+- **Ранняя остановка без ложных срабатываний.** Сравнение результата с прошедшим процентом останавливало видео со сложным
+  началом и статичным продолжением (сначала результат растёт быстро, потом почти не растёт). Теперь `_gain_watch` сравнивает
+  результат с объёмом оригинала, который ffmpeg уже прочитал (`GetProcessIoCounters`), — с тем же участком видео:
+  остановка, если результат ≥ 110% прочитанного при прочитанных ≥ 10%, или ≥ 102% при ≥ 30%; без счётчиков чтения
+  (не в Windows) — только когда результат уже достиг 97% оригинала. Итоговая проверка (меньше не хотя бы на 3% → удаляется)
+  не изменилась.
+- **Контрольная сумма.** Размер и дата не доказывают, что сжатый файл тот же самый, поэтому сразу после сжатия считается
+  SHA-256 («Считаю контрольную сумму»), и перед заменой она сверяется ещё раз; записи без неё считаются записями старой версии.
+- **Проверка строже:** звук сжатого файла должен быть не короче звука оригинала; допуск длительности теперь
+  max(1 с, min(3 с, 0,1% длины)); VMAF теста учитывается, только если тест был с теми же режимом и качеством, что и сжатие.
+- **Длинные пути:** при пути длиннее ~250 символов Windows удаляла оригинал насовсем, мимо корзины (проверено), поэтому такие
+  файлы заблокированы.
+- **Импортированные записи истории** при импорте теряют отпечатки и контрольную сумму и блокируются со своим сообщением.
+- **Окно замены:** кнопка у файла подсвечивает его и отмечает, только если нет предупреждений; при выборе файлов
+  с предупреждениями программа переспрашивает; в строках виден путь к сжатому файлу; итог — готово / предупреждение ⚠
+  (оригинал в корзине, но его там не нашли или новый файл остался с временным именем) / ошибка; убирается только пустая
+  папка `compressed`.
+- **Запуск и данные:** испорченная запись очереди или истории пропускается и не мешает запуску; записи истории идут по одной
+  (обновления из сжатия и замены не теряются); мьютекс единственного экземпляра берётся раньше всего остального; экспорт
+  истории — в настоящую папку «Документы» (в т.ч. OneDrive) под именем с датой и временем.

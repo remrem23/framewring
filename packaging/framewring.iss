@@ -1,5 +1,5 @@
 ﻿; Установщик Framewring (Inno Setup 6). Собирается из packaging\release.py,
-; который передаёт версию: ISCC /DAppVer=0.9.0 framewring.iss
+; который передаёт версию: ISCC /DAppVer=X.Y.Z framewring.iss
 ; Ставится для текущего пользователя без прав администратора
 ; (%LOCALAPPDATA%\Programs\Framewring); данные — в %APPDATA%\Framewring.
 

@@ -22,18 +22,25 @@ Ideas and requests are welcome in [Issues](https://github.com/remrem23/framewrin
 
 - “Thorough” speed for *CPU · AV1* uses SVT-AV1 preset 4 ([#1](https://github.com/remrem23/framewring/issues/1)).
 - **Backups of your data:** settings, history and the queue are saved with up to 3 backup copies and restored automatically
-  if a file gets damaged or the data folder is deleted (the installed version keeps them in `%LOCALAPPDATA%\Framewringackup`).
+  if a file gets damaged or the data folder is deleted (the installed version keeps them in `%LOCALAPPDATA%\Framewring\backup`).
 - Leftover `.part.mp4` files are removed on exit in the middle of compression and on the next start after a crash.
 - Installer and update tests in Windows Sandbox.
 
 ## Done in 0.9.3
 
 - **⇄ Replace originals:** a compressed file takes the original's place (same folder and name, `.mp4`) — only for the files
-  you tick yourself. Each one is first fully verified (decoded from start to end, duration and audio tracks match the original);
-  the original goes to the Windows Recycle Bin, never deleted permanently. Warnings for untested quality, low VMAF,
-  editing sources and small savings; risky cases are blocked.
+  you tick yourself. Each one is first fully verified (SHA-256 checksum taken right after compression, decoded from start to
+  end, duration, audio tracks and audio length match the original); the original goes to the Windows Recycle Bin. This is
+  checked beforehand (Recycle Bin present, turned on, enough free space, path not too long); if Windows would still delete
+  permanently it asks first; afterwards Framewring confirms the original is in the Recycle Bin and warns if not. Warnings
+  for untested quality, low VMAF, editing sources and small savings; risky cases (changed files, old or imported history
+  entries) are blocked.
+- Fixed a false **Kept as is** on videos with a complex beginning: the early stop now compares the output with the part of
+  the original already read.
+- Startup and data robustness: a damaged queue or history entry no longer prevents start; history writes are serialized;
+  the single-instance check comes first.
 - A short **How it works** hint on first run.
-- **History export and import.**
+- **History export and import** (export to the real *Documents* folder, timestamped name).
 
 ## Road to 1.0
 
@@ -106,18 +113,25 @@ and post the result in [Issues](https://github.com/remrem23/framewring/issues) �
 
 - Скорость «Тщательно» для «Процессор · AV1» — пресет 4 у SVT-AV1 ([#1](https://github.com/remrem23/framewring/issues/1)).
 - **Резервные копии данных:** настройки, история и очередь сохраняются с резервными копиями (до 3 штук) и сами восстанавливаются,
-  если файл повреждён или папку данных удалили (установленная версия хранит их в `%LOCALAPPDATA%\Framewringackup`).
+  если файл повреждён или папку данных удалили (установленная версия хранит их в `%LOCALAPPDATA%\Framewring\backup`).
 - Недоделанный `.part.mp4` удаляется при выходе посреди сжатия и при следующем запуске после сбоя.
 - Проверка установщика и обновлений в «Песочнице Windows».
 
 ### Сделано в 0.9.3
 
 - **«⇄ Заменить оригиналы»:** сжатый файл встаёт на место оригинала (та же папка и имя, `.mp4`) — только для файлов,
-  которые ты отметил сам. Каждый сначала полностью проверяется (декодируется от начала до конца, длительность и звуковые дорожки
-  совпадают с оригиналом); оригинал уходит в корзину Windows, насовсем не удаляется. Предупреждения о непроверенном качестве,
-  низком VMAF, монтажных исходниках и небольшом выигрыше; рискованные случаи заблокированы.
+  которые ты отметил сам. Каждый сначала полностью проверяется (контрольная сумма SHA-256, посчитанная сразу после сжатия,
+  декодирование от начала до конца, длительность, звуковые дорожки и длина звука совпадают с оригиналом); оригинал уходит
+  в корзину Windows. Это проверяется заранее (корзина есть, включена, в ней хватает места, путь не слишком длинный); если
+  Windows всё же собралась бы удалить насовсем, она сначала спросит; после замены Жмых проверяет, что оригинал в корзине,
+  и предупреждает, если нет. Предупреждения о непроверенном качестве, низком VMAF, монтажных исходниках и небольшом
+  выигрыше; рискованные случаи (изменённые файлы, старые или импортированные записи истории) заблокированы.
+- Исправлено ложное **«Оставлен как есть»** у видео со сложным началом: ранняя остановка теперь сравнивает результат
+  с уже прочитанной частью оригинала.
+- Надёжность запуска и данных: испорченная запись очереди или истории больше не мешает запуску; записи истории идут
+  по одной; проверка единственного экземпляра выполняется первой.
 - Короткая подсказка **«Как это работает»** при первом запуске.
-- **Экспорт и импорт истории.**
+- **Экспорт и импорт истории** (экспорт — в настоящую папку «Документы», имя с датой и временем).
 
 ### Путь к 1.0
 
