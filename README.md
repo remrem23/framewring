@@ -8,7 +8,7 @@ scattered across folders, often in several copies.
 
 **Framewring finds them, shows how much space each one wastes, and compresses them several times smaller with no
 visible loss of quality.** You keep every video — it just takes a fraction of the space.
-Real example: a 76.6 GB screen recording became 7.3 GB; the first evening freed 93 GB.
+Real example: a 76.6 GB screen recording became 7.3 GB; overall more then 200 GB freed already.
 
 Free, local, no limits: your files never leave your computer.
 
@@ -196,7 +196,7 @@ The builds include [FFmpeg](https://ffmpeg.org) (Gyan build, GPL v3) and other c
 
 **Framewring находит их, показывает, сколько места зря занимает каждое, и сжимает в разы без видимой потери
 качества.** Все видео остаются с тобой — просто занимают в разы меньше места.
-Реальный пример: запись экрана на 76,6 ГБ стала 7,3 ГБ; за первый вечер освободилось 93 ГБ.
+Реальный пример: запись экрана на 76,6 ГБ стала 7,3 ГБ; в общем освобождено более 200 ГБ.
 
 Бесплатно, локально, без лимитов: файлы никуда не отправляются.
 
