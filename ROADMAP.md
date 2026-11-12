@@ -14,13 +14,40 @@ Ideas and requests are welcome in [Issues](https://github.com/remrem23/framewrin
 - **Updates:** a check for a new version on GitHub once per launch (can be turned off); the installed version updates in one click.
 - **🐞 Report a bug** button: opens the GitHub form with system details pre-filled and shows the log.
 
-## Planned
+## Done in 0.9.1
+
+- No more results bigger than the original: compression stops early when it can't save space, and the video is marked **Kept as is**.
+
+## Road to 1.0
+
+1.0 is about being **reliable on other people's computers** and finishing the main promise — actually freeing the space.
+New big features wait until after 1.0.
+
+| Version | What's in it |
+|---|---|
+| **0.9.2** | “Thorough” speed for *CPU · AV1* uses SVT-AV1 preset 4 ([#1](https://github.com/remrem23/framewring/issues/1)); history and queue are saved with backup copies and restored automatically if a file gets damaged; leftover `.part.mp4` files from a crash are cleaned up; installer and update tests run in Windows Sandbox. |
+| **0.9.3** | Each finished file is verified (it opens, duration matches, no broken frames); a **Move originals to Recycle Bin** button for verified files, with a confirmation and the total space it frees (never a permanent delete); a short first-run hint; history export/import; install via `winget`. |
+| **1.0.0-rc1** | Release candidate for testers (marked as pre-release, so the built-in updater doesn't offer it to everyone). |
+| **1.0.0** | When the criteria below are met. |
+
+**Also before 1.0:** code signing (applying to SignPath Foundation for open-source projects) so SmartScreen stops warning;
+every release checked on VirusTotal; builds made by GitHub Actions; card payments on the support page (Ko-fi).
+
+**1.0 is released when:**
+- two weeks pass without a critical bug (damaged or lost files, the app won't start);
+- it has been tested on at least 5 different setups, including Windows 10, a PC without Everything, AMD Radeon RX 6000/7000 and Intel graphics;
+- the built-in update has worked for real users;
+- the release is clean on VirusTotal, and signing is done or at least applied for.
+
+**Help wanted:** if you have Windows 10, an AMD Radeon or Intel graphics, run **Test (2 min)** on a couple of videos
+and post the result in [Issues](https://github.com/remrem23/framewring/issues) — it helps a lot.
+
+## After 1.0
 
 - **Auto quality:** pick the compression level for a target VMAF (like ab-av1).
 - Resume an interrupted file from where it stopped (it currently starts over).
 - Explicit HDR support.
 - Testing and builds for macOS / Linux.
-- Card payments on the support page (Ko-fi).
 - Smaller download (a leaner FFmpeg build).
 
 ## Known limitations
@@ -54,13 +81,40 @@ Ideas and requests are welcome in [Issues](https://github.com/remrem23/framewrin
 - **Обновления:** проверка новой версии на GitHub один раз при запуске (можно отключить); установленная версия обновляется в один клик.
 - Кнопка **«🐞 Сообщить об ошибке»:** открывает форму на GitHub с заполненными данными о системе и показывает журнал.
 
-### В планах
+### Сделано в 0.9.1
+
+- Больше никаких результатов крупнее оригинала: если сжатие не экономит место, оно останавливается сразу, а видео помечается **«Оставлен как есть»**.
+
+### Путь к 1.0
+
+1.0 — это **надёжность на чужих компьютерах** и выполненное до конца главное обещание: реально освобождать место.
+Новые большие функции — после 1.0.
+
+| Версия | Что входит |
+|---|---|
+| **0.9.2** | Скорость «Тщательно» для «Процессор · AV1» — пресет 4 у SVT-AV1 ([#1](https://github.com/remrem23/framewring/issues/1)); история и очередь сохраняются с резервными копиями и сами восстанавливаются при повреждении файла; уборка оставшихся после сбоя `.part.mp4`; проверка установщика и обновлений в «Песочнице Windows». |
+| **0.9.3** | Проверка каждого готового файла (открывается, длительность совпадает, нет битых кадров); кнопка **«Удалить оригиналы в корзину»** для проверенных файлов — с подтверждением и итогом, сколько места освободится (никогда не удаляет насовсем); короткая подсказка при первом запуске; экспорт и импорт истории; установка через `winget`. |
+| **1.0.0-rc1** | Кандидат в релиз для тестеров (помечен как предварительный, поэтому встроенное обновление не предлагает его всем). |
+| **1.0.0** | Когда выполнены условия ниже. |
+
+**Ещё до 1.0:** цифровая подпись (заявка в SignPath Foundation для открытых проектов), чтобы SmartScreen перестал предупреждать;
+проверка каждого релиза на VirusTotal; сборка через GitHub Actions; оплата картой на странице поддержки (Ko-fi).
+
+**1.0 выходит, когда:**
+- две недели без критических ошибок (порча или потеря файлов, программа не запускается);
+- проверено минимум на 5 разных конфигурациях, включая Windows 10, компьютер без Everything, AMD Radeon RX 6000/7000 и графику Intel;
+- встроенное обновление сработало у реальных пользователей;
+- релиз чистый на VirusTotal, а подпись получена или хотя бы подана заявка.
+
+**Нужна помощь:** если у тебя Windows 10, видеокарта AMD Radeon или графика Intel — запусти **«Тест на 2 мин»** на паре видео
+и напиши результат в [Issues](https://github.com/remrem23/framewring/issues). Это очень поможет.
+
+### После 1.0
 
 - **Авто-качество:** подбор уровня сжатия под целевой VMAF (как ab-av1).
 - Продолжение прерванного файла с места остановки (сейчас — с начала).
 - Явная поддержка HDR.
 - Тестирование и сборки для macOS / Linux.
-- Оплата картой на странице поддержки (Ko-fi).
 - Меньший размер загрузки (более компактная сборка FFmpeg).
 
 ### Известные ограничения
