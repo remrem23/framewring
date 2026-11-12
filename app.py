@@ -3273,7 +3273,11 @@ function renderReplace(){if(!$("replace").classList.contains("on"))return;
  const g=$("repGo");g.textContent=running?tr("rep.s.replace"):tr("rep.go",{n:sel.length});g.disabled=running||repLoading||!sel.length}
 async function doReplace(){const sel=repList.filter(c=>repSel.has(c.key)&&!c.block.length&&!repDone(c));if(!sel.length)return;
  const warned=sel.filter(c=>c.warn.length);
- if(warned.length&&!confirm(tr("rep.confirm_warn",{list:warned.map(c=>"• "+c.name+" — "+c.warn.map(msg).join("; ")).join("\n")})))return;
+ // подтверждение обязательно всегда: без отдельного «да» ни один файл не заменяется
+ const lim=(a,f)=>a.slice(0,12).map(f).join("\n")+(a.length>12?"\n"+tr("rep.confirm_more",{n:a.length-12}):"");
+ let q=tr("rep.confirm",{n:sel.length,list:lim(sel,c=>"• "+c.name)});
+ if(warned.length)q+="\n\n"+tr("rep.confirm_warn",{list:lim(warned,c=>"• "+c.name+" — "+c.warn.map(msg).join("; "))});
+ if(!confirm(q))return;
  const g=$("repGo");g.disabled=true;
  const r=await api("/api/replace",{keys:sel.map(c=>c.key)});
  if(r&&!r.error&&!r.msg)repWasRunning=true;else g.disabled=false;refresh()}

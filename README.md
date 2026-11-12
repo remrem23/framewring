@@ -99,8 +99,8 @@ Copies from other sites may be modified.
   would still delete permanently it asks first; afterwards Framewring confirms the original is in the Recycle Bin and
   warns if not. Replacing is also blocked when the original or the compressed file changed after compression, and for
   history entries from older versions or imported from another history file. Files with untested quality, low VMAF,
-  editing sources or tracks the compressed file lacks (subtitles, telemetry…) are flagged, and ticking them asks for
-  confirmation. A replacement interrupted by a crash is finished or rolled back on the next start.
+  editing sources or tracks the compressed file lacks (subtitles, telemetry…) are flagged. Nothing is replaced without a
+  final confirmation that lists the ticked files and their warnings. A replacement interrupted by a crash is finished or rolled back on the next start.
 - **A queue that survives restarts**, a *↻ Retry* button for failed files, **history** of everything compressed with the total space freed,
   **history export/import** (a JSON file in *Documents*).
 - **Drag & drop** files and folders onto the app window to add them.
@@ -318,8 +318,8 @@ FFmpeg уже внутри, ничего доустанавливать не н�
   всё же собралась бы удалить насовсем, она сначала спросит; после замены Жмых проверяет, что оригинал в корзине, и
   предупреждает, если нет. Замена также заблокирована, если оригинал или сжатый файл изменили после сжатия, и для записей
   истории старых версий или импортированных из другого файла истории. Файлы с непроверенным качеством, низким VMAF, монтажные
-  исходники и файлы, в сжатой версии которых нет части дорожек (субтитры, телеметрия…), помечены, а при их выборе программа
-  переспрашивает. Замена, прерванная сбоем, доделывается или откатывается при следующем запуске.
+  исходники и файлы, в сжатой версии которых нет части дорожек (субтитры, телеметрия…), помечены. Ничего не заменяется без
+  отдельного подтверждения со списком отмеченных файлов и их предупреждений. Замена, прерванная сбоем, доделывается или откатывается при следующем запуске.
 - **Очередь, которая переживает перезапуск**, кнопка «↻ Повторить» у неудачных файлов, **история** всего сжатого с итогом освобождённого места,
   **экспорт и импорт истории** (JSON-файл в «Документах»).
 - **Перетаскивание** файлов и папок прямо в окно программы.

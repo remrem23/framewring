@@ -146,8 +146,8 @@ the saving.
 
 **Only what you tick.** Nothing is ticked by default. **Tick those without warnings** ticks only the files that have no
 warnings and no blocks; **Untick all** clears the selection. The bottom line shows how many files are selected and how much
-space they free; the button says **Replace (N)**. If any ticked file has warnings, Framewring lists those files and asks
-for confirmation before starting.
+space they free; the button says **Replace (N)**. Before starting, Framewring always asks for confirmation: it lists the
+ticked files and, separately, those with warnings. Nothing is replaced until you confirm.
 
 **Checksum.** Right after compression Framewring computes a SHA-256 checksum of the compressed file (the stage is shown as
 *Computing the checksum*) and records it in History. It is used to make sure the file you replace with is byte for byte the
@@ -437,8 +437,8 @@ VMAF в тесте: 95+ — разницу практически не отли�
 
 **Только то, что ты отметил.** По умолчанию ничего не отмечено. «Отметить без предупреждений» отмечает только файлы без
 предупреждений и без запретов; «Снять все» снимает отметки. Внизу видно, сколько файлов выбрано и сколько места освободится;
-на кнопке — «Заменить (N)». Если у отмеченных файлов есть предупреждения, Framewring перечислит эти файлы и переспросит
-перед началом.
+на кнопке — «Заменить (N)». Перед началом Framewring всегда спрашивает подтверждение: перечисляет отмеченные
+файлы и отдельно — файлы с предупреждениями. Пока не подтвердишь, ничего не заменяется.
 
 **Контрольная сумма.** Сразу после сжатия Framewring считает контрольную сумму SHA-256 сжатого файла (этап «Считаю
 контрольную сумму») и записывает её в «Историю». По ней видно, что на место оригинала встаёт байт в байт тот самый файл,

@@ -47,8 +47,9 @@ REPLACE ORIGINALS
   originals with compressed files"; nothing is ticked. "Replace original"
   on a finished file opens the same window with that file highlighted and
   ticked only if it has no warnings. Only the files you tick are replaced
-  ("Tick those without warnings" ticks the safe ones); ticking files with
-  warnings asks for confirmation and lists them. Each row shows the
+  ("Tick those without warnings" ticks the safe ones). Nothing starts
+  without a final confirmation that lists the files (and their warnings,
+  if any). Each row shows the
   compressed file's path. For each file:
   - right after compression Framewring computed a SHA-256 checksum of the
     compressed file ("Computing the checksum"); it is checked again before
@@ -240,8 +241,9 @@ Framewring Жмых находит на дисках тяжёлые видео �
   сжатыми»; ничего не отмечено. «Заменить оригинал» у готового файла
   открывает то же окно с подсвеченным файлом и отмечает его, только если
   у него нет предупреждений. Заменяются только отмеченные тобой файлы
-  («Отметить без предупреждений» отмечает безопасные); если отмечены
-  файлы с предупреждениями, программа перечислит их и переспросит.
+  («Отметить без предупреждений» отмечает безопасные). Без отдельного
+  подтверждения со списком файлов (и их предупреждений, если есть)
+  ничего не начнётся.
   В каждой строке виден путь к сжатому файлу. Для каждого файла:
   - сразу после сжатия Жмых посчитал контрольную сумму SHA-256 сжатого
     файла («Считаю контрольную сумму»); перед заменой она сверяется ещё

@@ -177,8 +177,8 @@ and has the expected type.
 ## Replacing originals
 
 Only for history entries the user ticked in the dialog. Nothing is pre-selected; **⇄ Replace original** on a job
-(`openReplace(src, out)`) highlights that file's row and pre-ticks it only if it has neither blocks nor warnings. If any
-ticked file has warnings, `doReplace` lists them and asks for confirmation (`rep.confirm_warn`). Each row shows the
+(`openReplace(src, out)`) highlights that file's row and pre-ticks it only if it has neither blocks nor warnings. `doReplace`
+always asks for confirmation first, listing the ticked files (`rep.confirm`) and those with warnings (`rep.confirm_warn`). Each row shows the
 original's folder and the compressed file's path (`→ out`).
 
 Entries are identified by a stable key `_hkey(h)` = `"t|normalised src"` (not by the index in the list, which shifts e.g.
@@ -473,7 +473,7 @@ a changed original refused; a failed Recycle Bin step fully rolled back; plus th
 
 Только для записей истории, которые пользователь отметил в окне. Заранее ничего не отмечено; «⇄ Заменить оригинал» у задачи
 (`openReplace(src, out)`) подсвечивает строку этого файла и отмечает его, только если у него нет ни запретов, ни
-предупреждений. Если у отмеченных файлов есть предупреждения, `doReplace` перечисляет их и переспрашивает (`rep.confirm_warn`).
+предупреждений. `doReplace` всегда сначала спрашивает подтверждение со списком отмеченных файлов (`rep.confirm`) и файлов с предупреждениями (`rep.confirm_warn`).
 В каждой строке — папка оригинала и путь к сжатому файлу (`→ out`).
 
 Записи опознаются по устойчивому ключу `_hkey(h)` = `"t|нормализованный src"` (а не по номеру в списке, который сдвигается,
