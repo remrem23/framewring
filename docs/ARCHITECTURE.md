@@ -291,7 +291,9 @@ a changed original refused; a failed Recycle Bin step fully rolled back; plus th
 
 Releases are built by GitHub Actions (`.github/workflows/build.yml`) on a clean `windows-2025` machine: Python 3.12.10,
 exact package versions from `packaging/requirements-build.txt`, FFmpeg from `packaging/ffmpeg.json` (Gyan build, checked by
-SHA-256 in `packaging/get_ffmpeg.py`), then `build.py`, a start check (`/api/ping`), `release.py` and a build provenance
+SHA-256 in `packaging/get_ffmpeg.py`), PyInstaller with its bootloader compiled from the source archive (`packaging/
+build_pyinstaller.py`, archive checked by SHA-256 in `packaging/pyinstaller.json`; the ready-made bootloader is the same file in
+thousands of programs and trips antivirus heuristics), then `build.py`, a start check (`/api/ping`), `release.py` and a build provenance
 attestation for the setup and the zip. Run manually, it uploads the files as a workflow artifact; a `vX.Y.Z` tag (must match
 `__version__`) also creates a draft release, which is published by hand. A published release is never overwritten.
 
@@ -592,7 +594,9 @@ attestation for the setup and the zip. Run manually, it uploads the files as a w
 
 Релизы собирает GitHub Actions (`.github/workflows/build.yml`) на чистой машине `windows-2025`: Python 3.12.10, точные
 версии пакетов из `packaging/requirements-build.txt`, FFmpeg из `packaging/ffmpeg.json` (сборка Gyan, сверка SHA-256 в
-`packaging/get_ffmpeg.py`), затем `build.py`, проверка запуска (`/api/ping`), `release.py` и подтверждение происхождения
+`packaging/get_ffmpeg.py`), PyInstaller с загрузчиком, собранным из исходного архива (`packaging/build_pyinstaller.py`,
+архив сверяется по SHA-256 из `packaging/pyinstaller.json`; готовый загрузчик одинаков у тысяч программ, и на него
+срабатывают эвристики антивирусов), затем `build.py`, проверка запуска (`/api/ping`), `release.py` и подтверждение происхождения
 (build provenance) для установщика и архива. При ручном запуске файлы выкладываются как артефакт запуска; метка `vX.Y.Z`
 (должна совпадать с `__version__`) вдобавок создаёт черновик релиза, который публикуется вручную. Опубликованный релиз
 никогда не перезаписывается.
