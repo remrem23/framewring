@@ -6,3 +6,6 @@ contact_links:
   - name: User guide / Инструкция
     url: https://github.com/remrem23/framewring/blob/main/docs/USER-GUIDE.md
     about: How to use Framewring, FAQ and troubleshooting. / Как пользоваться, частые вопросы и решения проблем.
+  - name: Roadmap / Дорожная карта
+    url: https://github.com/remrem23/framewring/blob/main/ROADMAP.md
+    about: Check whether your idea is already planned before sending a feature request. / Посмотри, нет ли твоей идеи уже в планах, прежде чем отправлять пожелание.
