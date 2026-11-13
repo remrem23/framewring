@@ -1,0 +1,46 @@
+# Automatic tests on a clean GitHub Windows machine: no video card, no Everything, only Python + FFmpeg.
+# Includes real compression on the CPU (x265 and SVT-AV1) and the "replace originals" scenarios (see tests/README.md).
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.12.10"
+
+      - name: Syntax check
+        run: python -c "import ast;ast.parse(open('app.py',encoding='utf-8').read())"
+
+      - name: FFmpeg (checked by SHA-256)
+        id: ff
+        shell: pwsh
+        run: |
+          $d = python packaging/get_ffmpeg.py
+          if ($LASTEXITCODE) { throw "FFmpeg" }
+          "dir=$d" >> $env:GITHUB_OUTPUT
+
+      - name: Tests (CPU compression, replace originals, history)
+        run: python tests/run_all.py --ffmpeg-dir "${{ steps.ff.outputs.dir }}"
