@@ -59,6 +59,8 @@ STRINGS = {
     "audio.aac": "Recodificar a AAC 192",
     "preset.recommended": " · recomendado",
     "preset.unavailable": "No disponible: {why}",
+    "preset.experimental": " · experimental",
+    "preset.experimental_hint": "Aún no probado en hardware real: comparte tu resultado. Haz una Prueba y pulsa «📤 Compartir resultado».",
     "preset.nvenc_av1.title": "GPU Nvidia · AV1",
     "preset.nvenc_av1.desc": "RTX 40xx/50xx. Entre 5 y 7 veces más rápido que la CPU y archivos más pequeños que con H.265. "
                              "Ideal para grandes colecciones de video. Se reproduce en PC, teléfonos y televisores recientes.",
@@ -80,6 +82,8 @@ STRINGS = {
     "report.log": "Si puedes, adjunta el archivo de registro framewring.log: ayuda mucho. Quita lo que no quieras compartir, como las rutas de los archivos.",
     "report.open": "Abrir el formulario en GitHub",
     "report.open_log": "📂 Mostrar el registro",
+    "share.title": "Compartir el resultado de la prueba",
+    "share.text": "El formulario se abre en GitHub (se necesita una cuenta gratuita). Se rellenará exactamente lo que se muestra abajo: sin nombres de archivo, rutas ni nombre de usuario. No se envía nada hasta que pulses «Submit» en GitHub; allí puedes cambiar o quitar lo que quieras.",
     "api.no_log": "Todavía no hay registro: lo escriben la versión instalada y la portátil.",
     "upd.available": "Framewring {v} está disponible.",
     "upd.install": "Actualizar",
@@ -239,6 +243,9 @@ STRINGS = {
     "test.eyes": "Compara a simple vista: abre ambos archivos de la carpeta _tests a pantalla completa.",
     "test.not_smaller": "La compresión no reduce este archivo: el original ya está comprimido de forma eficiente.",
     "test.open": "Abrir carpeta de pruebas",
+    "test.share": "📤 Compartir resultado",
+    "test.share_title": "Abrir en GitHub un formulario ya rellenado con el resultado de esta prueba y los datos de tu hardware",
+    "test.share_exp": "Este modo aún no se ha probado en hardware real: tu resultado será de gran ayuda.",
     "progress.finish": "Finalizando el archivo: moviendo el índice al principio para que el video se abra y "
                        "permita saltar a cualquier punto al instante",
     "progress.left_approx": "quedan ≈ {t}",
@@ -372,6 +379,7 @@ STRINGS = {
     "api.cant_retry": "Esta tarea no se puede reintentar ahora mismo",
     "api.unreadable": "No se puede leer el archivo: {detail}",
     "api.no_info": "sin datos del video",
+    "api.no_test_result": "no hay resultado de prueba para compartir: haz la Prueba de nuevo",
     "api.url_denied": "enlace no permitido",
     "api.open_missing": "Archivo no encontrado (se eliminó o se movió): {path}",
     # ---- native dialogs and console (translated by Python)

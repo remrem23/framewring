@@ -295,6 +295,10 @@ HW_VENDOR = {"nvenc": "nvidia", "amf": "amd", "qsv": "intel"}  # GPU mode -> ven
 # What to recommend: the video card, if present. The CPU compresses slightly tighter, but an order of magnitude slower.
 # AV1 on AMD and Intel is below H.265 until tested on real video cards
 RECOMMEND = ("nvenc_av1", "nvenc_hevc", "amf_hevc", "qsv_hevc", "amf_av1", "qsv_av1", "vt_hevc", "x265", "av1")
+# Modes not yet tested on real hardware: shown as "experimental" and never picked automatically
+# while a tested mode works. When someone confirms a mode works (e.g. a shared "Test" result),
+# remove it from this tuple - that is the only change needed to drop the label.
+UNVERIFIED = ("amf_av1", "qsv_hevc", "qsv_av1", "vt_hevc")
 
 # Quality: high / balanced / compact
 QUALITY = {
@@ -365,9 +369,10 @@ CAPS = {"ffmpeg": bool(FFMPEG), "ffprobe": bool(FFPROBE), "version": "", "preset
         "checked": False, "recommended": "", "pagefile_off": pagefile_off()}
 
 
-def gpu_names():
+def gpu_names(driver=False):
     """Video card names from the driver descriptions in the registry (no WMI - it can be very slow).
-    Virtual monitors and the like are dropped: only Nvidia / AMD / Intel."""
+    Virtual monitors and the like are dropped: only Nvidia / AMD / Intel.
+    driver=True: "Name (driver X)" - for the shared test result."""
     names = []
     if not IS_WIN:
         return names
@@ -383,6 +388,11 @@ def gpu_names():
                 try:
                     with winreg.OpenKey(k, sub) as sk:
                         desc = str(winreg.QueryValueEx(sk, "DriverDesc")[0]).strip()
+                        if driver:
+                            try:
+                                desc += " (driver %s)" % str(winreg.QueryValueEx(sk, "DriverVersion")[0]).strip()
+                            except OSError:
+                                pass
                 except OSError:
                     continue
                 low = desc.lower()
@@ -449,7 +459,9 @@ def detect_caps():
         v = HW_VENDOR.get(p.split("_")[0])
         c["show"] = p in ("x265", "av1") or c["ok"] or (v is not None and v in vendors)
     CAPS["presets"] = pres  # whole at once, so /api/status never sees a half-filled dict
-    CAPS["recommended"] = next((p for p in RECOMMEND if CAPS["presets"][p]["ok"]), "")
+    ok = [p for p in RECOMMEND if CAPS["presets"][p]["ok"]]
+    # a tested mode first; an experimental one only if nothing else works
+    CAPS["recommended"] = next((p for p in ok if p not in UNVERIFIED), ok[0] if ok else "")
     with LOCK:
         # first run (mode never chosen yet) or the chosen mode is unavailable -> the recommended one
         if (not PRESET_CHOSEN or not CAPS["presets"].get(SETTINGS["preset"], {}).get("ok")) and CAPS["recommended"]:
@@ -2417,7 +2429,9 @@ def do_test(job, s):
         return fail(err)
     ts, rs = test.stat().st_size, ref.stat().st_size
     factor = (info["duration"] or ref_dur) / ref_dur
-    res = {"preset": s["preset"], "quality": s["quality"],  # the page builds the test caption in its own language
+    res = {"preset": s["preset"], "quality": s["quality"], "speed": s["speed"], "version": __version__,
+           # the page builds the caption itself; speed/version/clip numbers are for "Share result"
+           "clip_dur": ref_dur, "enc_time": enc_time,
            "test_size": ts, "ref_size": rs, "est_size": int(ts * factor), "ratio": ts / rs if rs else 0,
            "est_time": enc_time * factor, "vmaf": None, "test_path": str(test), "ref_path": str(ref)}
     # 3) VMAF, if available. Above 1080p we compare at 1080p: the vmaf_v0.6.1 model is designed for it,
@@ -2443,6 +2457,7 @@ def do_test(job, s):
         job["test"], job["status"], job["pct"] = res, "tested", 100
 
 
+SHARE_PENDING = {}  # job id -> the "Share result" fields last shown to the person (opened only as shown)
 HISTORY_FILE = DATA_DIR / "history.json"
 HISTORY = {"items": [], "ver": 0}
 
@@ -2754,7 +2769,7 @@ def snapshot(scan_ver=None):
         elif settings.get("outdir"):
             target = Path(os.path.expanduser(settings["outdir"]))
     return {"caps": caps, "jobs": jobs, "running": running, "settings": settings, "disk": disk_info(target),
-            "presets": list(PRESETS), "sys_lang": SYS_LANG,
+            "presets": list(PRESETS), "unverified": list(UNVERIFIED), "sys_lang": SYS_LANG,
             "quality": QUALITY, "scan": scan_public(scan_ver), "hist_ver": HISTORY["ver"],
             "replace": {"running": REPLACE["running"], "ver": REPLACE["ver"],
                         "items": dict(REPLACE["items"])}, "version": __version__, "update": {k: UPDATE[k] for k in ("latest", "state", "pct", "err")},
@@ -2945,6 +2960,24 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/report":
             webbrowser.open(report_url())
             return None
+        if path == "/api/share_preview":  # "Share result" of a Test (test_result.yml): step 1, show the fields
+            with LOCK:
+                j = next((x for x in JOBS if x["id"] == b.get("id")), None)
+                data = j and (dict(j["test"] or {}), dict(j["info"] or {}), j["size"])
+            fields = data and share_fields(*data)  # registry reads: outside the lock
+            if not fields:
+                raise UserError("api.no_test_result")
+            with LOCK:
+                SHARE_PENDING.clear()
+                SHARE_PENDING[b.get("id")] = fields
+            return {"fields": fields, "url": share_url(fields)}
+        if path == "/api/share":  # step 2: open exactly the fields the person saw
+            with LOCK:
+                fields = SHARE_PENDING.pop(b.get("id"), None)
+            if not fields:
+                raise UserError("api.no_test_result")
+            webbrowser.open(share_url(fields))
+            return {"ok": True}
         if path == "/api/open_log":
             log = DATA_DIR / "framewring.log"
             if not log.exists():
@@ -3063,7 +3096,7 @@ h1{margin:0;font-size:22px;letter-spacing:.2px}h1 span{color:var(--acc)}
 .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:0 0 10px}
 .opt{display:block;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
 .opt:hover{border-color:#3a4152}.opt.on{border-color:var(--acc);background:#7c5cff14}
-.opt.off{opacity:.45;cursor:not-allowed}.opt b{display:block}.opt small{color:var(--mut)}
+.opt.off{opacity:.45;cursor:not-allowed}.opt b{display:block}.opt small{color:var(--mut)}.opt small .exp{color:var(--warn)}
 .opt input{display:none}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:6px}
 .seg button{flex:1;background:none;border:0;color:var(--fg);padding:8px 4px;cursor:pointer;font:inherit;border-right:1px solid var(--line)}
@@ -3120,7 +3153,7 @@ a{color:var(--acc)}:root{color-scheme:dark}.jh .btn{white-space:nowrap}
 .tag.g{color:var(--acc2);border-color:var(--acc2)}.tag.y{color:var(--warn);border-color:var(--warn)}.tag.m{color:var(--mut)}
 .drv{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:6px 10px;cursor:pointer}
 .drv.on{border-color:var(--acc);background:#7c5cff14}.drv input{margin:0}
-.vm{font-weight:700}.vm.g{color:var(--acc2)}.vm.y{color:var(--warn)}.vm.r{color:var(--err)}
+.sharebody{max-height:46vh;overflow:auto;white-space:pre-wrap;font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;margin:12px 0}.vm{font-weight:700}.vm.g{color:var(--acc2)}.vm.y{color:var(--warn)}.vm.r{color:var(--err)}
 .lng{font-size:12px;font-weight:400;margin-left:10px;vertical-align:middle;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:2px 4px;cursor:pointer}
 .lng:hover{border-color:#3a4152}
 </style></head><body><div class="wrap">
@@ -3200,6 +3233,11 @@ a{color:var(--acc)}:root{color-scheme:dark}.jh .btn{white-space:nowrap}
  <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap"><div><h3 data-t="report.title"></h3><div class="meta" data-t="report.text"></div></div><button class="btn sm" onclick="report(false)" data-ta="common.close">✕</button></div>
  <p style="margin:14px 0 10px" data-t="report.log"></p>
  <div class="row"><button class="btn pri" onclick="api('/api/report')" data-t="report.open"></button><button class="btn" onclick="api('/api/open_log')" data-t="report.open_log"></button></div>
+</div></div>
+<div class="modal" id="share" onclick="if(event.target===this)shareClose()"><div class="mbox" role="dialog" aria-modal="true" data-ta="share.title">
+ <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap"><div><h3 data-t="share.title"></h3><div class="meta" data-t="share.text"></div></div><button class="btn sm" onclick="shareClose()" data-ta="common.close">✕</button></div>
+ <pre id="shareBody" class="sharebody"></pre>
+ <div class="row"><button class="btn pri" onclick="shareGo()" data-t="report.open"></button><button class="btn" onclick="shareClose()" data-t="common.close"></button></div>
 </div></div>
 <div class="toast" id="toast"></div>
 <script>
@@ -3297,9 +3335,15 @@ function renderUpd(){const u=S.update||{};let h="";
    `<button class="btn sm" onclick="api('/api/update_page')">${esc(tr("upd.notes"))}</button><button class="btn sm" onclick="localStorage.setItem('fw_upd_skip','${esc(u.latest)}');renderUpd()">${esc(tr("upd.later"))}</button>`;
   h=`<div class="updbox"><b>${esc(tr("upd.available",{v:u.latest}))}</b><div class="row" style="align-items:center">${act}</div></div>`}
  setHTML($("upd"),h)}
-document.addEventListener("keydown",e=>{if(e.key==="Escape"){donate(false);report(false);closeReplace()}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){donate(false);report(false);closeReplace();shareClose()}});
 $("repList").addEventListener("change",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k==null)return;e.target.checked?repSel.add(k):repSel.delete(k);renderReplace()});
 $("lng").addEventListener("change",e=>setLang(e.target.value));
+// "Share result" of a Test: show exactly what goes into the GitHub form, open it only on request
+let shareId=null;
+async function share(id){const r=await api("/api/share_preview",{id});if(!r.fields)return;shareId=id;
+ $("shareBody").textContent=r.fields.map(([k,v])=>k+":"+(v.includes("\n")?"\n":" ")+v).join("\n\n");$("share").classList.add("on")}
+function shareClose(){const d=$("share");if(d)d.classList.remove("on");shareId=null}
+async function shareGo(){const id=shareId;shareClose();if(id!=null)await api("/api/share",{id})} // closed first: a double click can't open two tabs
 async function openUrl(u){if(u)await api("/api/url",{url:u})}
 function toast(m){const t=$("toast");if(!t)return;t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",5000)}
 const gb=b=>{const n=Math.abs(b||0),sg=b<0?"−":"";return sg+(n>=1e9?nf(n/1e9,2)+" "+tr("unit.gb"):n>=1e7?nf(n/1e6,0)+" "+tr("unit.mb"):nf(n/1e6,1)+" "+tr("unit.mb"))};
@@ -3307,6 +3351,7 @@ const tm=s=>{if(s==null||!isFinite(s))return"—";s=Math.round(s);const h=Math.f
 const dur=s=>{s=Math.round(s||0);return`${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`};
 const pctS=d=>(d<0?"+":"−")+nf(Math.abs(d),0); // -37 (smaller) / +5 (bigger)
 const testLabel=tl=>{tl=tl||120;return tl<60?tr("btn.test_sec",{n:String(Math.round(tl))}):tr("btn.test_min",{n:nfm(Math.round(tl/6)/10,1)})};
+const isExp=k=>!!(S&&S.unverified&&S.unverified.includes(k)); // mode not yet tested on real hardware (UNVERIFIED)
 const presetTitle=k=>I18N.ru["preset."+k+".title"]!=null?tr("preset."+k+".title"):k;
 let pending=0,sver=0;
 async function setS(k,v){S.settings[k]=v;sver++;pending++;renderSettings();try{await api("/api/settings",{[k]:v})}finally{pending--}}
@@ -3337,7 +3382,7 @@ function renderSettings(){
  const st=S.settings,caps=S.caps;
  const ord=k=>{const c=caps.presets[k]||{};return (caps.checked&&!c.ok?100:0)+S.presets.indexOf(k)};
  setHTML($("presets"),S.presets.filter(k=>{const c=caps.presets[k];return c?c.show!==false:(k==="x265"||k==="av1")}).sort((a,b)=>ord(a)-ord(b)).map(k=>{const c=caps.presets[k]||{};const off=caps.checked&&!c.ok;
-  return `<label class="opt ${st.preset===k?"on":""} ${off?"off":""}" ${off?"":`onclick="setS('preset','${k}')"`}><b>${esc(presetTitle(k))}${k===caps.recommended?esc(tr("preset.recommended")):""}</b><small>${esc(tr("preset."+k+".desc"))}${off?` <br>${esc(tr("preset.unavailable",{why:msg(c.why)}))}`:""}</small></label>`}).join(""));
+  return `<label class="opt ${st.preset===k?"on":""} ${off?"off":""}" ${off?"":`onclick="setS('preset','${k}')"`}><b>${esc(presetTitle(k))}${k===caps.recommended?esc(tr("preset.recommended")):""}${isExp(k)?esc(tr("preset.experimental")):""}</b><small>${esc(tr("preset."+k+".desc"))}${isExp(k)&&!off?` <br><span class="exp">${esc(tr("preset.experimental_hint"))}</span>`:""}${off?` <br>${esc(tr("preset.unavailable",{why:msg(c.why)}))}`:""}</small></label>`}).join(""));
  for(const [id,key] of [["q","quality"],["sp","speed"],["au","audio"]]){document.querySelectorAll(`#${id} button`).forEach(b=>{b.classList.toggle("on",b.dataset.v===st[key]);b.onclick=()=>setS(key,b.dataset.v)})}
  const qv=S.quality[st.preset]||{};const unit=st.preset==="vt_hevc"?"q":st.preset.startsWith("nvenc")?"CQ":st.preset.startsWith("amf")?"QP":st.preset.startsWith("qsv")?"ICQ":"CRF";
  $("qhint").textContent=tr("set.qhint",{unit,high:String(qv.high),balanced:String(qv.balanced),compact:String(qv.compact)});
@@ -3361,7 +3406,7 @@ function jobStatic(j){
    .replace("\u0001",`<i>${esc(label)}</i>`)}<br>${esc(tr("test.clip",{a:gb(x.ref_size),b:gb(x.test_size),pct:pctS((1-x.ratio)*100)}))} <b>${esc(tr("test.forecast",{size:gb(x.est_size)}))}</b>${esc(tr("test.time",{t:tm(x.est_time)}))}
   ${x.vmaf!=null?`<br>VMAF: <span class="vm ${vmafCls(x.vmaf)}">${esc(nf(x.vmaf,1))}</span> ${esc(tr("test.vmaf_scale"))}`:`<br>${esc(tr("test.eyes"))}`}
   ${tb?`<div class="note">${esc(tr("test.not_smaller"))}</div>`:""}
-  <br><button class="btn sm" style="margin-top:6px" onclick="api('/api/open',{id:${j.id},which:'test'})">${esc(tr("test.open"))}</button></div>`}
+  <br><button class="btn sm" style="margin-top:6px" onclick="api('/api/open',{id:${j.id},which:'test'})">${esc(tr("test.open"))}</button>${x.preset&&x.version&&x.enc_time!=null?` <button class="btn sm${isExp(x.preset)?" pri":""}" style="margin-top:6px" title="${esc(tr("test.share_title"))}" onclick="share(${j.id})">${esc(tr("test.share"))}</button>${isExp(x.preset)?`<div class="note">${esc(tr("test.share_exp"))}</div>`:""}`:""}</div>`}
  const note=msg(j.note),err=msg(j.error);
  if(note)body+=`<div class="note">${esc(note)}</div>`;
  if(err)body+=`<div class="err">${esc(err)}</div>`;
@@ -3639,21 +3684,88 @@ def install_update():
     threading.Thread(target=run, daemon=True).start()
 
 
+def os_name():
+    import platform
+    try:
+        build = sys.getwindowsversion().build if IS_WIN else 0
+        return ("Windows %s (build %d)" % ("11" if build >= 22000 else "10", build)) if IS_WIN else platform.platform()
+    except Exception:
+        return platform.platform()
+
+
+def cpu_name():
+    import platform
+    if IS_WIN:
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as k:
+                return " ".join(str(winreg.QueryValueEx(k, "ProcessorNameString")[0]).split())
+        except OSError:
+            pass
+    return platform.processor() or platform.machine() or "?"
+
+
 def report_url():
     """The "Report a bug" form on GitHub, with the version, Windows, video cards and mode already filled in.
     Nothing is sent automatically: the person sees everything in the browser and decides whether to submit."""
-    import platform
     import urllib.parse
-    try:
-        build = sys.getwindowsversion().build if IS_WIN else 0
-        win = ("Windows %s (build %d)" % ("11" if build >= 22000 else "10", build)) if IS_WIN else platform.platform()
-    except Exception:
-        win = platform.platform()
     s = SETTINGS
-    q = {"template": "bug_report.yml", "version": "%s (%s)" % (__version__, install_kind()), "windows": win,
+    q = {"template": "bug_report.yml", "version": "%s (%s)" % (__version__, install_kind()), "windows": os_name(),
          "gpu": ", ".join(gpu_names()) or "?", "ffmpeg": (CAPS.get("version") or "")[:150],
          "mode": "%s · %s · %s" % (s.get("preset"), s.get("quality"), s.get("speed"))}
     return ISSUES_NEW + "?" + urllib.parse.urlencode(q)
+
+
+def shareable(test):
+    """Only results made by a version that records everything the form needs (and its own version)."""
+    return bool(test and test.get("preset") and "enc_time" in test and test.get("version"))
+
+
+def share_fields(x, i, size):
+    """Fields of the "Test result" form (.github/ISSUE_TEMPLATE/test_result.yml) for a test result x,
+    video info i and file size. Privacy: only numbers about the video, the mode and the hardware - never
+    a file name, a path or the user name. The page shows exactly these fields before opening the form."""
+    x, i = x or {}, i or {}
+    if not shareable(x):
+        return None
+
+    def mb(n):
+        return "%.1f MB" % ((n or 0) / 1e6)
+
+    def hms(t):
+        t = int(round(t or 0))
+        return "%d:%02d:%02d" % (t // 3600, t // 60 % 60, t % 60) if t >= 3600 else "%d:%02d" % (t // 60, t % 60)
+    p = x["preset"]
+    title = i18n.t("en", "preset.%s.title" % p)
+    exp = " [experimental]" if p in UNVERIFIED else ""
+    gpus = gpu_names(driver=True)
+    video = "\n".join([
+        "Codec: %s%s" % ((i.get("vcodec") or "?").upper(), ", interlaced" if i.get("interlaced") else ""),
+        "Resolution: %sx%s" % (i.get("width") or "?", i.get("height") or "?"),
+        "Frame rate: %s fps" % (i.get("fps") or "?"),
+        "Bitrate: %.1f Mb/s" % ((i.get("bitrate") or 0) / 1e6),
+        "Duration: %s" % hms(i.get("duration")),
+        "Size: %s" % mb(size),
+        "Audio: %s" % (", ".join(a.get("codec") or "?" for a in i.get("audio") or []) or "none")])
+    result = "\n".join([
+        "Clip: %s, %s -> %s (%+.1f%%)" % (hms(x.get("clip_dur")), mb(x.get("ref_size")), mb(x.get("test_size")),
+                                         ((x.get("ratio") or 0) - 1) * 100),
+        "Clip encode time: %s" % (hms(x["enc_time"]) if x.get("enc_time") is not None else "?"),
+        "Forecast for the whole file: %s, time %s" % (mb(x.get("est_size")), hms(x.get("est_time"))),
+        "VMAF: %s" % ("%.2f" % x["vmaf"] if x.get("vmaf") is not None else "not measured")])
+    words = {"nvidia": ("nvidia",), "amd": ("amd", "radeon"), "intel": ("intel",)}.get(HW_VENDOR.get(p.split("_")[0]))
+    dev = (next((g.split(" (driver")[0] for g in gpus if any(w in g.lower() for w in words)), "?") if words
+           else "Mac" if p == "vt_hevc" else cpu_name())  # the device that did the encoding
+    return [("title", "Test result: %s on %s" % (title, dev)),
+            ("version", "%s (%s)" % (x["version"], install_kind())),  # the version that made the test
+            ("mode", "%s (%s)%s · %s · %s" % (p, title, exp, x.get("quality"), x.get("speed") or "?")),
+            ("result", result), ("video", video), ("windows", os_name()), ("cpu", cpu_name()),
+            ("gpu", ", ".join(gpus) or "?"), ("ffmpeg", (CAPS.get("version") or "").split(" Copyright")[0][:150])]
+
+
+def share_url(fields):
+    import urllib.parse
+    return ISSUES_NEW + "?" + urllib.parse.urlencode([("template", "test_result.yml")] + list(fields))
 
 
 def _own_windows():

@@ -59,19 +59,24 @@ The search never deletes or changes anything.
 |---|---|
 | **Nvidia GPU · AV1** | RTX 40/50 series. 5–7× faster than the CPU and smaller than H.265. Best for big archives. Plays on PCs, recent phones and TVs. |
 | **Nvidia GPU · H.265** | Fast and plays almost everywhere: older phones and TVs, iPhone. Files are slightly bigger than AV1. |
-| **AMD GPU · AV1** | Radeon RX 7000 or newer, and Ryzen 7040/8040-series graphics (Radeon 780M/880M). Same idea as Nvidia AV1. Not yet tested on real hardware — please report how it works. |
+| **AMD GPU · AV1** | Radeon RX 7000 or newer, and Ryzen 7040/8040-series graphics (Radeon 780M/880M). Same idea as Nvidia AV1. **Experimental:** not yet tested on real hardware — please share a Test result. |
 | **AMD GPU · H.265** | Radeon RX 400 series or newer, including Ryzen integrated graphics. Plays almost everywhere. Tested on real hardware (Ryzen 7 9700X graphics). |
-| **Intel GPU · AV1** | Intel Arc or Core Ultra graphics. Not yet tested on real hardware — please report how it works. |
-| **Intel GPU · H.265** | Most Intel graphics since about 2016. Plays almost everywhere. Not yet tested on real hardware — please report how it works. |
+| **Intel GPU · AV1** | Intel Arc or Core Ultra graphics. **Experimental:** not yet tested on real hardware — please share a Test result. |
+| **Intel GPU · H.265** | Most Intel graphics since about 2016. Plays almost everywhere. **Experimental:** not yet tested on real hardware — please share a Test result. |
 | **CPU · H.265** | Files are usually 10–20% smaller than on the GPU, but many times slower (hours per hour of 4K). If you have no suitable GPU or every gigabyte counts. |
 | **CPU · AV1** | The smallest files, the slowest mode. Does not play everywhere. |
-| **Mac GPU · H.265** | Only on macOS, when run from source. |
+| **Mac GPU · H.265** | Only on macOS, when run from source. **Experimental:** not yet tested on real hardware. |
 
 On startup every mode is test-encoded; only the working ones can be picked. Modes your hardware or FFmpeg cannot do
 are greyed out with the reason; GPU modes for a vendor whose card your PC does not have (for example AMD modes on a PC
 with only an Nvidia card) are hidden. The best available one is marked **recommended** and chosen by default
 (your own choice is remembered). Order of preference: Nvidia AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 → AMD AV1 →
-Intel AV1 → CPU. AMD AV1 and Intel AV1 stay below H.265 until they are verified on real hardware.
+Intel AV1 → CPU, except that **experimental** modes are skipped while a tested mode works.
+
+**Experimental** next to a mode means it has not been tested on real hardware yet (now: AMD GPU · AV1, Intel GPU · H.265,
+Intel GPU · AV1, Mac GPU · H.265). It passed the startup check on your PC and you can use it, but nobody has confirmed
+the result on such a card. Please run a **Test** in that mode and press **📤 Share result** (see section 10). A mode
+confirmed on real hardware loses the label in a later version.
 
 **Quality** — **Maximum / Balanced / Compact**. *Balanced* is the right choice for almost everything.
 VMAF in the test: 95+ — practically indistinguishable, 92–95 — very good, lower — the difference becomes visible.
@@ -283,6 +288,16 @@ Click **🐞 Report a bug** in the header. A small window opens:
 - **📂 Show the log** opens the folder with `framewring.log`. Attach it to the report if you can, removing anything you
   don't want to share, such as file paths. The log exists only in the installed and portable versions.
 
+**Sharing a Test result.** After a **Test**, the result has a **📤 Share result** button (highlighted for experimental
+modes). It first shows exactly what will be filled in: a title with the mode and the
+device that encoded; the Framewring version that made the Test; mode, quality and speed; the test numbers (clip length,
+clip size before and after, clip encode time, forecast for the whole file — size and time, VMAF); the video's codec
+(and whether it is interlaced), resolution, frame rate, bitrate, duration, size and audio codecs; Windows, CPU, GPU and
+driver version, FFmpeg version. No file names, paths or user name. The button appears only for Tests made in this
+version or later.
+**Open the form on GitHub** opens the *Test result* form with these fields; nothing is sent until you press *Submit*
+there, and you can edit anything first. Please add whether the clip looked fine to you.
+
 Questions and bug reports: [github.com/remrem23/framewring/issues](https://github.com/remrem23/framewring/issues).
 The only official page of the program is [github.com/remrem23/framewring](https://github.com/remrem23/framewring).
 
@@ -350,19 +365,24 @@ Framewring Жмых — бесплатный локальный компресс
 |---|---|
 | **Видеокарта Nvidia · AV1** | RTX 40xx/50xx. В 5–7 раз быстрее процессора и компактнее H.265. Лучший выбор для больших архивов. Играется на ПК, новых телефонах и ТВ. |
 | **Видеокарта Nvidia · H.265** | Быстро и открывается почти везде: старые телефоны и ТВ, iPhone. Файл немного больше, чем у AV1. |
-| **Видеокарта AMD · AV1** | Radeon RX 7000 и новее, а также графика Ryzen серий 7040/8040 (Radeon 780M/880M). То же, что AV1 на Nvidia. На реальном железе ещё не проверялся — напиши, как работает. |
+| **Видеокарта AMD · AV1** | Radeon RX 7000 и новее, а также графика Ryzen серий 7040/8040 (Radeon 780M/880M). То же, что AV1 на Nvidia. **Экспериментальный:** на реальном железе ещё не проверялся — поделись результатом «Теста». |
 | **Видеокарта AMD · H.265** | Radeon RX 400 и новее, в том числе графика, встроенная в процессоры Ryzen. Открывается почти везде. Проверен на реальном железе (графика Ryzen 7 9700X). |
-| **Видеокарта Intel · AV1** | Графика Intel Arc или Core Ultra. На реальном железе ещё не проверялся — напиши, как работает. |
-| **Видеокарта Intel · H.265** | Большинство графики Intel примерно с 2016 года. Открывается почти везде. На реальном железе ещё не проверялся — напиши, как работает. |
+| **Видеокарта Intel · AV1** | Графика Intel Arc или Core Ultra. **Экспериментальный:** на реальном железе ещё не проверялся — поделись результатом «Теста». |
+| **Видеокарта Intel · H.265** | Большинство графики Intel примерно с 2016 года. Открывается почти везде. **Экспериментальный:** на реальном железе ещё не проверялся — поделись результатом «Теста». |
 | **Процессор · H.265** | Файл обычно на 10–20% меньше, чем у видеокарты, но в разы медленнее (часы на час видео в 4K). Если подходящей видеокарты нет или важен каждый гигабайт. |
 | **Процессор · AV1** | Самый маленький файл, самый медленный режим. Открывается не везде. |
-| **Видеокарта Mac · H.265** | Только на macOS при запуске из исходников. |
+| **Видеокарта Mac · H.265** | Только на macOS при запуске из исходников. **Экспериментальный:** на реальном железе ещё не проверялся. |
 
 При запуске каждый режим проверяется пробным кодированием; выбрать можно только работающие. Режимы, которые не умеет
 твоё железо или FFmpeg, серые, с причиной; режимы видеокарт производителя, которого в компьютере нет (например, режимы
 AMD на компьютере только с Nvidia), скрыты. Лучший доступный помечен **«рекомендую»** и выбран по умолчанию
 (твой собственный выбор запоминается). Порядок предпочтения: Nvidia AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 →
-AMD AV1 → Intel AV1 → процессор. AMD AV1 и Intel AV1 стоят ниже H.265, пока не проверены на реальном железе.
+AMD AV1 → Intel AV1 → процессор, но **экспериментальные** режимы пропускаются, пока работает проверенный.
+
+**«Экспериментальный»** у режима значит, что он ещё не проверен на реальном железе (сейчас: Видеокарта AMD · AV1,
+Видеокарта Intel · H.265, Видеокарта Intel · AV1, Видеокарта Mac · H.265). На твоём компьютере он прошёл проверку при
+запуске и им можно пользоваться, но на такой карте результат ещё никто не подтвердил. Пожалуйста, сделай **«Тест»** в этом
+режиме и нажми **«📤 Поделиться результатом»** (см. раздел 10). Режим, подтверждённый на реальном железе, теряет пометку в одной из следующих версий.
 
 **Качество** — **Максимальное / Баланс / Компактное**. «Баланс» подходит почти всегда.
 VMAF в тесте: 95+ — разницу практически не отличить, 92–95 — очень хорошо, ниже — уже видно.
@@ -572,6 +592,16 @@ VMAF в тесте: 95+ — разницу практически не отли�
   аккаунт GitHub.
 - **«📂 Показать журнал»** открывает папку с `framewring.log`. Если можешь, приложи его, убрав то, чем не хочешь делиться,
   например пути к файлам. Журнал есть только у установленной и портабл-версии.
+
+**Поделиться результатом «Теста».** После «Теста» у результата есть кнопка **«📤 Поделиться результатом»** (у
+экспериментальных режимов она выделена). Сначала она показывает ровно то, что будет заполнено: заголовок с режимом
+и устройством, которое кодировало; версия Framewring, сделавшая «Тест»; режим, качество и скорость; цифры теста (длина
+куска, размер куска до и после, время кодирования куска, прогноз для всего файла — размер и время, VMAF); кодек видео
+(и чересстрочное ли оно), разрешение, частота кадров, битрейт, длительность, размер и аудиокодеки; Windows, процессор,
+видеокарта и версия драйвера, версия FFmpeg. Без имён файлов, путей и имени пользователя. Кнопка есть только у «Тестов»,
+сделанных в этой версии или новее. **«Открыть форму на GitHub»** открывает форму *Test result* с этими полями;
+ничего не отправится, пока ты не нажмёшь там *Submit*, и всё можно сначала исправить. Пожалуйста, добавь, как кусок
+выглядел на глаз.
 
 Вопросы и ошибки: [github.com/remrem23/framewring/issues](https://github.com/remrem23/framewring/issues).
 Официальная страница программы — только [github.com/remrem23/framewring](https://github.com/remrem23/framewring).
