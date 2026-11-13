@@ -1,3 +1,4 @@
-# "Sponsor" button on the repository page
+# "Sponsor" button on the repository page.
+# ko_fi: card or PayPal; custom: DONATE.md, the only official source of payment details (USDT addresses and the Ko-fi link).
 ko_fi: remrem23
 custom: ["https://github.com/remrem23/framewring/blob/main/DONATE.md"]

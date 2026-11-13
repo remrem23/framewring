@@ -5,8 +5,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        Please check ROADMAP.md first — it may already be planned. English or Russian is fine.
-        Сначала загляни в ROADMAP.md — возможно, это уже в планах. Можно писать по-русски или по-английски.
+        Please check [ROADMAP.md](https://github.com/remrem23/framewring/blob/main/ROADMAP.md) first — it may already be planned. English or Russian is fine.
+        Сначала загляни в [ROADMAP.md](https://github.com/remrem23/framewring/blob/main/ROADMAP.md) — возможно, это уже в планах. Можно писать по-русски или по-английски.
+        Found a bug instead, or want to report how a mode works on your hardware? Use the *Bug report* or *Test result* form. / Нашёл ошибку или хочешь рассказать, как режим работает на твоём железе? Используй форму *Bug report* или *Test result*.
   - type: textarea
     id: problem
     attributes:
@@ -24,3 +25,8 @@ body:
     attributes:
       label: Your GPU, if relevant / Видеокарта, если это важно
       placeholder: "AMD RX 7800 XT / Intel Arc A770 / …"
+  - type: input
+    id: version
+    attributes:
+      label: Framewring version, if relevant / Версия Framewring, если это важно
+      placeholder: "0.9.4 (installer / portable / source)"

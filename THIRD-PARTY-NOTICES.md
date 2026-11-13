@@ -12,23 +12,26 @@ Running from source uses only Python itself, an FFmpeg you install, and optional
 
 ## Bundled components
 
-| Component | Used for | License | Source |
-|---|---|---|---|
-| **FFmpeg** (ffmpeg.exe, ffprobe.exe), Gyan "full" build | all encoding, decoding, probing and VMAF | GNU GPL v3 (the build includes GPL libraries such as x265) | [ffmpeg.org](https://ffmpeg.org), [github.com/FFmpeg/FFmpeg](https://github.com/FFmpeg/FFmpeg); build: [gyan.dev/ffmpeg/builds](https://www.gyan.dev/ffmpeg/builds/), sources of the builds: [github.com/GyanD/codexffmpeg/releases](https://github.com/GyanD/codexffmpeg/releases) |
-| **Python 3.12** runtime | runs the program | Python Software Foundation License (PSF-2.0) | [python.org](https://www.python.org/downloads/source/) |
-| OpenSSL 3 (part of the Python runtime) | Python's `ssl`/`hashlib` modules | Apache License 2.0 | [openssl.org](https://www.openssl.org/) |
-| libffi (part of the Python runtime) | `ctypes` | MIT | [github.com/libffi/libffi](https://github.com/libffi/libffi) |
-| zlib, bzip2, xz (liblzma), expat, mpdecimal (parts of the Python runtime) | compression, XML, decimal modules | zlib License; bzip2 License (BSD-style); 0BSD / public domain; MIT; BSD-2-Clause | [zlib.net](https://zlib.net), [sourceware.org/bzip2](https://sourceware.org/bzip2/), [tukaani.org/xz](https://tukaani.org/xz/), [libexpat.github.io](https://libexpat.github.io/), [bytereef.org/mpdecimal](https://www.bytereef.org/mpdecimal/) |
-| Tcl/Tk (part of the Python runtime) | `tkinter` file dialogs in browser mode | Tcl/Tk License (BSD-style) | [tcl.tk](https://www.tcl.tk/) |
-| Microsoft Visual C++ runtime (VCRUNTIME140.dll, shipped with Python) | Python runtime | Microsoft Visual C++ Redistributable license | [Microsoft](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist) |
-| **pywebview** | the app window | BSD-3-Clause | [github.com/r0x0r/pywebview](https://github.com/r0x0r/pywebview) |
-| bottle (pywebview dependency) | — | MIT | [github.com/bottlepy/bottle](https://github.com/bottlepy/bottle) |
-| proxy_tools (pywebview dependency) | — | MIT | [github.com/jtushman/proxy_tools](https://github.com/jtushman/proxy_tools) |
-| typing_extensions (pywebview dependency) | — | PSF-2.0 | [github.com/python/typing_extensions](https://github.com/python/typing_extensions) |
-| **pythonnet**, clr_loader | pywebview's bridge to the WebView2 .NET control | MIT | [github.com/pythonnet/pythonnet](https://github.com/pythonnet/pythonnet), [github.com/pythonnet/clr-loader](https://github.com/pythonnet/clr-loader) |
-| cffi, pycparser (clr_loader dependencies) | — | MIT-0 (cffi); BSD-3-Clause (pycparser) | [github.com/python-cffi/cffi](https://github.com/python-cffi/cffi), [github.com/eliben/pycparser](https://github.com/eliben/pycparser) |
-| **Microsoft WebView2 SDK** (Microsoft.Web.WebView2.Core.dll, Microsoft.Web.WebView2.WinForms.dll, WebView2Loader.dll) | hosting the Edge WebView2 control | Microsoft WebView2 SDK license (BSD-style) | [nuget.org/packages/Microsoft.Web.WebView2](https://www.nuget.org/packages/Microsoft.Web.WebView2) |
-| **PyInstaller** bootloader | starting `Framewring.exe` | GPL-2.0-or-later with the PyInstaller bootloader exception | [github.com/pyinstaller/pyinstaller](https://github.com/pyinstaller/pyinstaller) |
+Versions are those of the 0.9.4 release; they match `packaging/requirements-build.txt` and `packaging/ffmpeg.json`.
+Components that are parts of the Python runtime have no version of their own here.
+
+| Component | Version | Used for | License | Source |
+|---|---|---|---|---|
+| **FFmpeg** (ffmpeg.exe, ffprobe.exe), Gyan "full" build | 8.1.1 | all encoding, decoding, probing and VMAF | GNU GPL v3 (the build includes GPL libraries such as x265) | [ffmpeg.org](https://ffmpeg.org), [github.com/FFmpeg/FFmpeg](https://github.com/FFmpeg/FFmpeg); build: [gyan.dev/ffmpeg/builds](https://www.gyan.dev/ffmpeg/builds/), sources of the builds: [github.com/GyanD/codexffmpeg/releases](https://github.com/GyanD/codexffmpeg/releases) |
+| **Python 3.12** runtime | 3.12 | runs the program | Python Software Foundation License (PSF-2.0) | [python.org](https://www.python.org/downloads/source/) |
+| OpenSSL 3 (part of the Python runtime) | — | Python's `ssl`/`hashlib` modules | Apache License 2.0 | [openssl.org](https://www.openssl.org/) |
+| libffi (part of the Python runtime) | — | `ctypes` | MIT | [github.com/libffi/libffi](https://github.com/libffi/libffi) |
+| zlib, bzip2, xz (liblzma), expat, mpdecimal (parts of the Python runtime) | — | compression, XML, decimal modules | zlib License; bzip2 License (BSD-style); 0BSD / public domain; MIT; BSD-2-Clause | [zlib.net](https://zlib.net), [sourceware.org/bzip2](https://sourceware.org/bzip2/), [tukaani.org/xz](https://tukaani.org/xz/), [libexpat.github.io](https://libexpat.github.io/), [bytereef.org/mpdecimal](https://www.bytereef.org/mpdecimal/) |
+| Tcl/Tk (part of the Python runtime) | — | `tkinter` file dialogs in browser mode | Tcl/Tk License (BSD-style) | [tcl.tk](https://www.tcl.tk/) |
+| Microsoft Visual C++ runtime (VCRUNTIME140.dll, shipped with Python) | — | Python runtime | Microsoft Visual C++ Redistributable license | [Microsoft](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist) |
+| **pywebview** | 6.2.1 | the app window | BSD-3-Clause | [github.com/r0x0r/pywebview](https://github.com/r0x0r/pywebview) |
+| bottle (pywebview dependency) | 0.13.4 | — | MIT | [github.com/bottlepy/bottle](https://github.com/bottlepy/bottle) |
+| proxy_tools (pywebview dependency) | 0.1.0 | — | MIT | [github.com/jtushman/proxy_tools](https://github.com/jtushman/proxy_tools) |
+| typing_extensions (pywebview dependency) | 4.16.0 | — | PSF-2.0 | [github.com/python/typing_extensions](https://github.com/python/typing_extensions) |
+| **pythonnet**, clr_loader | pythonnet 3.2.1, clr_loader 0.3.1 | pywebview's bridge to the WebView2 .NET control | MIT | [github.com/pythonnet/pythonnet](https://github.com/pythonnet/pythonnet), [github.com/pythonnet/clr-loader](https://github.com/pythonnet/clr-loader) |
+| cffi, pycparser (clr_loader dependencies) | cffi 2.1.1, pycparser 3.12 | — | MIT-0 (cffi); BSD-3-Clause (pycparser) | [github.com/python-cffi/cffi](https://github.com/python-cffi/cffi), [github.com/eliben/pycparser](https://github.com/eliben/pycparser) |
+| **Microsoft WebView2 SDK** (Microsoft.Web.WebView2.Core.dll, Microsoft.Web.WebView2.WinForms.dll, WebView2Loader.dll) | — | hosting the Edge WebView2 control | Microsoft WebView2 SDK license (BSD-style) | [nuget.org/packages/Microsoft.Web.WebView2](https://www.nuget.org/packages/Microsoft.Web.WebView2) |
+| **PyInstaller** bootloader | 6.22.3 | starting `Framewring.exe` | GPL-2.0-or-later with the PyInstaller bootloader exception | [github.com/pyinstaller/pyinstaller](https://github.com/pyinstaller/pyinstaller) |
 
 The **Microsoft Edge WebView2 Runtime** itself is not bundled; it is part of Windows 11 (and most Windows 10 installations)
 or can be installed from Microsoft.
@@ -63,16 +66,18 @@ WebView2 SDK лежат в папке `licenses` (её создаёт `packaging
 
 ### Что входит в сборку (кратко)
 
-- **FFmpeg** (ffmpeg.exe, ffprobe.exe), сборка Gyan «full» — всё кодирование, декодирование, анализ и VMAF. GNU GPL v3.
+Версии — из релиза 0.9.4; они совпадают с `packaging/requirements-build.txt` и `packaging/ffmpeg.json`.
+
+- **FFmpeg 8.1.1** (ffmpeg.exe, ffprobe.exe), сборка Gyan «full» — всё кодирование, декодирование, анализ и VMAF. GNU GPL v3.
   Исходники: [github.com/FFmpeg/FFmpeg](https://github.com/FFmpeg/FFmpeg), сборки Gyan и их исходники —
   [gyan.dev/ffmpeg/builds](https://www.gyan.dev/ffmpeg/builds/), [github.com/GyanD/codexffmpeg/releases](https://github.com/GyanD/codexffmpeg/releases).
 - **Python 3.12** — PSF-2.0; в его составе OpenSSL 3 (Apache-2.0), libffi (MIT), zlib (zlib), bzip2 (BSD-подобная),
   xz/liblzma (0BSD / общественное достояние), expat (MIT), mpdecimal (BSD-2-Clause), Tcl/Tk (BSD-подобная),
   среда выполнения Microsoft Visual C++ (лицензия Microsoft на распространение).
-- **pywebview** (BSD-3-Clause) — окно программы; его зависимости bottle (MIT), proxy_tools (MIT), typing_extensions (PSF-2.0).
-- **pythonnet** и clr_loader (MIT) — мост к .NET-компоненту WebView2; их зависимости cffi (MIT-0) и pycparser (BSD-3-Clause).
+- **pywebview 6.2.1** (BSD-3-Clause) — окно программы; его зависимости bottle 0.13.4 (MIT), proxy_tools 0.1.0 (MIT), typing_extensions 4.16.0 (PSF-2.0).
+- **pythonnet 3.2.1** и clr_loader 0.3.1 (MIT) — мост к .NET-компоненту WebView2; их зависимости cffi 2.1.1 (MIT-0) и pycparser 3.12 (BSD-3-Clause).
 - **Microsoft WebView2 SDK** (Microsoft.Web.WebView2.Core.dll, Microsoft.Web.WebView2.WinForms.dll, WebView2Loader.dll) — BSD-подобная лицензия Microsoft.
-- **Загрузчик PyInstaller** — GPL-2.0-or-later с исключением для загрузчика.
+- **Загрузчик PyInstaller 6.22.3** — GPL-2.0-or-later с исключением для загрузчика.
 
 Сама среда **Microsoft Edge WebView2 Runtime** в сборку не входит: она есть в Windows 11 (и в большинстве Windows 10)
 или ставится с сайта Microsoft.

@@ -4,6 +4,11 @@
 
 ## Supported versions
 
+| Version | Supported |
+|---|---|
+| 0.9.4 (latest release) | ✅ |
+| 0.9.3 and older | ❌ — please update |
+
 Only the [latest release](https://github.com/remrem23/framewring/releases/latest) receives fixes.
 
 ## Reporting a vulnerability
@@ -28,8 +33,10 @@ If you find a copy of Framewring distributed elsewhere, especially one showing o
 
 Verify downloads with `SHA256SUMS.txt` from the release (`Get-FileHash <file>` in PowerShell).
 
-Releases after 0.9.3 are built by GitHub Actions from the public source code. You can check that a file was built there
-from this repository: `gh attestation verify <file> -R remrem23/framewring` (needs the GitHub CLI).
+**Provenance check (since 0.9.4).** Releases from 0.9.4 on are built by GitHub Actions on a clean Windows machine from the
+public source code, and the installer and the portable zip carry a build provenance attestation. You can check that a file
+was built there from this repository: `gh attestation verify <file> -R remrem23/framewring` (needs the GitHub CLI).
+Earlier releases (0.9.3 and older) were not built by GitHub Actions and have no attestation; `SHA256SUMS.txt` is the only check for them.
 
 ---
 
@@ -39,6 +46,11 @@ from this repository: `gh attestation verify <file> -R remrem23/framewring` (nee
 **Политика безопасности**
 
 ### Поддерживаемые версии
+
+| Версия | Поддерживается |
+|---|---|
+| 0.9.4 (последний релиз) | ✅ |
+| 0.9.3 и старше | ❌ — пожалуйста, обнови |
 
 Исправления выходят только для [последней версии](https://github.com/remrem23/framewring/releases/latest).
 
@@ -64,5 +76,7 @@ from this repository: `gh attestation verify <file> -R remrem23/framewring` (nee
 
 Проверяй загрузки по `SHA256SUMS.txt` из релиза (`Get-FileHash <файл>` в PowerShell).
 
-Релизы после 0.9.3 собирает GitHub Actions из открытого кода. Проверить, что файл собран там и из этого репозитория:
+**Проверка происхождения (с 0.9.4).** Релизы, начиная с 0.9.4, собирает GitHub Actions на чистой Windows из открытого кода,
+а установщик и портабл-архив получают подтверждение происхождения сборки. Проверить, что файл собран там и из этого репозитория:
 `gh attestation verify <файл> -R remrem23/framewring` (нужен GitHub CLI).
+Более ранние релизы (0.9.3 и старше) собраны не в GitHub Actions и подтверждения не имеют; для них единственная проверка — `SHA256SUMS.txt`.

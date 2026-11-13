@@ -31,6 +31,26 @@ Use the **Feature request** form. Check [ROADMAP.md](ROADMAP.md) first — the i
 - Building the exe and installer: [packaging/](packaging/) (`build.py`, then `release.py`).
 - Contributions are accepted under the project license, [GNU GPL v3](LICENSE).
 
+### Tests
+
+Run `python tests/run_all.py` before opening a pull request (one suite: `python tests/run_all.py replace`).
+It needs only Python and FFmpeg/FFprobe with `libx265` and `libsvtav1` — no video card, no Everything — and works
+in a temporary folder, so your settings and videos are never touched. Details: [tests/README.md](tests/README.md).
+If you change anything that touches user files (replacing originals, history, the queue), add or extend a test for it.
+
+### Continuous integration
+
+GitHub Actions runs the same tests on a clean Windows machine on pushes to `main` and on pull requests
+(`.github/workflows/tests.yml`; docs-only changes are skipped). Releases are built there too, after the tests pass
+(`.github/workflows/build.yml`). Please make sure the checks are green before asking for a review.
+
+### Commits and pull requests
+
+- Write **commit messages in English**: they are shown next to every file on GitHub. First line — what was done, in the
+  imperative (`Fix a false "Kept as is" on videos with a complex start`); details, if needed, below it.
+- Keep one change per commit and one topic per pull request. Do not rewrite published history.
+- Pull request descriptions, like documentation, go English first, Russian below (Russian only is fine too — we will help).
+
 Security issues: see [SECURITY.md](SECURITY.md) — please do not report them publicly.
 
 ---
@@ -68,5 +88,25 @@ Security issues: see [SECURITY.md](SECURITY.md) — please do not report them pu
 - Проверяй на настоящих видео, в том числе странных (VFR с телефона, черезстрочные `.mts`, MKV с субтитрами), и, если можешь, на видеокарте и процессоре.
 - Сборка exe и установщика: [packaging/](packaging/) (`build.py`, затем `release.py`).
 - Вклад принимается под лицензией проекта, [GNU GPL v3](LICENSE).
+
+#### Тесты
+
+Перед pull request запусти `python tests/run_all.py` (один набор: `python tests/run_all.py replace`).
+Нужны только Python и FFmpeg/FFprobe с `libx265` и `libsvtav1` — без видеокарты и без Everything; тесты работают
+во временной папке, поэтому твои настройки и видео не затрагиваются. Подробнее: [tests/README.md](tests/README.md#русский).
+Если меняешь то, что касается файлов пользователя (замена оригиналов, история, очередь), добавь или дополни тест.
+
+#### Непрерывная проверка (CI)
+
+GitHub Actions запускает те же тесты на чистой Windows при push в `main` и в pull request
+(`.github/workflows/tests.yml`; правки только документации пропускаются). Релизы тоже собираются там, после прохождения тестов
+(`.github/workflows/build.yml`). Пожалуйста, перед просьбой о ревью убедись, что проверки зелёные.
+
+#### Коммиты и pull request'ы
+
+- **Сообщения коммитов пиши по-английски**: GitHub показывает их рядом с каждым файлом. Первая строка — что сделано, в
+  повелительном наклонении (`Fix a false "Kept as is" on videos with a complex start`); подробности, если нужны, — ниже.
+- Один коммит — одно изменение, один pull request — одна тема. Опубликованную историю не переписывай.
+- Описания pull request'ов, как и документация, — сначала по-английски, ниже по-русски (можно и только по-русски — поможем).
 
 Уязвимости: см. [SECURITY.md](SECURITY.md#русский) — пожалуйста, не публикуй их открыто.
