@@ -1,7 +1,7 @@
-﻿; Установщик Framewring (Inno Setup 6). Собирается из packaging\release.py,
-; который передаёт версию: ISCC /DAppVer=X.Y.Z framewring.iss
-; Ставится для текущего пользователя без прав администратора
-; (%LOCALAPPDATA%\Programs\Framewring); данные — в %APPDATA%\Framewring.
+﻿; Framewring installer (Inno Setup 6). Built by packaging\release.py,
+; which passes the version: ISCC /DAppVer=X.Y.Z framewring.iss
+; Installs for the current user without administrator rights
+; (%LOCALAPPDATA%\Programs\Framewring); data - in %APPDATA%\Framewring.
 
 #ifndef AppVer
   #define AppVer "0.0.0"
@@ -44,14 +44,14 @@ CloseApplications=yes
 RestartApplications=no
 
 [Languages]
-; первый — запасной, если язык Windows не из списка
+; the first one is the fallback if the Windows language is not in the list
 Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "de"; MessagesFile: "compiler:Languages\German.isl"
 Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "pt"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
-; китайский (упрощённый) — неофициальный перевод Inno Setup, лежит рядом
+; Chinese (Simplified) - unofficial Inno Setup translation, kept next to this file
 Name: "zh"; MessagesFile: "ChineseSimplified.isl"
 
 [CustomMessages]
@@ -62,7 +62,7 @@ ru.AppTitle=Framewring Жмых
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [InstallDelete]
-; при обновлении убираем старые библиотеки, чтобы не смешались с новыми
+; on update remove old libraries so they do not mix with the new ones
 Type: filesandordirs; Name: "{app}\_internal"
 
 [Files]
@@ -74,11 +74,11 @@ Name: "{autodesktop}\{cm:AppTitle}"; Filename: "{app}\Framewring.exe"; Tasks: de
 
 [Run]
 Filename: "{app}\Framewring.exe"; Description: "{cm:LaunchProgram,{cm:AppTitle}}"; Flags: nowait postinstall skipifsilent
-; обновление из самой программы (тихо, с /FWUPDATE=1) — сразу запускаем новую версию
+; update from the program itself (silent, with /FWUPDATE=1) - start the new version right away
 Filename: "{app}\Framewring.exe"; Flags: nowait skipifnotsilent; Check: IsSelfUpdate
 
-; Настройки, очередь и история (%APPDATA%\Framewring) при удалении не трогаем:
-; переустановка не должна терять историю сжатия.
+; Settings, queue and history (%APPDATA%\Framewring) are not touched on uninstall:
+; a reinstall must not lose the compression history.
 
 [Code]
 function IsSelfUpdate: Boolean;

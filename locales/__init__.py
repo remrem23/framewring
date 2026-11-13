@@ -1,1 +1,1 @@
-"""Переводы интерфейса Framewring: <код>.py со словарём STRINGS (ключи как в i18n.EN)."""
+"""Framewring interface translations: <code>.py with a STRINGS dict (keys as in i18n.EN)."""

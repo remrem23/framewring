@@ -5,9 +5,6 @@
 
 Windows Sandbox is a throw-away clean Windows: nothing done inside it touches your system or your installed
 Framewring. Enable it once: "Turn Windows features on or off" -> "Windows Sandbox" -> restart.
-
-Создаёт конфигурации «Песочницы Windows» в build\\sandbox. Песочница — одноразовая чистая Windows: ничего внутри
-не трогает твою систему и установленный Framewring. Включается один раз в «Компонентах Windows».
 """
 from pathlib import Path
 

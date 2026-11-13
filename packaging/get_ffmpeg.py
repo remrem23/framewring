@@ -1,9 +1,9 @@
-"""Скачивает FFmpeg (сборка Gyan), указанный в packaging/ffmpeg.json, и сверяет SHA-256.
+"""Downloads the FFmpeg build (Gyan) specified in packaging/ffmpeg.json and verifies SHA-256.
 
-    python packaging/get_ffmpeg.py        -> печатает папку с ffmpeg.exe и ffprobe.exe
+    python packaging/get_ffmpeg.py        -> prints the folder with ffmpeg.exe and ffprobe.exe
 
-Результат: build/ffmpeg-<версия>/ (bin/ffmpeg.exe, bin/ffprobe.exe, LICENSE). Повторный запуск берёт уже скачанное.
-Нужен для сборки на чистой машине (GitHub Actions): packaging/build.py --ffmpeg-dir <папка>.
+Result: build/ffmpeg-<version>/ (bin/ffmpeg.exe, bin/ffprobe.exe, LICENSE). A repeated run reuses what is already downloaded.
+Needed to build on a clean machine (GitHub Actions): packaging/build.py --ffmpeg-dir <folder>.
 """
 import hashlib
 import json
@@ -33,7 +33,7 @@ def main():
         return
     ZIP.parent.mkdir(parents=True, exist_ok=True)
     if not ZIP.is_file() or sha256(ZIP) != CFG["sha256"]:
-        print("Скачиваю", CFG["url"], file=sys.stderr)
+        print("Downloading", CFG["url"], file=sys.stderr)
         tmp = ZIP.with_suffix(".part")
         with urllib.request.urlopen(CFG["url"], timeout=120) as r, open(tmp, "wb") as f:
             shutil.copyfileobj(r, f, 1 << 20)
@@ -41,21 +41,21 @@ def main():
     got = sha256(ZIP)
     if got != CFG["sha256"]:
         ZIP.unlink()
-        sys.exit("SHA-256 архива FFmpeg не совпадает: %s, ожидалось %s" % (got, CFG["sha256"]))
+        sys.exit("SHA-256 of the FFmpeg archive does not match: %s, expected %s" % (got, CFG["sha256"]))
     if OUT.exists():
         shutil.rmtree(OUT)
     (OUT / "bin").mkdir(parents=True)
     with zipfile.ZipFile(ZIP) as z:
         for info in z.infolist():
             parts = info.filename.split("/")
-            # внутри архива: ffmpeg-<версия>-full_build/bin/ffmpeg.exe, .../LICENSE
+            # inside the archive: ffmpeg-<version>-full_build/bin/ffmpeg.exe, .../LICENSE
             rel = "/".join(parts[1:])
             if rel in ("bin/ffmpeg.exe", "bin/ffprobe.exe", "LICENSE"):
                 with z.open(info) as src, open(OUT / rel, "wb") as dst:
                     shutil.copyfileobj(src, dst)
     for n in ("bin/ffmpeg.exe", "bin/ffprobe.exe", "LICENSE"):
         if not (OUT / n).is_file():
-            sys.exit("В архиве FFmpeg нет " + n)
+            sys.exit("Not found in the FFmpeg archive: " + n)
     print(OUT)
 
 

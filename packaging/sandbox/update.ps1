@@ -1,12 +1,10 @@
 # Runs INSIDE Windows Sandbox: downloads an OLDER published release from GitHub, installs it and starts it.
 # Then click "Update" in the bar at the top and check that the newest version installs and restarts.
-# Запускается ВНУТРИ «Песочницы Windows»: скачивает с GitHub СТАРУЮ опубликованную версию, ставит и запускает.
-# Дальше — нажать «Обновить» в полоске сверху и убедиться, что ставится и запускается новейшая версия.
 param([string]$From = '')
 $ErrorActionPreference = 'Stop'
 $api = 'https://api.github.com/repos/remrem23/framewring/releases'
 $rels = Invoke-RestMethod $api -Headers @{ 'User-Agent' = 'Framewring-sandbox-test' } | Where-Object { -not $_.draft -and -not $_.prerelease }
-if (-not $From) { $From = ($rels | Select-Object -Skip 1 -First 1).tag_name }   # предпоследний релиз
+if (-not $From) { $From = ($rels | Select-Object -Skip 1 -First 1).tag_name }   # second-to-last release
 $rel = $rels | Where-Object { $_.tag_name -eq $From -or $_.tag_name -eq "v$From" } | Select-Object -First 1
 if (-not $rel) { Write-Host "Release $From not found"; Read-Host 'Enter to exit'; exit 1 }
 $asset = $rel.assets | Where-Object { $_.name -like '*-setup.exe' } | Select-Object -First 1

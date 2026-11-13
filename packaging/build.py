@@ -1,12 +1,12 @@
-"""Сборка Framewring.exe (PyInstaller, onedir) + FFmpeg рядом.
+"""Build Framewring.exe (PyInstaller, onedir) + FFmpeg next to it.
 
-Запуск (из корня проекта):
-    py -3.12 -m venv build\\venv312          (Python 3.12+: свежий рантайм без устаревшего OpenSSL)
+Run (from the project root):
+    py -3.12 -m venv build\\venv312          (Python 3.12+: a fresh runtime without the outdated OpenSSL)
     build\\venv312\\Scripts\\python -m pip install pyinstaller pywebview pillow
-    build\\venv312\\Scripts\\python packaging\\build.py [--ffmpeg-dir ПАПКА_С_ffmpeg.exe]
+    build\\venv312\\Scripts\\python packaging\\build.py [--ffmpeg-dir FOLDER_WITH_ffmpeg.exe]
 
-Результат: build\\dist\\Framewring\\ (Framewring.exe, _internal\\, ffmpeg\\).
-FFmpeg берётся из --ffmpeg-dir или из PATH (рекомендуется сборка Gyan: в ней x265, SVT-AV1, NVENC, libvmaf).
+Result: build\\dist\\Framewring\\ (Framewring.exe, _internal\\, ffmpeg\\).
+FFmpeg is taken from --ffmpeg-dir or from PATH (the Gyan build is recommended: it has x265, SVT-AV1, NVENC, libvmaf).
 """
 import argparse
 import re
@@ -67,7 +67,7 @@ VERSION_INFO = """VSVersionInfo(
 )
 """
 
-# пакеты из сборки, чьи лицензии надо положить рядом (их тексты лежат в dist-info)
+# packages from the build whose licenses must be placed alongside (their texts are in dist-info)
 BUNDLED_PKGS = ("pywebview", "pythonnet", "clr_loader", "bottle", "proxy_tools", "cffi", "pycparser",
                 "typing_extensions", "pyinstaller")
 
@@ -78,7 +78,7 @@ def app_version():
 
 
 def copy_licenses():
-    """Тексты лицензий всего, что входит в сборку: Python, пакеты, Tcl/Tk; FFmpeg — в своей папке."""
+    """License texts of everything in the build: Python, packages, Tcl/Tk; FFmpeg - in its own folder."""
     import importlib.metadata as md
     out = DIST / "licenses"
     if out.exists():
@@ -89,7 +89,7 @@ def copy_licenses():
         try:
             dist = md.distribution(name)
         except md.PackageNotFoundError:
-            print("нет пакета", name)
+            print("package not found:", name)
             continue
         files = [f for f in (dist.files or []) if re.search(r"(LICEN[CS]E|COPYING|NOTICE)", f.name, re.I)
                  and ".dist-info" in str(f)]
@@ -105,12 +105,12 @@ def copy_licenses():
     if tk.is_file():
         shutil.copy2(tk, out / "Tcl-Tk-license.terms.txt")
     import importlib.metadata as _md
-    try:  # полный текст Apache-2.0 (лицензия OpenSSL 3) — берём из пакета packaging, он двойной Apache/BSD
+    try:  # full text of Apache-2.0 (OpenSSL 3 license) - taken from the packaging package, which is dual Apache/BSD
         apache = next(Path(_md.distribution("packaging").locate_file(f)) for f in _md.distribution("packaging").files
                       if f.name == "LICENSE.APACHE")
         shutil.copy2(apache, out / "OpenSSL-LICENSE-Apache-2.0.txt")
     except Exception:
-        print("ВНИМАНИЕ: не нашёл текст Apache-2.0 для OpenSSL")
+        print("WARNING: could not find the Apache-2.0 text for OpenSSL")
     (out / "OpenSSL-NOTICE.txt").write_text(
         "OpenSSL (libssl/libcrypto, bundled with Python): Apache License 2.0\n"
         "https://www.openssl.org/source/license.html\n", encoding="utf-8")
@@ -127,10 +127,10 @@ def find_ffmpeg(arg):
         for c in (d, d / "bin"):
             if (c / "ffmpeg.exe").is_file() and (c / "ffprobe.exe").is_file():
                 return c
-        sys.exit("В %s нет ffmpeg.exe и ffprobe.exe" % d)
+        sys.exit("%s has no ffmpeg.exe and ffprobe.exe" % d)
     w = shutil.which("ffmpeg")
     if not w:
-        sys.exit("FFmpeg не найден в PATH: укажи --ffmpeg-dir")
+        sys.exit("FFmpeg not found in PATH: specify --ffmpeg-dir")
     return Path(w).resolve().parent
 
 
@@ -151,7 +151,7 @@ def main():
     vf.write_text(VERSION_INFO.format(v=v, v4=", ".join(str(x) for x in (nums + [0, 0, 0])[:4])), encoding="utf-8")
 
     excl = []
-    # Pillow — только для иконки. ssl не исключать: без него не грузится pywebview
+    # Pillow is only for the icon. Do not exclude ssl: pywebview cannot load without it
     for m in ("PIL", "setuptools", "pkg_resources"):
         excl += ["--exclude-module", m]
     subprocess.check_call([
@@ -170,19 +170,19 @@ def main():
     if lic:
         shutil.copy2(lic, DIST / "ffmpeg" / "LICENSE.txt")
     else:
-        print("ВНИМАНИЕ: не нашёл LICENSE рядом с FFmpeg — положи текст GPL в ffmpeg\\LICENSE.txt вручную")
+        print("WARNING: no LICENSE found next to FFmpeg - put the GPL text into ffmpeg\\LICENSE.txt manually")
     ver = subprocess.run([str(dst / "ffmpeg.exe"), "-hide_banner", "-version"], capture_output=True,
                          text=True).stdout.splitlines()[0]
     (DIST / "ffmpeg" / "README.txt").write_text(FFMPEG_NOTE.format(ver=ver), encoding="utf-8")
 
-    # своя лицензия, инструкция и уведомления о сторонних компонентах — рядом с exe
+    # own license, instructions and third-party notices - next to the exe
     shutil.copy2(ROOT / "LICENSE", DIST / "LICENSE.txt")
     for n in ("README.txt", "THIRD-PARTY-NOTICES.md"):
         if (ROOT / n).is_file():
             shutil.copy2(ROOT / n, DIST / n)
     copy_licenses()
-    # лишнее из pywebview: файл для Android. Папки runtimes\win-x86/win-arm64 НЕ трогать —
-    # pywebview проверяет их наличие при запуске и без них откатывается в браузер (проверено)
+    # unneeded parts of pywebview: the Android file. Do NOT touch the runtimes\win-x86/win-arm64 folders -
+    # pywebview checks for them at startup and falls back to the browser without them (verified)
     wl = DIST / "_internal" / "webview" / "lib"
     for x in ("pywebview-android.jar",):
         q = wl / x
@@ -192,7 +192,7 @@ def main():
             q.unlink()
 
     total = sum(p.stat().st_size for p in DIST.rglob("*") if p.is_file())
-    print("Готово: %s (%.0f МБ)" % (DIST, total / 1e6))
+    print("Done: %s (%.0f MB)" % (DIST, total / 1e6))
 
 
 if __name__ == "__main__":

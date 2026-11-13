@@ -1,10 +1,10 @@
-"""Релизные файлы из готовой сборки build\\dist\\Framewring (сначала packaging\\build.py):
+"""Release files from the finished build build\\dist\\Framewring (run packaging\\build.py first):
 
-    build\\release\\Framewring-<версия>-setup.exe     установщик (Inno Setup 6)
-    build\\release\\Framewring-<версия>-portable.zip  портабл: данные в папке data рядом с exe
-    build\\release\\SHA256SUMS.txt                    контрольные суммы
+    build\\release\\Framewring-<version>-setup.exe     installer (Inno Setup 6)
+    build\\release\\Framewring-<version>-portable.zip  portable: data in the data folder next to the exe
+    build\\release\\SHA256SUMS.txt                    checksums
 
-Запуск: python packaging\\release.py [--iscc ПУТЬ_К_ISCC.exe] [--no-setup] [--no-zip]
+Run: python packaging\\release.py [--iscc PATH_TO_ISCC.exe] [--no-setup] [--no-zip]
 """
 import argparse
 import hashlib
@@ -45,7 +45,7 @@ def find_iscc(arg):
     for c in cands:
         if c and Path(c).is_file():
             return c
-    sys.exit("Не найден ISCC.exe (Inno Setup 6): winget install JRSoftware.InnoSetup или --iscc ПУТЬ")
+    sys.exit("ISCC.exe (Inno Setup 6) not found: winget install JRSoftware.InnoSetup or --iscc PATH")
 
 
 def sha256(p):
@@ -63,9 +63,9 @@ def main():
     ap.add_argument("--no-zip", action="store_true")
     a = ap.parse_args()
     if not (DIST / "Framewring.exe").is_file():
-        sys.exit("Нет сборки: сначала packaging\\build.py")
+        sys.exit("No build: run packaging\\build.py first")
     if (DIST / "portable.txt").exists():
-        sys.exit("В build\\dist\\Framewring лежит portable.txt — убери, иначе установленная версия станет портабл")
+        sys.exit("build\\dist\\Framewring contains portable.txt - remove it, otherwise the installed version would become portable")
     ver = version()
     OUT.mkdir(parents=True, exist_ok=True)
     made = []
@@ -96,8 +96,8 @@ def main():
     sums.write_text("".join("%s  %s\n" % (h, n) for n, h in sorted(old.items())
                             if (OUT / n).exists()), encoding="utf-8")
     for p in made:
-        print("%-40s %7.1f МБ" % (p.name, p.stat().st_size / 1e6))
-    print("Контрольные суммы:", sums)
+        print("%-40s %7.1f MB" % (p.name, p.stat().st_size / 1e6))
+    print("Checksums:", sums)
 
 
 if __name__ == "__main__":

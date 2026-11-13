@@ -1,5 +1,4 @@
 # Runs INSIDE Windows Sandbox: installs the freshly built setup.exe from C:\release and starts Framewring.
-# Запускается ВНУТРИ «Песочницы Windows»: ставит свежий setup.exe из C:\release и запускает Framewring.
 $ErrorActionPreference = 'Stop'
 $setup = Get-ChildItem 'C:\release' -Filter 'Framewring-*-setup.exe' | Sort-Object LastWriteTime | Select-Object -Last 1
 if (-not $setup) { Write-Host 'No Framewring-*-setup.exe in C:\release'; Read-Host 'Enter to exit'; exit 1 }
