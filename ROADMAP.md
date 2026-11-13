@@ -54,17 +54,22 @@ New big features wait until after 1.0.
 | **1.0.0-rc1** | Release candidate for testers (marked as pre-release, so the built-in updater doesn't offer it to everyone). |
 | **1.0.0** | When the criteria below are met. |
 
-**Also before 1.0:** code signing (applying to SignPath Foundation for open-source projects) so SmartScreen stops warning;
-every release checked on VirusTotal; ~~builds made by GitHub Actions~~ — done; ~~card payments on the support page (Ko-fi)~~ — done.
+**Also before 1.0:** every release checked on VirusTotal; experimental marks for untested modes and a **Share test result**
+button, so anyone can report how a mode works on their hardware; ~~builds made by GitHub Actions~~ — done; ~~card payments on the support page (Ko-fi)~~ — done.
 
 **1.0 is released when:**
 - two weeks pass without a critical bug (damaged or lost files, the app won't start);
-- it has been tested on at least 5 different setups, including Windows 10, a PC without Everything, AMD Radeon RX 6000/7000 and Intel graphics;
-- the built-in update has worked for real users;
-- the release is clean on VirusTotal, and signing is done or at least applied for.
+- automated tests (safe replacement of originals, history, real compression on the CPU) pass for every build on a clean
+  Windows machine in GitHub Actions — without a GPU and without Everything;
+- modes not yet confirmed on real hardware (*AMD GPU · AV1*, the Intel modes) are marked **experimental** in the app;
+  the mark is removed as soon as someone reports a result;
+- the built-in update has worked;
+- the release is clean on VirusTotal.
 
-**Help wanted:** if you have Windows 10, an AMD Radeon or Intel graphics, run **Test (2 min)** on a couple of videos
-and post the result in [Issues](https://github.com/remrem23/framewring/issues) — it helps a lot.
+Code signing (SignPath Foundation) is a goal, not a condition for 1.0: it needs some project history first.
+
+**Help wanted:** if you have an AMD Radeon RX 7000, Intel graphics or Windows 10, run **Test (2 min)** on a couple of
+videos and send the result to [Issues](https://github.com/remrem23/framewring/issues) — it helps a lot.
 
 ## After 1.0
 
@@ -145,17 +150,22 @@ and post the result in [Issues](https://github.com/remrem23/framewring/issues) �
 | **1.0.0-rc1** | Кандидат в релиз для тестеров (помечен как предварительный, поэтому встроенное обновление не предлагает его всем). |
 | **1.0.0** | Когда выполнены условия ниже. |
 
-**Ещё до 1.0:** цифровая подпись (заявка в SignPath Foundation для открытых проектов), чтобы SmartScreen перестал предупреждать;
-проверка каждого релиза на VirusTotal; ~~сборка через GitHub Actions~~ — сделано; ~~оплата картой на странице поддержки (Ko-fi)~~ — сделано.
+**Ещё до 1.0:** проверка каждого релиза на VirusTotal; пометка «экспериментальный» у непроверенных режимов и кнопка
+**«Поделиться результатом теста»**, чтобы любой мог сообщить, как режим работает на его железе; ~~сборка через GitHub Actions~~ — сделано; ~~оплата картой на странице поддержки (Ko-fi)~~ — сделано.
 
 **1.0 выходит, когда:**
 - две недели без критических ошибок (порча или потеря файлов, программа не запускается);
-- проверено минимум на 5 разных конфигурациях, включая Windows 10, компьютер без Everything, AMD Radeon RX 6000/7000 и графику Intel;
-- встроенное обновление сработало у реальных пользователей;
-- релиз чистый на VirusTotal, а подпись получена или хотя бы подана заявка.
+- автоматические тесты (безопасная замена оригиналов, история, настоящее сжатие на процессоре) проходят при каждой сборке
+  на чистой Windows в GitHub Actions — без видеокарты и без Everything;
+- режимы, ещё не подтверждённые на реальном железе (*AMD GPU · AV1*, режимы Intel), помечены в программе как
+  **экспериментальные**; пометка снимается, как только кто-то пришлёт результат;
+- встроенное обновление сработало;
+- релиз чистый на VirusTotal.
 
-**Нужна помощь:** если у тебя Windows 10, видеокарта AMD Radeon или графика Intel — запусти **«Тест на 2 мин»** на паре видео
-и напиши результат в [Issues](https://github.com/remrem23/framewring/issues). Это очень поможет.
+Цифровая подпись (SignPath Foundation) — цель, но не условие 1.0: для неё сначала нужна история проекта.
+
+**Нужна помощь:** если у тебя AMD Radeon RX 7000, графика Intel или Windows 10 — запусти **«Тест на 2 мин»** на паре
+видео и пришли результат в [Issues](https://github.com/remrem23/framewring/issues). Это очень поможет.
 
 ### После 1.0
 
