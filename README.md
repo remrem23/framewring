@@ -196,7 +196,7 @@ the release page, the support page, voidtools.com).
 
 ## Support the author
 
-Framewring is free. If it saved you disk space and time — see the [support page](DONATE.md).
+Framewring is free. If it saved you disk space and time — [Ko-fi](https://ko-fi.com/remrem23) (card, PayPal) or USDT on the [support page](DONATE.md).
 
 ## Documentation
 
@@ -415,7 +415,7 @@ Framewring восстановит всё из последней целой ко
 
 ### Поддержать автора
 
-Framewring бесплатный. Если он сэкономил тебе место и время — [страница поддержки](DONATE.md#русский).
+Framewring бесплатный. Если он сэкономил тебе место и время — [Ko-fi](https://ko-fi.com/remrem23) (карта, PayPal) или USDT на [странице поддержки](DONATE.md#русский).
 
 ### Документация
 

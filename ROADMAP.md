@@ -55,7 +55,7 @@ New big features wait until after 1.0.
 | **1.0.0** | When the criteria below are met. |
 
 **Also before 1.0:** code signing (applying to SignPath Foundation for open-source projects) so SmartScreen stops warning;
-every release checked on VirusTotal; builds made by GitHub Actions; card payments on the support page (Ko-fi).
+every release checked on VirusTotal; builds made by GitHub Actions; ~~card payments on the support page (Ko-fi)~~ — done.
 
 **1.0 is released when:**
 - two weeks pass without a critical bug (damaged or lost files, the app won't start);
@@ -146,7 +146,7 @@ and post the result in [Issues](https://github.com/remrem23/framewring/issues) �
 | **1.0.0** | Когда выполнены условия ниже. |
 
 **Ещё до 1.0:** цифровая подпись (заявка в SignPath Foundation для открытых проектов), чтобы SmartScreen перестал предупреждать;
-проверка каждого релиза на VirusTotal; сборка через GitHub Actions; оплата картой на странице поддержки (Ko-fi).
+проверка каждого релиза на VirusTotal; сборка через GitHub Actions; ~~оплата картой на странице поддержки (Ko-fi)~~ — сделано.
 
 **1.0 выходит, когда:**
 - две недели без критических ошибок (порча или потеря файлов, программа не запускается);

@@ -27,7 +27,7 @@ STRINGS = {
     "donate.btn_title": "Apoyar al autor de Framewring",
     "donate.title": "Apoyar al autor",
     "donate.text": "Framewring es gratuito. Si te ha ahorrado espacio y tiempo, puedes apoyar al autor.",
-    "donate.ways": "Las formas de apoyo (USDT) están en la página oficial del programa en GitHub.",
+    "donate.ways": "Las formas de apoyo (con tarjeta a través de Ko-fi o USDT) están en la página oficial del programa en GitHub.",
     "donate.open": "♥ Abrir la página de apoyo",
     "donate.official": "Página oficial:",
     "donate.official2": "Descarga Framewring solo desde ahí. Si lo obtuviste en otro lugar y aquí aparece una "

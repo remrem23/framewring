@@ -27,7 +27,7 @@ STRINGS = {
     "donate.btn_title": "支持 Framewring 的作者",
     "donate.title": "支持作者",
     "donate.text": "Framewring 是免费的。如果它为你节省了空间和时间，欢迎支持作者。",
-    "donate.ways": "支持方式（USDT）见 GitHub 上的程序官方页面。",
+    "donate.ways": "支持方式（通过 Ko-fi 用银行卡支付，或 USDT）见 GitHub 上的程序官方页面。",
     "donate.open": "♥ 打开支持页面",
     "donate.official": "官方页面：",
     "donate.official2": "请只从这里下载 Framewring。如果你是从其他地方获得的，并且这里显示的是其他地址，"

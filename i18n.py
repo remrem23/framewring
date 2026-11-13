@@ -43,7 +43,7 @@ RU = {
     "donate.btn_title": "Поддержать автора Framewring",
     "donate.title": "Поддержать автора",
     "donate.text": "Framewring бесплатный. Если он сэкономил тебе место и время, можно поддержать автора.",
-    "donate.ways": "Способы поддержки (USDT) — на официальной странице программы на GitHub.",
+    "donate.ways": "Способы поддержки (картой через Ko-fi или USDT) — на официальной странице программы на GitHub.",
     "donate.open": "♥ Открыть страницу поддержки",
     "donate.official": "Официальная страница:",
     "donate.official2": "Скачивай Framewring только оттуда. Если программа скачана в другом месте и здесь указан "
@@ -430,7 +430,7 @@ EN = {
     "donate.btn_title": "Support the author of Framewring",
     "donate.title": "Support the author",
     "donate.text": "Framewring is free. If it saved you space and time, you can support the author.",
-    "donate.ways": "Ways to support (USDT) are listed on the program's official page on GitHub.",
+    "donate.ways": "Ways to support (by card via Ko-fi, or USDT) are listed on the program's official page on GitHub.",
     "donate.open": "♥ Open the support page",
     "donate.official": "Official page:",
     "donate.official2": "Download Framewring only from there. If you got it somewhere else and a different "
