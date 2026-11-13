@@ -11,6 +11,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # order: quick ones first
+SUITE_TIMEOUT = 900  # seconds per suite
 SUITES = ["test_history", "test_compress", "test_replace", "test_control"]
 
 
@@ -33,7 +34,11 @@ def main():
     for n in names:
         print("=" * 70 + "\n" + n + "\n" + "=" * 70, flush=True)
         t0 = time.time()
-        rc = subprocess.call([sys.executable, os.path.join(HERE, n + ".py")], env=env, cwd=HERE)
+        try:
+            rc = subprocess.call([sys.executable, os.path.join(HERE, n + ".py")], env=env, cwd=HERE, timeout=SUITE_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            print("TIMEOUT: %s did not finish in %d s" % (n, SUITE_TIMEOUT), flush=True)
+            rc = 124
         results.append((n, rc, time.time() - t0))
     print("=" * 70)
     for n, rc, dt in results:

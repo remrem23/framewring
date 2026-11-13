@@ -15,14 +15,14 @@ python tests/run_all.py
 
 If FFmpeg is not in `PATH`: `python tests/run_all.py --ffmpeg-dir <folder with bin\ffmpeg.exe>`
 (`python packaging/get_ffmpeg.py` prints such a folder). One suite: `python tests/run_all.py replace`.
-Takes about 2 minutes on a desktop PC. The exit code is 0 only if everything passed.
+The exit code is 0 only if everything passed. A suite that runs longer than 15 minutes is stopped and counted as failed.
 
 | Suite | What it checks |
 |---|---|
 | `test_compress.py` | Real compression on the CPU (x265 and SVT-AV1) through the program's HTTP API: status `done`, the result is smaller, duration and codec match, the original is untouched |
-| `test_replace.py` | Replacing originals with compressed files (12 scenarios): Recycle Bin, `.mkv` → `.mp4`, subst drives, changed/old/busy files, truncated video, interrupted replace and recovery, name collisions |
-| `test_control.py` | Early stop ("Kept") on already efficient video, Test-mode VMAF reuse, long paths, SHA-256 check, shortened audio, history import, parallel history writes, broken entries at startup, custom output folder |
-| `test_history.py` | History export/import and a forged-history attack (foreign files must stay untouched) |
+| `test_replace.py` | Replacing originals with compressed files: Recycle Bin, `.mkv` → `.mp4`, subst drive, changed/old/busy/already replaced/not smaller files, truncated video, interrupted replace and recovery, name collisions, rollback when the Recycle Bin step fails, the `compressed` folder (kept / removed when empty), a batch where one item fails, `/api/replace` with an unknown key. Not covered: copying across different drives |
+| `test_control.py` | A video with a complex start is compressed (not falsely "Kept"); an already efficient HEVC is stopped **early** during encoding (`note.no_gain_early`, x265 and SVT-AV1, slow speed so the 2-second watcher fires); VMAF from a Test run with other settings is not used; path of 250+ characters is blocked; a 1-byte change is caught by SHA-256; shortened audio is caught; imported history entry is blocked; 150+150 parallel history writes lose nothing; broken queue/history entries don't stop startup; recovery of an `.mp4` replace; a custom output folder is kept |
+| `test_history.py` | History export/import (into a fake Documents folder) and a forged-history attack: foreign files stay untouched, imported entries are blocked and a replace of them fails |
 
 ## Safety
 
@@ -31,14 +31,16 @@ settings, queue, history and backups of the program stay in that folder, and `HO
 Nothing in the repository, in `%APPDATA%\Framewring` or in an installed Framewring is touched, and no instance of the
 program is started (the HTTP server of `test_compress.py` listens on a random free port, not on 8765).
 The replace tests send **their own** files to the Windows Recycle Bin; on exit they remove from the bin only the entries
-whose original path is inside the test folder (`fwtest.clean_bin`). If a run is killed hard, leftovers are in
-`%TEMP%\fwtest_*` and can be deleted by hand. The replace tests need a drive with a working Recycle Bin and a free drive
-letter for `subst`; both exist on a normal Windows PC and on GitHub's `windows-*` runners.
+whose original path is inside the test folder (`fwtest.clean_bin`). **If a run is killed hard** (or a suite hits the
+timeout), cleanup does not run and leftovers stay: the folder `%TEMP%wtest_*` (or `%SystemDrive%wtest_*`), the
+matching items in the Recycle Bin (their original path starts with that folder), and — if it happened inside the
+`subst` scenario — a `subst` drive letter (remove with `subst X: /d`; the letter is one of W V U T S R Q P). Delete them by
+hand. The replace tests need a drive with a Recycle Bin (a local fixed drive) and a free drive letter for `subst`.
 
 ## CI
 
-`.github/workflows/tests.yml` runs these tests on a clean `windows-2025` runner (no GPU, no Everything) on every push
-to `main`, every pull request and on demand; `build.yml` runs them before building a release.
+`.github/workflows/tests.yml` runs these tests on a `windows-2025` runner (no video card, no Everything) on pushes to
+`main`, on pull requests (except docs-only changes) and on demand; `build.yml` runs them before building a release.
 
 ## Not covered here
 
@@ -62,29 +64,31 @@ python tests/run_all.py
 
 Если FFmpeg нет в `PATH`: `python tests/run_all.py --ffmpeg-dir <папка с bin\ffmpeg.exe>`
 (такую папку печатает `python packaging/get_ffmpeg.py`). Один набор: `python tests/run_all.py replace`.
-Около 2 минут на обычном ПК. Код выхода 0 — только если всё прошло.
+Код выхода 0 — только если всё прошло. Набор, который идёт дольше 15 минут, останавливается и считается упавшим.
 
 | Набор | Что проверяет |
 |---|---|
 | `test_compress.py` | Настоящее сжатие на процессоре (x265 и SVT-AV1) через HTTP API программы: статус `done`, результат меньше, длительность и кодек совпадают, оригинал не тронут |
-| `test_replace.py` | Замена оригиналов сжатыми (12 сценариев): Корзина, `.mkv` → `.mp4`, диски subst, изменённые/старые/занятые файлы, обрезанное видео, прерванная замена и восстановление, занятые имена |
-| `test_control.py` | Ранняя остановка («Оставлен») на уже эффективном видео, VMAF из режима «Проба», длинные пути, проверка SHA-256, укороченный звук, импорт истории, параллельная запись истории, кривые записи при запуске, своя папка вывода |
-| `test_history.py` | Экспорт/импорт истории и атака подделанной историей (чужие файлы должны остаться нетронутыми) |
+| `test_replace.py` | Замена оригиналов сжатыми: Корзина, `.mkv` → `.mp4`, диск subst, изменённые/старые/занятые/уже заменённые/не меньшие файлы, обрезанное видео, прерванная замена и восстановление, занятые имена, откат при сбое шага «Корзина», папка `compressed` (остаётся / удаляется пустой), пакет, где один элемент падает, `/api/replace` с неизвестным ключом. Не покрыто: копирование между разными дисками |
+| `test_control.py` | Видео со сложным началом сжимается (не «Оставлен» по ошибке); уже эффективный HEVC останавливается **рано**, во время кодирования (`note.no_gain_early`, x265 и SVT-AV1, медленная скорость, чтобы сработал двухсекундный наблюдатель); VMAF из «Пробы» с другими настройками не используется; путь от 250 символов заблокирован; изменение одного байта ловится по SHA-256; укороченный звук ловится; импортированная запись заблокирована; 150+150 параллельных записей истории ничего не теряют; кривые записи очереди/истории не мешают запуску; восстановление замены `.mp4`; своя папка вывода остаётся |
+| `test_history.py` | Экспорт/импорт истории (в подменённую папку «Документы») и атака подделанной историей: чужие файлы не тронуты, импортированные записи заблокированы, замена по ним не проходит |
 
 ## Безопасность
 
 Каждый набор работает в своей новой временной папке: туда **копируются** `app.py`, `i18n.py` и `locales/`, поэтому настройки,
 очередь, история и резервные копии программы остаются в ней, а `HOME`/`USERPROFILE` тоже указывают внутрь. Репозиторий,
 `%APPDATA%\Framewring` и установленный Framewring не затрагиваются, экземпляр программы не запускается (HTTP-сервер
-`test_compress.py` слушает случайный свободный порт, не 8765). Тесты замены отправляют в Корзину **свои** файлы; при выходе они
-удаляют из Корзины только записи, чей исходный путь лежит внутри тестовой папки (`fwtest.clean_bin`). Если запуск убили
-принудительно, остатки лежат в `%TEMP%\fwtest_*` — их можно удалить вручную. Тестам замены нужен диск с рабочей Корзиной и
-свободная буква диска для `subst` — на обычном ПК с Windows и на раннерах GitHub `windows-*` это есть.
+`test_compress.py` слушает случайный свободный порт, не 8765). Тесты замены отправляют в Корзину **свои** файлы; при выходе они удаляют из Корзины только записи, чей исходный
+путь лежит внутри тестовой папки (`fwtest.clean_bin`). **Если запуск убит принудительно** (или набор упёрся в таймаут),
+очистка не выполняется и остаётся: папка `%TEMP%wtest_*` (или `%SystemDrive%wtest_*`), соответствующие записи в
+Корзине (их исходный путь начинается с этой папки) и — если это случилось внутри сценария `subst` — буква диска `subst`
+(убрать: `subst X: /d`; буква — одна из W V U T S R Q P). Удалите вручную. Тестам замены нужен диск с Корзиной
+(локальный фиксированный) и свободная буква диска для `subst`.
 
 ## CI
 
-`.github/workflows/tests.yml` запускает тесты на чистом раннере `windows-2025` (без видеокарты и без Everything) при каждом
-push в `main`, каждом pull request и по кнопке; `build.yml` запускает их перед сборкой релиза.
+`.github/workflows/tests.yml` запускает тесты на раннере `windows-2025` (без видеокарты и без Everything) при push в
+`main`, в pull request (кроме правок только документации) и по кнопке; `build.yml` запускает их перед сборкой релиза.
 
 ## Не покрыто
 

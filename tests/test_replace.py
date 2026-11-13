@@ -30,7 +30,7 @@ check("2 file bigger than Recycle Bin is blocked", bc is not None and bc["k"] ==
 check("2b normal size fits", app.bin_check(a, 10 ** 6) is None, app.bin_check(a, 10 ** 6))
 
 # 3. subst: replacing through a subst drive letter still sends to the Recycle Bin (by the real path)
-letter = next((l for l in "WVUTSRQP" if not os.path.exists(l + ":\\")), None)
+letter = t.free_letter()
 if letter and os.name == "nt":
     subprocess.run(["subst", letter + ":", V], check=True)
     try:
@@ -68,8 +68,7 @@ app.HISTORY["items"].insert(0, {"t": 0, "src": os.path.join(V, "zzz.mp4"), "out"
 app.replace_run([k])
 app.HISTORY["items"].insert(0, {"t": -1, "src": os.path.join(V, "yyy.mp4"), "out": os.path.join(V, "yyy2.mp4"),
                                 "name": "yyy", "size": 1, "out_size": 1})
-while app.REPLACE["running"]:
-    time.sleep(0.3)
+t.wait_replace()
 hd = entry(d)
 check("6 history shifted mid-run: the right entry is marked replaced", hd.get("replaced") and not any(
     x.get("replaced") for x in app.HISTORY["items"] if x["name"] in ("zzz", "yyy")))
@@ -135,5 +134,91 @@ app.verify_output = slow_verify
 r = run_replace(j12)
 app.verify_output = orig_verify
 check("12 a file appearing during verify is NOT overwritten", open(j12[:-4] + ".mp4", "rb").read() == b"FOREIGN"
-      and os.path.exists(j12) and r["state"] == "error", r["err"])
+      and os.path.exists(j12) and r["state"] == "error" and r["err"]["k"] == "rep.b.collision", r["err"])
+
+# ---------------------------------------------------------------- more scenarios ----
+
+
+def same_bytes(p, data):
+    return os.path.isfile(p) and open(p, "rb").read() == data
+
+
+# 13. the original was edited after compression -> blocked, both files intact
+n13 = mk("n13.mp4"); compress(n13)
+o13 = entry(n13)["out"]
+with open(n13, "ab") as f:
+    f.write(b"\0" * 100)
+src13, out13 = open(n13, "rb").read(), open(o13, "rb").read()
+r = run_replace(n13)
+check("13 original edited after compression -> rep.b.src_changed, nothing touched", "rep.b.src_changed" in keys(cand(n13)["block"])
+      and r["state"] == "error" and r["err"]["k"] == "rep.b.src_changed" and same_bytes(n13, src13) and same_bytes(o13, out13), r["err"])
+
+# 14. the Recycle Bin step fails -> rolled back: compressed file back in place, original intact
+p14 = mk("p14.mp4"); compress(p14)
+o14 = entry(p14)["out"]
+src14, out14 = open(p14, "rb").read(), open(o14, "rb").read()
+orig_recycle = app.recycle
+app.recycle = lambda p: False
+try:
+    r = run_replace(p14)
+finally:
+    app.recycle = orig_recycle
+check("14 Recycle Bin fails -> rolled back, both files intact", r["state"] == "error" and r["err"]["k"] == "rep.err.recycle"
+      and same_bytes(p14, src14) and same_bytes(o14, out14) and not app._tmp_for(p14).exists()
+      and not entry(p14).get("replace_tmp") and not entry(p14).get("replaced"), r["err"])
+check("14b the entry can be replaced afterwards", run_replace(p14)["state"] == "done")
+
+# 15. the default "compressed" folder: kept while it holds other files, removed when it becomes empty
+D15 = os.path.join(V, "f15"); os.makedirs(D15)
+x15, y15 = os.path.join(D15, "x.mp4"), os.path.join(D15, "y.mp4")
+shutil.copy2(mk("x.mp4", dur=3), x15); shutil.copy2(mk("y.mp4", dur=3), y15)
+compress(x15); compress(y15)
+cdir = os.path.join(D15, "compressed")
+r1 = run_replace(x15)
+check("15a compressed folder is kept while another result is in it", r1["state"] == "done" and os.path.isdir(cdir)
+      and os.listdir(cdir) == ["y.mp4"], os.listdir(cdir) if os.path.isdir(cdir) else None)
+r2 = run_replace(y15)
+check("15b compressed folder is removed when empty", r2["state"] == "done" and not os.path.exists(cdir), r2)
+
+# 16. a second replace of the same entry and a result that is not smaller
+check("16a already replaced entry -> rep.b.replaced", "rep.b.replaced" in keys(cand(a)["block"]), keys(cand(a)["block"]))
+k16 = app._hkey(entry(a))
+app.replace_run([k16]); t.wait_replace()
+check("16b second replace is refused and the file stays", app.REPLACE["items"][k16]["state"] == "error"
+      and app.REPLACE["items"][k16]["err"]["k"] == "rep.b.replaced" and app.probe(a)["vcodec"] == "hevc",
+      app.REPLACE["items"][k16]["err"])
+q16 = mk("q16.mp4", dur=3); compress(q16)
+o16 = entry(q16)["out"]
+with open(o16, "ab") as f:
+    f.write(b"\0" * (os.path.getsize(q16) + 10))  # now bigger than the original (and changed, so also out_changed)
+check("16c result not smaller than the original -> rep.b.not_smaller", "rep.b.not_smaller" in keys(cand(q16)["block"]),
+      keys(cand(q16)["block"]))
+
+# 17. a batch of three: the middle one fails, the other two are replaced
+b1, b2, b3 = (mk("batch%d.mp4" % i, dur=3) for i in (1, 2, 3))
+for p in (b1, b2, b3):
+    compress(p)
+with open(entry(b2)["out"], "ab") as f:
+    f.write(b"\0")  # changed after compression
+src_b2 = open(b2, "rb").read()
+ks3 = [app._hkey(entry(p)) for p in (b1, b2, b3)]
+app.replace_run(ks3); t.wait_replace()
+st = [app.REPLACE["items"][k]["state"] for k in ks3]
+check("17 batch of 3: the failing one does not stop the others", st == ["done", "error", "done"]
+      and app.probe(b1)["vcodec"] == "hevc" and app.probe(b3)["vcodec"] == "hevc" and same_bytes(b2, src_b2), st)
+
+# 18. /api/replace with an unknown key -> rep.err.blocked, nothing starts
+route = lambda path, body: app.H.route(app.H.__new__(app.H), path, body)  # noqa: E731
+try:
+    route("/api/replace", {"keys": ["no-such-key|0"]})
+    err = None
+except app.UserError as e:
+    err = e.k
+check("18a /api/replace with an unknown key -> rep.err.blocked", err == "rep.err.blocked" and not app.REPLACE["running"], err)
+try:
+    route("/api/replace", {"keys": []})
+    err = None
+except app.UserError as e:
+    err = e.k
+check("18b /api/replace with no keys -> rep.err.none", err == "rep.err.none", err)
 t.finish()

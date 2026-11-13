@@ -32,7 +32,7 @@ def clean_bin(prefix, dry=False):
     """Remove from the Recycle Bin ONLY entries whose original path is inside `prefix`. Returns the count."""
     if os.name != "nt":
         return 0
-    prefix = os.path.normcase(_long(prefix))
+    prefix = os.path.normcase(_long(prefix)).rstrip("\/") + os.sep  # a folder, not a name prefix
     root = os.path.splitdrive(prefix)[0] + "\\"
     base = os.path.join(root, "$Recycle.Bin")
     n = 0
@@ -102,9 +102,13 @@ class T:
         os.chdir(self.work)
         import app  # the COPY inside the work folder
         self.app = app
-        assert os.path.normcase(os.path.dirname(os.path.abspath(app.__file__))) == os.path.normcase(self.prog), app.__file__
-        assert os.path.normcase(str(app.DATA_DIR)).startswith(os.path.normcase(self.work)), app.DATA_DIR
-        assert app.FFMPEG and app.FFPROBE, "ffmpeg/ffprobe not found in PATH"
+        # safety guards (explicit, they must also work under python -O): never run against the real program folder
+        if os.path.normcase(os.path.dirname(os.path.abspath(app.__file__))) != os.path.normcase(self.prog):
+            raise SystemExit("SAFETY: app was imported from %s, not from the test copy" % app.__file__)
+        if not os.path.normcase(str(app.DATA_DIR)).startswith(os.path.normcase(self.work)):
+            raise SystemExit("SAFETY: program data folder %s is outside the work folder" % app.DATA_DIR)
+        if not (app.FFMPEG and app.FFPROBE):
+            raise SystemExit("ffmpeg/ffprobe not found in PATH")
         print("[%s] work folder: %s" % (name, self.work), flush=True)
 
     # work folder: temp dir; with need_bin - on a drive that has a usable Recycle Bin
@@ -206,10 +210,23 @@ class T:
     def keys(m):
         return [x["k"] for x in m]
 
+    def wait_replace(self, limit=300):
+        t0 = time.time()
+        while self.app.REPLACE["running"]:
+            if time.time() - t0 > limit:
+                raise SystemExit("TIMEOUT: replace did not finish in %d s" % limit)
+            time.sleep(0.3)
+
     def run_replace(self, src):
         app = self.app
         k = app._hkey(self.entry(src))
         app.replace_run([k])
-        while app.REPLACE["running"]:
-            time.sleep(0.3)
+        self.wait_replace()
         return app.REPLACE["items"][k]
+
+    @staticmethod
+    def free_letter(prefer="WVUTSRQP"):
+        """A drive letter that is not in use (GetLogicalDrives bitmask), or None."""
+        import ctypes
+        mask = ctypes.windll.kernel32.GetLogicalDrives()
+        return next((c for c in prefer if not mask & (1 << (ord(c) - 65))), None)

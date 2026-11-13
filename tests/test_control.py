@@ -23,17 +23,23 @@ ff("-f", "lavfi", "-i", "testsrc2=size=960x540:rate=30:duration=5", "-f", "lavfi
 j = compress(fl, preset="x265", speed="fast")
 check("1 front-loaded video is compressed, not falsely Kept", j["status"] == "done", (j["status"], j["size"], j["out_size"]))
 
-# 2. an already efficient HEVC is still stopped early ("Kept", no gain). This used to run on NVENC AV1;
-#    on the CPU the same logic is exercised with SVT-AV1 and with x265 on an HEVC CRF 30 source.
+# 2. EARLY STOP: an already efficient HEVC must be stopped while it is being encoded (note.no_gain_early, written by the
+#    2-second size watcher), not after a full encode (that is note.no_gain). The slow speed keeps the encode running
+#    long enough for the watcher on any machine. This used to run on NVENC AV1; here it is x265 and SVT-AV1.
 eff = os.path.join(V, "efficient.mp4")
-ff("-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30:duration=12", "-vf", "noise=alls=12:allf=t+u,format=yuv420p",
+ff("-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30:duration=20", "-vf", "noise=alls=12:allf=t+u,format=yuv420p",
    "-c:v", "libx265", "-preset", "ultrafast", "-crf", "30", "-x265-params", "log-level=error", eff)
-j = compress(eff, preset="x265")
-check("2a efficient HEVC re-encoded with x265 is stopped (Kept)", j["status"] == "kept" and j["note"] and "no_gain" in json.dumps(j["note"]),
-      (j["status"], j["note"] and app.i18n.text("en", j["note"])[:60]))
-j = compress(eff, preset="av1")
-check("2b efficient HEVC re-encoded with SVT-AV1 is stopped (Kept)", j["status"] == "kept" and j["note"] and "no_gain" in json.dumps(j["note"]),
-      (j["status"], j["note"] and app.i18n.text("en", j["note"])[:60]))
+
+
+def note_keys(j):
+    n = j["note"] if isinstance(j["note"], list) else [j["note"]]
+    return [x["k"] for x in n if isinstance(x, dict)]
+
+
+for preset, tag in (("x265", "a"), ("av1", "b")):
+    j = compress(eff, preset=preset, speed="slow")
+    check("2%s %s: efficient HEVC is stopped EARLY (Kept, note.no_gain_early)" % (tag, preset),
+          j["status"] == "kept" and "note.no_gain_early" in note_keys(j), (j["status"], note_keys(j)))
 
 # 3. VMAF from a Test run with other settings is not used
 v3 = mk("vmaf.mp4"); app.add_path(v3); j3 = app.JOBS[-1]
@@ -42,16 +48,17 @@ j3["status"] = "running"
 app.do_full(j3, t.settings(preset="x265", quality="compact"))
 check("3 Test VMAF from other settings is not used", entry(v3).get("vmaf") is None and "rep.w.no_test" in ks(cand(v3)["warn"]))
 
-# 4. a path longer than 250 chars is blocked (kept below 260 so no long-path support is needed)
+# 4. a path of 250+ characters is blocked. The source path is 254 characters, i.e. still below Windows' MAX_PATH (260),
+#    so the test does not depend on LongPathsEnabled; the output folder is short, so only the source path is long.
 cur = V
 while 223 - len(cur) > 2:
     cur = os.path.join(cur, "d" * min(30, 223 - len(cur) - 1))
-deep = cur
-os.makedirs(deep, exist_ok=True)
-lp = os.path.join(deep, "x" * 16 + "_long_video.mp4")
+os.makedirs(cur, exist_ok=True)
+lp = os.path.join(cur, "x" * 16 + "_long_video.mp4")
 shutil.copy2(mk("lsrc.mp4"), lp)
-compress(lp)
-check("4 path > 250 chars is blocked", len(app._real_path(lp)) > 250 and "rep.b.long_path" in ks(cand(lp)["block"]), len(app._real_path(lp)))
+compress(lp, outdir=os.path.join(V, "o"))
+check("4 path > 250 chars is blocked", 250 <= len(app._real_path(lp)) < 260 and "rep.b.long_path" in ks(cand(lp)["block"]),
+      len(app._real_path(lp)))
 
 # 5. checksum: a silently changed byte in the compressed file is caught
 h5 = mk("hash.mp4"); j5 = compress(h5)
@@ -104,8 +111,12 @@ def w2():
 
 t1, t2 = threading.Thread(target=w1), threading.Thread(target=w2); t1.start(); t2.start(); t1.join(); t2.join()
 disk = json.load(open(app.HISTORY_FILE, encoding="utf-8"))
-check("8 concurrent history writes: no errors, nothing lost", not errs and len(disk) == len(app.HISTORY["items"]),
-      (len(errs), len(disk), len(app.HISTORY["items"])))
+mem_p = [h for h in app.HISTORY["items"] if h.get("name") == "p"]
+disk_p = [h for h in disk if h.get("name") == "p"]
+disk_a6 = next((h for h in disk if os.path.normcase(h.get("src", "")) == os.path.normcase(a6)), {})
+check("8 concurrent history writes: no errors, nothing lost", not errs and len(disk) == len(app.HISTORY["items"])
+      and len(mem_p) == len(disk_p) == 150 and disk_a6.get("note_test") == 149 and entry(a6).get("note_test") == 149,
+      (len(errs), len(disk), len(disk_p), disk_a6.get("note_test")))
 
 # 9. broken queue/history entries do not stop startup
 json.dump([{"path": None, "name": "x"}, 5, {"path": a6, "name": "ok", "size": 1, "status": "ready"}], open(str(app.QUEUE_FILE), "w"))
