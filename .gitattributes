@@ -1,10 +1,18 @@
+# Normalize line endings in the repository (LF inside, per-type endings in the working tree).
 * text=auto
 *.py text eol=lf
 *.sh text eol=lf
 *.command text eol=lf
 *.md text eol=lf
 *.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.txt text eol=lf
+# Windows-only files that must keep CRLF.
 *.bat text eol=crlf
 README.txt text eol=crlf
 *.iss text eol=crlf
 *.ps1 text eol=crlf
+# Never touch the bytes of images and icons.
+*.png binary
+*.ico binary
