@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Framewring Жмых — локальный компрессор видео с веб-интерфейсом.
-Обёртка над FFmpeg. Работает только на твоём компьютере, файлы никуда не уходят.
-Требования: Python 3.8+ и FFmpeg (в PATH или в папке ffmpeg рядом со скриптом).
+Framewring - local video compressor with a web interface.
+A wrapper around FFmpeg. Works only on your computer, files never leave it.
+Requirements: Python 3.8+ and FFmpeg (in PATH or in an ffmpeg folder next to the script).
 """
 import ctypes
 import json
@@ -26,26 +26,26 @@ from pathlib import Path
 import i18n
 
 __version__ = "0.9.3"
-APP_NAMES = i18n.APP_NAMES  # заголовок окна: «Framewring Жмых» / «Framewring»
-REPO_URL = "https://github.com/remrem23/framewring"  # официальная страница программы
+APP_NAMES = i18n.APP_NAMES  # window title (Russian name / plain name)
+REPO_URL = "https://github.com/remrem23/framewring"  # official page of the program
 DONATE_URL = REPO_URL + "/blob/main/DONATE.md"
 EVERYTHING_URL = "https://www.voidtools.com/"
 OPEN_URLS = (REPO_URL, DONATE_URL, EVERYTHING_URL)
 RELEASES_URL = REPO_URL + "/releases/latest"
 RELEASES_API = "https://api.github.com/repos/remrem23/framewring/releases/latest"
-ISSUES_NEW = REPO_URL + "/issues/new"  # только эти ссылки интерфейс может открыть
+ISSUES_NEW = REPO_URL + "/issues/new"  # the interface may open only these links
 
-FROZEN = bool(getattr(sys, "frozen", False))  # собрано в .exe (PyInstaller)
-APP_DIR = Path(__file__).resolve().parent  # код (в сборке — внутренняя папка)
-# Папка программы: рядом с exe в сборке, рядом с app.py при запуске из исходников
+FROZEN = bool(getattr(sys, "frozen", False))  # built into an .exe (PyInstaller)
+APP_DIR = Path(__file__).resolve().parent  # code (in a build: the internal folder)
+# Program folder: next to the exe in a build, next to app.py when run from source
 BASE_DIR = Path(sys.executable).resolve().parent if FROZEN else APP_DIR
 
 
 def _data_dir():
-    """Где хранить настройки, очередь, историю и кэш.
-    - запуск из исходников: рядом с app.py (как раньше, ничего не теряется);
-    - портабл-сборка (рядом с exe лежит portable.txt): папка data рядом с exe;
-    - установленная сборка: %APPDATA%\\Framewring (в Program Files писать нельзя)."""
+    """Where to keep settings, queue, history and cache.
+    - run from source: next to app.py (as before, nothing is lost);
+    - portable build (portable.txt next to the exe): a data folder next to the exe;
+    - installed build: %APPDATA%\\Framewring (Program Files is not writable)."""
     if not FROZEN:
         return APP_DIR
     if (BASE_DIR / "portable.txt").exists():
@@ -73,11 +73,11 @@ IS_MAC = sys.platform == "darwin"
 
 def find_tool(name):
     exe = name + (".exe" if IS_WIN else "")
-    for d in dict.fromkeys((BASE_DIR, APP_DIR)):  # рядом с exe/app.py, затем внутри сборки
+    for d in dict.fromkeys((BASE_DIR, APP_DIR)):  # next to exe/app.py, then inside the build
         for cand in (d / "ffmpeg" / "bin" / exe, d / "ffmpeg" / exe, d / exe):
             if cand.is_file():
                 return str(cand)
-    w = shutil.which(name)  # на Windows which смотрит и в текущую папку — её не берём
+    w = shutil.which(name)  # on Windows which also looks in the current folder - we don't want that
     return w if w and os.path.isabs(w) and Path(w).parent.resolve() != Path.cwd().resolve() else None
 
 
@@ -94,9 +94,9 @@ def run_quiet(args, timeout=60):
                           universal_newlines=True, encoding="utf-8", errors="replace")
 
 
-# ------------------------------------------------- Дочерние процессы ----
-# На Windows закрытие окна консоли убивает Python, но ffmpeg (запущенный без окна) продолжал бы
-# жечь процессор и писать .part-файл. Job Object с KILL_ON_JOB_CLOSE гасит его вместе с нами.
+# ------------------------------------------------- Child processes ----
+# On Windows, closing the console window kills Python, but ffmpeg (started without a window) would keep
+# burning CPU and writing the .part file. A Job Object with KILL_ON_JOB_CLOSE kills it together with us.
 
 _WIN_JOB = None
 
@@ -146,7 +146,7 @@ def _posix_child_setup(lowprio):
             except Exception:
                 pass
         if sys.platform.startswith("linux"):
-            try:  # умереть вместе с родителем
+            try:  # die together with the parent
                 import ctypes
                 import signal
                 ctypes.CDLL("libc.so.6").prctl(1, signal.SIGTERM)
@@ -156,7 +156,7 @@ def _posix_child_setup(lowprio):
 
 
 def spawn(args, lowprio=False, **kw):
-    """Popen для ffmpeg: без окна, с пониженным приоритетом, привязан к жизни Жмыха."""
+    """Popen for ffmpeg: no window, lowered priority, tied to the lifetime of the app."""
     if IS_WIN:
         kw["creationflags"] = NO_WINDOW | (BELOW_NORMAL if lowprio else 0)
     else:
@@ -173,7 +173,7 @@ def spawn(args, lowprio=False, **kw):
 
 
 def avail_mem():
-    """Сколько памяти реально можно выделить (байт) или None, если неизвестно."""
+    """How much memory can really be allocated (bytes), or None if unknown."""
     try:
         if IS_WIN:
             import ctypes
@@ -186,7 +186,7 @@ def avail_mem():
             m = MS()
             m.dwLength = ctypes.sizeof(MS)
             if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m)):
-                # AvailPageFile = свободный commit-лимит: при его нехватке аллокация падает
+                # AvailPageFile = free commit limit: when it runs out, allocation fails
                 return min(m.AvailPageFile, m.AvailPhys + 2 * 2 ** 30)
         elif sys.platform.startswith("linux"):
             vals = {}
@@ -201,8 +201,8 @@ def avail_mem():
 
 
 def pagefile_off():
-    """Windows без файла подкачки: лимит памяти = объём ОЗУ, и при всплесках ffmpeg падает с
-    «Cannot allocate memory», даже когда физической памяти ещё полно."""
+    """Windows without a page file: the memory limit equals the RAM size, and on spikes ffmpeg fails with
+    "Cannot allocate memory" even when plenty of physical memory is still free."""
     if not IS_WIN:
         return False
     try:
@@ -221,35 +221,35 @@ def pagefile_off():
 
 
 def svt_lp_for(info):
-    """SVT-AV1 по умолчанию на 3440×1440 хочет ~6,6 ГБ. Если столько нет, он падает с
-    'allocate memory failed'. Подбираем уровень параллельности (lp) под свободную память."""
+    """By default SVT-AV1 at 3440x1440 wants ~6.6 GB. If there is not that much, it fails with
+    'allocate memory failed'. We pick the parallelism level (lp) to fit the free memory."""
     budget = avail_mem()
     if not budget or not info:
         return None
     budget *= 0.95
     mp = max(1, (info.get("width") or 1920) * (info.get("height") or 1080)) / 1e6
 
-    def need(lp):  # замерено на SVT-AV1 4.x, 10 бит, preset 6
+    def need(lp):  # measured on SVT-AV1 4.x, 10 bit, preset 6
         return (mp * (0.25 * lp + 0.07) + 0.3) * 2 ** 30
     if need(5) <= budget:
-        return None  # хватает на настройки по умолчанию
+        return None  # enough for the default settings
     for lp in (4, 3, 2):
         if need(lp) <= budget:
             return lp
     return 1
 
 
-# ---------------------------------------------------------------- Тексты ----
-# Всё, что видит пользователь, бэкенд отдаёт ключом с параметрами: {"k": ключ, "p": {...}}.
-# Переводит страница (словарь из i18n.py), поэтому заметки и ошибки в queue.json не привязаны
-# к языку и после переключения языка показываются на новом. Сырые тексты ffmpeg/ОС — обычные строки.
+# ---------------------------------------------------------------- Texts ----
+# Everything the user sees is passed by the backend as a key with parameters: {"k": key, "p": {...}}.
+# The page translates it (dictionary from i18n.py), so notes and errors in queue.json are not tied
+# to a language and are shown in the new one after switching. Raw ffmpeg/OS texts are plain strings.
 
 def M(key, **p):
     return {"k": key, "p": p}
 
 
 class UserError(RuntimeError):
-    """Ошибка для пользователя: ключ перевода + параметры."""
+    """Error for the user: translation key + parameters."""
 
     def __init__(self, key, **p):
         super().__init__(key)
@@ -263,12 +263,12 @@ class UserError(RuntimeError):
 
 
 def err_msg(e):
-    """Исключение -> то, что кладём в job["error"]."""
+    """Exception -> what we put into job["error"]."""
     return e.msg() if isinstance(e, UserError) else str(e)
 
 
 def add_note(job, m):
-    """Добавить заметку к задаче (их может быть несколько)."""
+    """Add a note to the job (there can be several)."""
     cur = job.get("note")
     job["note"] = m if not cur else (cur if isinstance(cur, list) else [cur]) + [m]
 
@@ -281,7 +281,7 @@ def cur_lang():
 
 
 def tr(key, **p):
-    """Перевод на текущий язык: для системных окон и консоли."""
+    """Translation into the current language: for system windows and the console."""
     return i18n.t(cur_lang(), key, **p)
 
 
@@ -289,33 +289,33 @@ def app_name():
     return i18n.app_name(cur_lang())
 
 
-# Пресеты (порядок показа). Названия и описания: i18n.py, ключи preset.<код>.title/.desc
+# Presets (display order). Titles and descriptions: i18n.py, keys preset.<code>.title/.desc
 PRESETS = ("nvenc_av1", "nvenc_hevc", "amf_av1", "amf_hevc", "qsv_av1", "qsv_hevc", "vt_hevc", "x265", "av1")
-HW_VENDOR = {"nvenc": "nvidia", "amf": "amd", "qsv": "intel"}  # режим видеокарты -> производитель
-# Что рекомендовать: видеокарта, если есть. Процессор жмёт чуть плотнее, но на порядок дольше.
-# AV1 на AMD и Intel ниже H.265, пока не проверены на настоящих видеокартах
+HW_VENDOR = {"nvenc": "nvidia", "amf": "amd", "qsv": "intel"}  # GPU mode -> vendor
+# What to recommend: the video card, if present. The CPU compresses slightly tighter, but an order of magnitude slower.
+# AV1 on AMD and Intel is below H.265 until tested on real video cards
 RECOMMEND = ("nvenc_av1", "nvenc_hevc", "amf_hevc", "qsv_hevc", "amf_av1", "qsv_av1", "vt_hevc", "x265", "av1")
 
-# Качество: high / balanced / compact
+# Quality: high / balanced / compact
 QUALITY = {
     "x265": {"high": 20, "balanced": 22, "compact": 24},
     "av1": {"high": 27, "balanced": 30, "compact": 33},
     "nvenc_hevc": {"high": 22, "balanced": 24, "compact": 27},
     "nvenc_av1": {"high": 27, "balanced": 30, "compact": 33},
     "vt_hevc": {"high": 70, "balanced": 62, "compact": 55},
-    # AMD: постоянный QP. Замер (10 бит, тот же ролик): QP 22/24/27 ≈ NVENC CQ 22/24/27 по размеру и VMAF
+    # AMD: constant QP. Measured (10 bit, same clip): QP 22/24/27 ~ NVENC CQ 22/24/27 in size and VMAF
     "amf_hevc": {"high": 22, "balanced": 24, "compact": 27},
-    # AV1 у AMF — шкала 0–255 (≈ 4×QP HEVC); на настоящем RX 7000 ещё не проверено
-    "amf_av1": {"high": 108, "balanced": 120, "compact": 132},  # ≈ 4× шкалы 0–63, как CQ 27/30/33 у других AV1
-    # Intel: ICQ 1–51; на настоящем железе ещё не проверено
+    # AMF AV1 uses a 0-255 scale (~4x HEVC QP); not yet tested on a real RX 7000
+    "amf_av1": {"high": 108, "balanced": 120, "compact": 132},  # ~4x of the 0-63 scale, like CQ 27/30/33 of other AV1 encoders
+    # Intel: ICQ 1-51; not yet tested on real hardware
     "qsv_hevc": {"high": 22, "balanced": 24, "compact": 27},
     "qsv_av1": {"high": 24, "balanced": 27, "compact": 30},
 }
 SPEED = {
     "x265": {"slow": "slow", "normal": "medium", "fast": "fast"},
     "av1": {"slow": "4", "normal": "6", "fast": "8"},
-    # NVENC: (пресет, multipass). Замер на 2560×1440: p6+fullres в 2× медленнее p5+qres при том же
-    # размере и VMAF, поэтому «Обычно» = p5+qres.
+    # NVENC: (preset, multipass). Measured at 2560x1440: p6+fullres is 2x slower than p5+qres with the same
+    # size and VMAF, so "Normal" = p5+qres.
     "nvenc_hevc": {"slow": ("p7", "fullres"), "normal": ("p5", "qres"), "fast": ("p4", "disabled")},
     "nvenc_av1": {"slow": ("p7", "fullres"), "normal": ("p5", "qres"), "fast": ("p4", "disabled")},
     "vt_hevc": {"slow": None, "normal": None, "fast": None},
@@ -343,7 +343,7 @@ def video_args(preset, quality, speed, lp=None):
     if preset == "nvenc_av1":
         return ["-c:v", "av1_nvenc", "-preset", s[0], "-tune", "hq", "-rc", "vbr", "-cq", str(q), "-b:v", "0",
                 "-multipass", s[1], "-spatial-aq", "1", "-rc-lookahead", "32", "-pix_fmt", "p010le"]
-    if preset == "amf_hevc":  # 10 бит: в 8 битах AMF портил картинку (VMAF 56 против 99 в замере)
+    if preset == "amf_hevc":  # 10 bit: in 8 bit AMF damaged the picture (VMAF 56 vs 99 in the measurement)
         return ["-c:v", "hevc_amf", "-usage", "transcoding", "-quality", s, "-rc", "cqp", "-qp_i", str(q),
                 "-qp_p", str(q), "-profile:v", "main10", "-pix_fmt", "p010le", "-tag:v", "hvc1"]
     if preset == "amf_av1":
@@ -366,8 +366,8 @@ CAPS = {"ffmpeg": bool(FFMPEG), "ffprobe": bool(FFPROBE), "version": "", "preset
 
 
 def gpu_names():
-    """Названия видеокарт из описаний драйверов в реестре (без WMI — он бывает очень медленным).
-    Виртуальные мониторы и прочее отбрасываем: только Nvidia / AMD / Intel."""
+    """Video card names from the driver descriptions in the registry (no WMI - it can be very slow).
+    Virtual monitors and the like are dropped: only Nvidia / AMD / Intel."""
     names = []
     if not IS_WIN:
         return names
@@ -394,7 +394,7 @@ def gpu_names():
 
 
 def gpu_vendors():
-    """Какие видеокарты стоят: nvidia / amd / intel."""
+    """Which video cards are installed: nvidia / amd / intel."""
     found = set()
     for desc in gpu_names():
         d = desc.lower()
@@ -428,7 +428,7 @@ def detect_caps():
             return {"ok": False, "why": M("caps.no_encoder")}
         if p in ("x265", "av1"):
             return {"ok": True, "why": ""}
-        # Проверяем, что железо реально умеет, теми же флагами
+        # Check that the hardware really can do it, with the same flags
         try:
             r = run_quiet([FFMPEG, "-hide_banner", "-v", "error", "-f", "lavfi", "-i",
                            "color=black:s=1920x1080:r=30:d=0.5"] + video_args(p, "balanced", "normal")
@@ -438,20 +438,20 @@ def detect_caps():
         except Exception:
             return {"ok": False, "why": M("caps.check_failed")}
 
-    # аппаратные проверки параллельно: запуск быстрее
+    # hardware checks in parallel: faster startup
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=len(need)) as ex:
         res = {p: ex.submit(check, p, name) for p, name in need.items()}
     pres = {p: res[p].result() for p in need}
     for p, c in pres.items():
-        # показываем: процессор — всегда; видеокарту — если работает, а если нет — только когда такая
-        # видеокарта стоит (тогда видно, почему недоступно). Чужие производители не захламляют список.
+        # show: the CPU always; the video card if it works, and if not - only when such a
+        # card is installed (so it is clear why it is unavailable). Other vendors do not clutter the list.
         v = HW_VENDOR.get(p.split("_")[0])
         c["show"] = p in ("x265", "av1") or c["ok"] or (v is not None and v in vendors)
-    CAPS["presets"] = pres  # целиком, чтобы /api/status не видел полсловаря
+    CAPS["presets"] = pres  # whole at once, so /api/status never sees a half-filled dict
     CAPS["recommended"] = next((p for p in RECOMMEND if CAPS["presets"][p]["ok"]), "")
     with LOCK:
-        # первый запуск (режим ещё ни разу не выбирали) или выбранный режим недоступен -> рекомендуемый
+        # first run (mode never chosen yet) or the chosen mode is unavailable -> the recommended one
         if (not PRESET_CHOSEN or not CAPS["presets"].get(SETTINGS["preset"], {}).get("ok")) and CAPS["recommended"]:
             SETTINGS["preset"] = CAPS["recommended"]
     CAPS["checked"] = True
@@ -479,7 +479,7 @@ def probe(path):
             except Exception:
                 pass
             info["vbitrate"] = int(s.get("bit_rate") or 0)
-            # камеры AVCHD (.mts), ТВ-записи: 1080i. Без деинтерлейса в результате остаётся «гребёнка»
+            # AVCHD cameras (.mts), TV recordings: 1080i. Without deinterlacing the result keeps "combing"
             info["interlaced"] = s.get("field_order") in ("tt", "bb", "tb", "bt")
             if not info["duration"]:
                 info["duration"] = float(s.get("duration") or 0)
@@ -502,12 +502,12 @@ CUR = {"proc": None, "cancel": False, "part": None}
 DEFAULT_SETTINGS = {"preset": "x265", "quality": "balanced", "speed": "normal", "audio": "auto",
                     "outdir": "", "lowprio": True, "nosleep": True, "skip": True, "testlen": 120,
                     "update_check": True,
-                    "lang": ""}  # lang: "" = как в системе, иначе "ru" / "en"
+                    "lang": ""}  # lang: "" = as in the system, otherwise "ru" / "en"
 
 
 def _backup_dir():
-    """Резервные копии — отдельно от папки данных: установленная версия держит их в %LOCALAPPDATA%,
-    поэтому даже удалённая целиком папка %APPDATA%\\Framewring восстанавливается при запуске."""
+    """Backups are kept apart from the data folder: the installed version keeps them in %LOCALAPPDATA%,
+    so even a completely deleted %APPDATA%\\Framewring is restored at startup."""
     if FROZEN and IS_WIN and not (BASE_DIR / "portable.txt").exists():
         return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "Framewring" / "backup"
     return DATA_DIR / "backup"
@@ -519,8 +519,8 @@ _BK_LAST = {}
 
 
 def _backup(path, text, every=0):
-    """Копия файла данных в BACKUP_DIR: <имя>.1.json — самая свежая, до BACKUP_KEEP штук.
-    every — не чаще, чем раз в столько секунд (очередь сохраняется каждые 2 с)."""
+    """Copy of a data file in BACKUP_DIR: <name>.1.json is the newest, up to BACKUP_KEEP copies.
+    every - no more often than once per this many seconds (the queue is saved every 2 s)."""
     now = time.time()
     if every and now - _BK_LAST.get(path.name, 0) < every:
         return
@@ -545,8 +545,8 @@ _WRITE_LOCK = threading.RLock()
 
 
 def write_json(path, text, backup_every=0):
-    """Атомарная запись (через временный файл) + резервная копия. Одна запись за раз: история может
-    обновляться одновременно из сжатия и из замены."""
+    """Atomic write (via a temp file) + backup. One write at a time: history can be
+    updated concurrently from compression and from replacement."""
     with _WRITE_LOCK:
         tmp = path.with_name("%s.%d.tmp" % (path.name, threading.get_ident()))
         tmp.write_text(text, encoding="utf-8")
@@ -554,7 +554,7 @@ def write_json(path, text, backup_every=0):
             try:
                 os.replace(str(tmp), str(path))
                 break
-            except PermissionError:  # файл на миг занят антивирусом/индексатором
+            except PermissionError:  # the file is briefly held by an antivirus/indexer
                 if i == 9:
                     raise
                 time.sleep(0.2)
@@ -562,8 +562,8 @@ def write_json(path, text, backup_every=0):
 
 
 def read_json(path, kind):
-    """Читает файл данных; если его нет или он испорчен — самую свежую целую резервную копию.
-    Возвращает (данные, из_копии)."""
+    """Reads a data file; if it is missing or corrupted - the newest intact backup.
+    Returns (data, from_backup)."""
     cands = [path] + [BACKUP_DIR / ("%s.%d.json" % (path.stem, i)) for i in range(1, BACKUP_KEEP + 1)]
     for i, c in enumerate(cands):
         try:
@@ -605,7 +605,7 @@ def save_settings():
 
 
 def clean_settings(b):
-    """Пропускаем только допустимые значения: мусор в settings.json не должен ронять сжатие."""
+    """Accept only valid values: garbage in settings.json must not break compression."""
     out = {}
     for k, v in b.items():
         if k not in DEFAULT_SETTINGS:
@@ -626,7 +626,7 @@ def clean_settings(b):
             v = bool(v)
         if k == "outdir":
             v = os.path.expandvars(os.path.expanduser(v.strip().strip('"').strip("'")))
-            if v and not os.path.isabs(v):  # «out» или «D:video» ушли бы в папку программы
+            if v and not os.path.isabs(v):  # "out" or "D:video" would end up in the program folder
                 continue
         if k == "testlen":
             try:
@@ -647,7 +647,7 @@ SETTINGS.update(DEFAULT_SETTINGS)
 SETTINGS.update(clean_settings(_raw))
 
 _next_id = [1]
-OUT_OWNERS = {}  # путь результата -> исходник (чтобы два разных файла не писали в один .mp4)
+OUT_OWNERS = {}  # result path -> source (so two different files never write to one .mp4)
 
 
 def _norm(p):
@@ -698,7 +698,7 @@ def add_path(p):
                 job["status"], job["error"] = "error", err_msg(e)
 
     jobs = [j for j in new if "id" in j]
-    if jobs:  # ffprobe параллельно: папка на 100 файлов добавляется за секунды, а не за минуту
+    if jobs:  # ffprobe in parallel: a folder of 100 files is added in seconds, not a minute
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as ex:
             list(ex.map(do_probe, jobs))
@@ -712,7 +712,7 @@ def out_dir_for(job, s):
 
 
 def _same_dir(a, b):
-    """Та же папка, даже под другим именем (junction, подключённый диск, короткое имя 8.3)."""
+    """The same folder, even under a different name (junction, mapped drive, 8.3 short name)."""
     try:
         return os.path.samefile(str(a), str(b))
     except OSError:
@@ -727,18 +727,18 @@ def _same_file(a, b):
 
 
 def out_path_for(job, s):
-    """Куда писать результат. Главное правило: никогда не затирать чужой файл и тем более оригинал."""
+    """Where to write the result. Main rule: never overwrite someone else's file, let alone the original."""
     d = out_dir_for(job, s)
     src = Path(job["path"])
     ks = _norm(src)
     same = _same_dir(d, src.parent)
     stem = src.stem
     if same:
-        # пишем рядом с оригиналами: «клип.mkv» → «клип.mp4» затёр бы лежащий рядом оригинал «клип.mp4»
-        # (так оставляет файлы OBS после ремукса). Поэтому всегда с суффиксом.
+        # writing next to the originals: "clip.mkv" -> "clip.mp4" would overwrite an original "clip.mp4" lying there
+        # (OBS leaves files like that after a remux). So always with a suffix.
         stem += "_compressed"
     else:
-        # «клип.mkv» и «клип.mov» в одной папке дали бы один «клип.mp4». Различаем по расширению.
+        # "clip.mkv" and "clip.mov" in one folder would give the same "clip.mp4". We tell them apart by extension.
         try:
             low = src.stem.lower()
             if any(f.stem.lower() == low and f.suffix.lower() in VIDEO_EXT and f.suffix.lower() != src.suffix.lower()
@@ -746,8 +746,8 @@ def out_path_for(job, s):
                 stem = "%s_%s" % (src.stem, src.suffix.lstrip(".").lower())
         except OSError:
             pass
-    # Чужая общая папка (задана в «Куда сохранять»): файл без известного хозяина считаем чужим —
-    # одинаковые имена с разных карт памяти (GH010001.MP4) встречаются постоянно.
+    # Shared folder of someone else (set in "Save to"): a file with no known owner is treated as foreign -
+    # identical names from different memory cards (GH010001.MP4) are very common.
     shared = bool(s.get("outdir")) and not same
     o = base = d / (stem + ".mp4")
     n = 2
@@ -773,17 +773,17 @@ def audio_args(job, s):
 
 
 # --------------------------------------------------------------- Scanner ----
-# Поиск тяжёлых видео по дискам: обход папок, ffprobe кандидатов, прикидка экономии.
+# Search for heavy videos on the disks: folder walk, ffprobe of candidates, estimate of savings.
 
 SKIP_DIRS = {
-    # системное
+    # system
     "windows", "program files", "program files (x86)", "programdata", "appdata", "system volume information",
     "recovery", "msocache", "perflogs", "windowsapps", "winsxs", "$recycle.bin", "config.msi",
-    # служебное / разработка
+    # service / development
     "node_modules", "__pycache__", "venv", "site-packages", "dist-packages", "deriveddatacache", "ue-cache",
-    # наши же результаты
+    # our own results
     "compressed", "_tests",
-    # игры: их ролики трогать нельзя, иначе игра сломается
+    # games: their videos must not be touched, or the game breaks
     "steamapps", "steamlibrary", "epic games", "riot games", "xboxgames", "gog games", "gog galaxy",
     "origin games", "ea games", "ubisoft game launcher", "battle.net", "games",
 }
@@ -791,7 +791,7 @@ if not IS_WIN:
     SKIP_DIRS |= {"library", "applications", "system", "private", "proc", "sys", "dev", "usr", "bin", "sbin",
                   "lib", "lib64", "etc", "var", "run", "snap", "boot", "opt", "tmp"}
 FILE_ATTR_REPARSE = 0x400
-FILE_ATTR_CLOUD = 0x400000 | 0x40000 | 0x1000  # OneDrive «только в облаке» / offline: чтение скачает файл
+FILE_ATTR_CLOUD = 0x400000 | 0x40000 | 0x1000  # OneDrive "online only" / offline: reading would download the file
 EFFICIENT = {"hevc", "av1", "vp9", "vvc"}
 
 SCAN = {"running": False, "cancel": False, "phase": "", "dirs": 0, "cur": "", "candidates": 0, "probed": 0,
@@ -837,9 +837,9 @@ def list_drives():
                 continue
             root = "%s:\\" % letter
             t = k32.GetDriveTypeW(ctypes.c_wchar_p(root))
-            if t not in (2, 3, 4):  # съёмный, локальный, сетевой
+            if t not in (2, 3, 4):  # removable, local, network
                 continue
-            du = _disk_usage_timeout(root, 2.0)  # отключённый сетевой диск отвечает десятки секунд
+            du = _disk_usage_timeout(root, 2.0)  # a disconnected network drive takes tens of seconds to answer
             if du is None:
                 continue
             out.append({"path": root, "label": letter + ":", "total": du.total, "free": du.free,
@@ -861,7 +861,7 @@ def list_drives():
 
 
 def estimate(info, size):
-    """Грубая прикидка размера после «Качество · H.265 · Баланс». Точный прогноз даёт «Тест»."""
+    """Rough estimate of the size after "Quality - H.265 - Balanced". The exact forecast comes from "Test"."""
     dur = info.get("duration") or 0
     if dur <= 0 or size <= 0:
         return size
@@ -872,24 +872,24 @@ def estimate(info, size):
     audio_out = sum((a.get("bitrate") or 160000) if a.get("codec") in COPYABLE_AUDIO else 192000
                     for a in info.get("audio", []))
     v_src = info.get("vbitrate") or max(total_br - audio_src, total_br * 0.5)
-    # ~3 Мбит/с для 1080p30, растёт медленнее, чем число пикселей в секунду
+    # ~3 Mbit/s for 1080p30, grows slower than the number of pixels per second
     target = 3.0e6 * (w * h * fps / (1920 * 1080 * 30.0)) ** 0.75
     if info.get("vcodec") in EFFICIENT:
-        target = max(target, v_src * 0.75)  # уже современный кодек: много не выжать
+        target = max(target, v_src * 0.75)  # already a modern codec: not much can be squeezed out
     v_out = min(v_src, target)
     est = dur * (v_out + audio_out) / 8
     return int(min(size, est))
 
 
-# Запрос к уже запущенному Everything (voidtools) через его IPC (EV_WM_COPYDATA, QUERY2).
-# Без DLL и без es.exe: только ctypes.
+# Query to an already running Everything (voidtools) through its IPC (EV_WM_COPYDATA, QUERY2).
+# No DLL and no es.exe: ctypes only.
 
 EV_WM_COPYDATA = 0x004A
 COPYDATA_QUERY2W = 18
 REQ_FULL_PATH = 0x00000004
 REQ_SIZE = 0x00000010
 REQ_ATTRIBUTES = 0x00000100
-REPLY_ID = 0x5A48  # наш произвольный идентификатор ответа
+REPLY_ID = 0x5A48  # our arbitrary reply identifier
 
 LRESULT = ctypes.c_ssize_t
 WNDPROC = (ctypes.WINFUNCTYPE if IS_WIN else ctypes.CFUNCTYPE)(LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
@@ -962,7 +962,7 @@ def _ev_parse(buf):
     return out, totitems
 
 
-_EV_CLASS = {}  # один зарегистрированный класс окна и его обработчик живут до конца процесса
+_EV_CLASS = {}  # one registered window class and its handler live until the end of the process
 _EV_CUR = {}
 
 
@@ -990,7 +990,7 @@ _EV_LOCK = threading.Lock()
 
 
 def ev_query(search, timeout=15.0, max_results=200000):
-    """Выполняет поиск в Everything. None = Everything не запущен или не ответил."""
+    """Runs a search in Everything. None = Everything is not running or did not answer."""
     with _EV_LOCK:
         return _ev_query(search, timeout, max_results)
 
@@ -1013,7 +1013,7 @@ def _ev_query(search, timeout, max_results):
             _EV_CUR.clear()
             _EV_CUR.update(hwnd=hwnd, got=got)
             try:
-                # если Everything запущен от администратора, разрешаем ему прислать нам ответ
+                # if Everything runs as administrator, allow it to send us the reply
                 u.ChangeWindowMessageFilterEx(hwnd, EV_WM_COPYDATA, 1, None)
             except Exception:
                 pass
@@ -1063,9 +1063,9 @@ def ev_exe():
 
 
 def everything_search(min_bytes):
-    """Все видео >= min_bytes из индекса Everything: доли секунды вместо минут обхода дисков.
-    Если программа Everything установлена, но закрыта (работает только служба), запускаем её
-    в трей на время поиска и потом закрываем. None, если Everything нет или он не ответил."""
+    """All videos >= min_bytes from the Everything index: fractions of a second instead of minutes of disk walking.
+    If Everything is installed but closed (only the service runs), we start it
+    in the tray for the duration of the search and then close it. None if Everything is absent or did not answer."""
     if not IS_WIN:
         return None
     started = None
@@ -1081,7 +1081,7 @@ def everything_search(min_bytes):
         deadline = time.time() + 60
         while time.time() < deadline and not SCAN["cancel"]:
             r = ev_query(q, timeout=10.0) if ev_window() else None
-            if isinstance(r, tuple):  # пока база грузится, Everything не отвечает
+            if isinstance(r, tuple):  # while the database is loading, Everything does not answer
                 return r[0]
             time.sleep(1)
         return None
@@ -1096,7 +1096,7 @@ def everything_search(min_bytes):
 
 
 def ev_ok_root(root):
-    """Everything по умолчанию индексирует только локальные NTFS-диски."""
+    """By default Everything indexes only local NTFS drives."""
     if not IS_WIN:
         return False
     try:
@@ -1112,7 +1112,7 @@ def ev_ok_root(root):
 
 
 def is_ssd(root):
-    """True/False/None по признаку «есть задержка позиционирования головки». Без прав администратора."""
+    """True/False/None by the "has seek penalty" flag. Without administrator rights."""
     if not IS_WIN:
         return None
     try:
@@ -1157,7 +1157,7 @@ def load_probe_cache():
 
 
 def save_probe_cache():
-    """Параметры видео между запусками: повторный поиск не гоняет ffprobe по сотням файлов."""
+    """Video parameters between runs: a repeated search does not run ffprobe over hundreds of files."""
     try:
         items = list(PROBE_CACHE.items())[-5000:]
         d = {k: [v[0][0], v[0][1], v[1]] for k, v in items}
@@ -1187,7 +1187,7 @@ def _walk_dir(d, min_bytes, seen, on_found, push):
                         if name in SKIP_DIRS or name[:1] in "$.":  # .git, .pnpm-store, .cache, $Recycle.Bin…
                             continue
                         if IS_WIN and e.stat(follow_symlinks=False).st_file_attributes & FILE_ATTR_REPARSE:
-                            continue  # junction-ссылки: иначе одни и те же папки обходились бы дважды
+                            continue  # junction links: otherwise the same folders would be walked twice
                         push(e.path)
                     elif e.is_file(follow_symlinks=False):
                         if os.path.splitext(name)[1] not in VIDEO_EXT or name.endswith(".part.mp4"):
@@ -1210,8 +1210,8 @@ def _walk_dir(d, min_bytes, seen, on_found, push):
 
 
 def _scan_walk(root, min_bytes, seen, on_found):
-    """Обход в несколько потоков: SSD отдают каталоги параллельно в разы быстрее (замер: 44 с -> 13 с
-    на 420 тыс. папок), HDD — умеренно, чтобы не гонять головку."""
+    """Multi-threaded walk: SSDs serve directories in parallel several times faster (measured: 44 s -> 13 s
+    on 420 thousand folders), HDDs - moderately, so as not to thrash the head."""
     import queue
     q = queue.Queue()
     q.put(root)
@@ -1241,7 +1241,7 @@ def _scan_one(item):
     if SCAN["cancel"]:
         return
     try:
-        size = os.stat(path).st_size  # индекс Everything мог отстать: файл переписан или удалён
+        size = os.stat(path).st_size  # the Everything index may lag behind: the file was rewritten or deleted
         info = probe_cached(path)
     except Exception:
         SCAN["probed"] += 1
@@ -1263,8 +1263,8 @@ def _scan_one(item):
 
 
 def scan_thread(roots, min_bytes, use_ev=True):
-    """Каждый диск обходим в своём потоке (диски работают параллельно), а найденные файлы
-    сразу отдаём ffprobe: результаты появляются по ходу, а не после обхода всех дисков."""
+    """Each disk is walked in its own thread (disks work in parallel), and the files found are
+    passed straight to ffprobe: results appear as we go, not after all disks are walked."""
     from concurrent.futures import ThreadPoolExecutor
     try:
         seen = set()
@@ -1276,7 +1276,7 @@ def scan_thread(roots, min_bytes, use_ev=True):
             if ev_roots:
                 items = everything_search(min_bytes)
                 if items is None:
-                    SCAN["ev_missing"] = IS_WIN  # Everything нет или он не отвечает
+                    SCAN["ev_missing"] = IS_WIN  # Everything is absent or does not answer
                     walk_roots += ev_roots
                 else:
                     SCAN["method"] = ["everything"]
@@ -1361,7 +1361,7 @@ def keep_awake(on):
 # --------------------------------------------------------------- Encoding ----
 
 def proc_io(p):
-    """(прочитано, записано) байт процессом; None, если ОС не говорит."""
+    """(read, written) bytes by the process; None if the OS does not say."""
     try:
         if IS_WIN:
             class IOC(ctypes.Structure):
@@ -1377,7 +1377,7 @@ def proc_io(p):
 
 
 def proc_written(p):
-    """Сколько байт процесс уже записал на диск (None, если ОС не говорит)."""
+    """How many bytes the process has already written to disk (None if the OS does not say)."""
     try:
         if IS_WIN:
             class IOC(ctypes.Structure):
@@ -1398,15 +1398,15 @@ def proc_written(p):
 
 
 def _finish_watch(p, job, base_phase, last):
-    """После 100% ffmpeg молча переписывает весь файл, чтобы индекс (moov) оказался в начале
-    (+faststart): на десятках ГБ это минуты без единой строки прогресса. Считаем этот этап сами
-    по числу записанных процессом байт: переписать нужно примерно весь уже записанный объём."""
+    """After 100% ffmpeg silently rewrites the whole file so that the index (moov) ends up at the start
+    (+faststart): on tens of GB this is minutes without a single progress line. We estimate this stage
+    ourselves from the number of bytes written by the process: roughly the whole written volume has to be rewritten."""
     base = None
     while p.poll() is None:
         time.sleep(1)
         with LOCK:
             pct, size = job["pct"], job["cur_size"]
-        if pct < 90 or time.time() - last[0] < 3:  # ffmpeg замолчал под конец = идёт перенос индекса
+        if pct < 90 or time.time() - last[0] < 3:  # ffmpeg went quiet near the end = the index is being moved
             continue
         w = proc_written(p)
         now = time.time()
@@ -1425,8 +1425,8 @@ def _finish_watch(p, job, base_phase, last):
 
 
 def run_ffmpeg(args, job, total, phase, s):
-    """Запускает ffmpeg с прогрессом в job. Возвращает (ok, error_text, log_tail).
-    error_text == "cancel", если пользователь нажал «Стоп»."""
+    """Runs ffmpeg with progress into the job. Returns (ok, error_text, log_tail).
+    error_text == "cancel" if the user pressed "Stop"."""
     log = tempfile.TemporaryFile()
     try:
         full = [FFMPEG, "-hide_banner", "-nostdin", "-y"] + args
@@ -1457,7 +1457,7 @@ def run_ffmpeg(args, job, total, phase, s):
             with LOCK:
                 job["elapsed"] = time.time() - t0
                 if k in ("out_time_us", "out_time_ms") and v.lstrip("-").isdigit():
-                    done = int(v) / 1e6  # в ffmpeg out_time_ms тоже в микросекундах (исторический баг)
+                    done = int(v) / 1e6  # in ffmpeg out_time_ms is also in microseconds (a historical bug)
                     if total > 0:
                         job["pct"] = max(0.0, min(100.0, done / total * 100))
                         sp = job["speed"] or (done / job["elapsed"] if job["elapsed"] > 1 else 0)
@@ -1494,7 +1494,7 @@ def run_ffmpeg(args, job, total, phase, s):
         if cancelled:
             return False, "cancel", tail
         if p.returncode != 0:
-            # убираем болтовню SVT-AV1 и прочий шум, оставляем суть
+            # remove SVT-AV1 chatter and other noise, keep the essence
             lines = [l for l in tail.splitlines() if l.strip() and not l.startswith("Svt[info]")]
             err = "\n".join(lines)[-1500:]
             return False, err or M("err.ffmpeg_code", code=str(p.returncode)), tail
@@ -1507,18 +1507,18 @@ TEXT_SUBS = {"subrip", "srt", "ass", "ssa", "mov_text", "webvtt", "text"}
 
 
 def vfilters(info):
-    """Цепочка видеофильтров. Та же цепочка применяется к оригиналу при подсчёте VMAF."""
+    """Video filter chain. The same chain is applied to the original when computing VMAF."""
     f = []
     if info.get("interlaced"):
-        f.append("bwdif=mode=send_field")  # 50i -> 50p: плавность движения как в оригинале
-    # yuv420 требует чётных размеров: 1366×767 и подобное иначе падает в энкодере
+        f.append("bwdif=mode=send_field")  # 50i -> 50p: motion as smooth as in the original
+    # yuv420 needs even dimensions: 1366x767 and the like would otherwise fail in the encoder
     if (info.get("width") or 0) % 2 or (info.get("height") or 0) % 2:
         f.append("crop=trunc(iw/2)*2:trunc(ih/2)*2")
     return f
 
 
 def sub_args(info):
-    """Текстовые субтитры переносим в MP4 (mov_text). Картинки (PGS/DVD) MP4 не умеет."""
+    """Text subtitles are carried into MP4 (mov_text). MP4 cannot hold image subtitles (PGS/DVD)."""
     a = []
     for i, c in enumerate(info.get("subs") or []):
         if c in TEXT_SUBS:
@@ -1527,8 +1527,8 @@ def sub_args(info):
 
 
 def encode(job, s, src, dst, total, phase, extra, subs=False):
-    """Сжимает src в dst. Для AV1 подбирает lp под память и при нехватке повторяет с меньшим.
-    Возвращает (ok, err, секунды_кодирования)."""
+    """Compresses src into dst. For AV1 picks lp to fit memory and retries with a smaller one on shortage.
+    Returns (ok, err, encoding_seconds)."""
     info = job["info"]
     lp = svt_lp_for(info) if s["preset"] == "av1" else None
     if lp:
@@ -1549,8 +1549,8 @@ def encode(job, s, src, dst, total, phase, extra, subs=False):
         if ok or err == "cancel" or not isinstance(err, str) or not MEM_ERR.search(err):
             return ok, err, took
         if s["preset"] != "av1":
-            # «Cannot allocate memory» посреди сжатия: Windows не дала памяти (часто при выключенном файле
-            # подкачки). Это разовый сбой: повторяем, со второго раза без декодирования на видеокарте.
+            # "Cannot allocate memory" in the middle of compression: Windows gave no memory (often with the page
+            # file turned off). This is a one-off failure: we retry, without GPU decoding the second time.
             mem_tries += 1
             if mem_tries > 2:
                 return False, M("err.mem3", detail=err), took
@@ -1570,13 +1570,13 @@ def encode(job, s, src, dst, total, phase, extra, subs=False):
 
 
 def _rm_part(p):
-    """Удалить недоделанный результат — только наш «*.part.mp4», ничего другого."""
+    """Delete an unfinished result - only our "*.part.mp4", nothing else."""
     if p and str(p).lower().endswith(".part.mp4"):
         _rm(p)
 
 
 def _stop_current():
-    """Выход посреди сжатия: остановить ffmpeg и убрать недоделанный .part.mp4."""
+    """Exit in the middle of compression: stop ffmpeg and remove the unfinished .part.mp4."""
     p, part = CUR.get("proc"), CUR.get("part")
     if p:
         try:
@@ -1605,9 +1605,9 @@ def free_bytes(d):
 
 
 def finalize(part, out, job):
-    """part -> out. Сразу после записи большой файл часто держит антивирус (проверяет) или проводник
-    (строит превью), а итоговый файл может быть открыт в плеере. Раньше это давало «Ошибку» после
-    часа сжатия. Теперь ждём, пишем, что происходит, и в худшем случае оставляем готовый файл как есть."""
+    """part -> out. Right after writing, a big file is often held by an antivirus (scanning) or Explorer
+    (building a preview), and the final file may be open in a player. This used to give an "Error" after
+    an hour of compression. Now we wait, say what is happening, and in the worst case leave the finished file as is."""
     t0 = time.time()
     alt = None
     while True:
@@ -1626,34 +1626,34 @@ def finalize(part, out, job):
             job["phase"] = M("phase.save_wait", secs=int(waited))
         if waited > 60 and alt is None:
             n = 2
-            while True:  # возможно, занят именно старый результат: пробуем другое имя
+            while True:  # maybe the old result itself is busy: try another name
                 alt = out.with_name("%s (%d).mp4" % (out.stem, n))
                 with LOCK:
                     free_name = OUT_OWNERS.get(_norm(alt)) in (None, _norm(job["path"]))
                 if not alt.exists() and free_name:
                     break
                 n += 1
-        if waited > 600:  # 10 минут: сдаёмся, но работу не теряем
+        if waited > 600:  # 10 minutes: give up, but the work is not lost
             with LOCK:
                 add_note(job, M("note.rename_failed", name=part.name))
             return part
         time.sleep(2)
 
 
-NO_GAIN = 0.97  # результат больше 97% оригинала — сжимать незачем, оставляем оригинал
+NO_GAIN = 0.97  # result larger than 97% of the original - no point compressing, keep the original
 
 
 def _gain_watch(job, size, stop):
-    """Следит за размером во время сжатия. Если уже видно, что результат выйдет не меньше оригинала
-    (исходник и так сжат эффективно), останавливает ffmpeg — не тратим часы на файл, который не уменьшится."""
-    # Доля времени обманывает: у видео со сложным началом и статичным продолжением результат растёт
-    # неравномерно. Поэтому сравниваем записанное с уже ПРОЧИТАННЫМ из исходника (тот же участок видео).
+    """Watches the size during compression. If it is already clear the result will not be smaller than the original
+    (the source is already efficiently compressed), stops ffmpeg - we do not spend hours on a file that will not shrink."""
+    # The time fraction misleads: for a video with a complex start and a static rest the result grows
+    # unevenly. So we compare what is written with what has already been READ from the source (the same part of the video).
     while not stop.wait(2):
         if job.get("fin"):
             continue
         with LOCK:
             p = CUR.get("proc")
-        if p is None or p.poll() is not None:  # между попытками (повтор после сбоя памяти) — не трогаем
+        if p is None or p.poll() is not None:  # between attempts (retry after a memory failure) - do not touch
             continue
         cur = job.get("cur_size") or 0
         io = proc_io(p)
@@ -1662,8 +1662,8 @@ def _gain_watch(job, size, stop):
             ratio = cur / float(rd)
             frac = rd / float(size) if size else 0
             hit = (frac >= 0.10 and ratio >= 1.10) or (frac >= 0.30 and ratio >= 1.02)
-            done_pct, proj = job.get("pct") or frac * 100, ratio * 100  # в заметке — ход сжатия, а не чтения наперёд
-        else:  # счётчиков чтения нет — останавливаем, только когда результат уже не меньше оригинала
+            done_pct, proj = job.get("pct") or frac * 100, ratio * 100  # the note shows compression progress, not read-ahead
+        else:  # no read counters - stop only when the result is already not smaller than the original
             hit = cur >= size * NO_GAIN
             done_pct, proj = job.get("pct") or 0, cur * 100.0 / size if size else 0
         if hit:
@@ -1685,7 +1685,7 @@ def _keep_original(job, note):
 
 def do_full(job, s):
     out = out_path_for(job, s)
-    if _same_file(out, job["path"]):  # не должно случиться, но оригинал дороже всего
+    if _same_file(out, job["path"]):  # should not happen, but the original is the most valuable
         with LOCK:
             job["status"], job["error"] = "error", M("err.same_as_src")
         return
@@ -1695,7 +1695,7 @@ def do_full(job, s):
             OUT_OWNERS[_norm(out)] = _norm(job["path"])
             job["status"], job["out_path"], job["out_size"] = "skipped", str(out), out.stat().st_size
         return
-    # Место на диске: если не влезет даже по оптимистичной оценке, не тратим часы впустую
+    # Disk space: if it won't fit even by the optimistic estimate, don't waste hours
     need = estimate(job["info"], job["size"])
     free = free_bytes(out.parent)
     if free is not None and free < need + 200 * 10 ** 6:
@@ -1711,7 +1711,7 @@ def do_full(job, s):
     part = out.with_name(out.stem + ".part.mp4")
     try:
         job["src_sig"] = src_sig(job["path"])
-        job["size"] = job["src_sig"][0]  # файл мог дорасти после добавления в список
+        job["size"] = job["src_sig"][0]  # the file may have grown after being added to the list
     except OSError:
         job["src_sig"] = None
     with LOCK:
@@ -1746,7 +1746,7 @@ def do_full(job, s):
         out = finalize(part, out, job)
         with LOCK:
             OUT_OWNERS[_norm(out)] = _norm(job["path"])
-        try:  # дата изменения как у оригинала: сортировка по дате в проводнике не ломается
+        try:  # modification date as in the original: sorting by date in Explorer stays intact
             st = os.stat(job["path"])
             os.utime(str(out), (st.st_atime, st.st_mtime))
         except OSError:
@@ -1758,7 +1758,7 @@ def do_full(job, s):
         with LOCK:
             job["status"], job["pct"], job["out_path"], job["out_size"] = "done", 100, str(out), out.stat().st_size
         tst = job.get("test") or {}
-        # VMAF теста считаем, только если тест был с теми же режимом и качеством, что и сжатие
+        # VMAF of the test is used only if the test had the same mode and quality as the compression
         tv = tst.get("vmaf") if tst.get("preset") == s["preset"] and tst.get("quality") == s["quality"] else None
         try:
             out_sig = src_sig(str(out))
@@ -1783,24 +1783,24 @@ def do_full(job, s):
 
 
 # ------------------------------------------------------------- Replace originals ----
-# Замена — только по явному выбору человека в окне «Заменить оригиналы». Порядок: полная проверка сжатого
-# файла → сверка отпечатков оригинала и сжатого → проверка, что оригинал ТОЧНО поместится в корзину →
-# сжатый файл рядом с оригиналом под временным именем (записано в историю как «намерение») → оригинал в
-# корзину Windows (и проверка, что он там) → временное имя становится именем оригинала (.mp4).
-# Любой сбой до корзины — ничего не меняется; сбой/закрытие посередине доделывается при следующем запуске.
+# Replacement - only on the person's explicit choice in the "Replace originals" window. Order: full check of the compressed
+# file -> comparison of fingerprints of the original and compressed -> check that the original will DEFINITELY fit in the Recycle Bin ->
+# compressed file next to the original under a temporary name (recorded in history as an "intent") -> original to the
+# Windows Recycle Bin (and check that it is there) -> the temporary name becomes the original's name (.mp4).
+# Any failure before the Recycle Bin changes nothing; a failure/exit in the middle is completed at the next start.
 
 EDIT_CODECS = {"prores", "qtrle", "dnxhd", "cfhd", "ffv1", "huffyuv", "utvideo", "rawvideo", "v210", "png", "mjpeg"}
 REPLACE = {"running": False, "items": {}, "ver": 0}
 
 
 def src_sig(path):
-    """Отпечаток файла: размер и время изменения (с точностью до секунды)."""
+    """File fingerprint: size and modification time (to the second)."""
     st = os.stat(path)
     return [st.st_size, int(st.st_mtime)]
 
 
 def _hkey(h):
-    """Устойчивый ключ записи истории (номер в списке может сдвинуться — например, после импорта)."""
+    """Stable key of a history entry (the list index may shift - e.g. after an import)."""
     return "%s|%s" % (h.get("t"), _norm(h.get("src") or ""))
 
 
@@ -1810,8 +1810,8 @@ def _hist_find(key):
 
 
 def _real_path(path):
-    """Настоящий путь: subst-диск → его папка, junction/символическая ссылка → цель, сетевой диск → \\\\сервер.
-    Корзина зависит от настоящего тома, а не от буквы, под которой его видно."""
+    """The real path: subst drive -> its folder, junction/symlink -> target, network drive -> \\\\server.
+    The Recycle Bin depends on the real volume, not on the letter under which it is seen."""
     p = os.path.abspath(str(path))
     if IS_WIN:
         drive, rest = os.path.splitdrive(p)
@@ -1828,7 +1828,7 @@ def _real_path(path):
 
 
 def has_recycle_bin(path):
-    """Корзина есть только на локальных несъёмных дисках (по настоящему пути, не по букве)."""
+    """The Recycle Bin exists only on local fixed drives (by the real path, not by the letter)."""
     if not IS_WIN:
         return False
     try:
@@ -1851,9 +1851,9 @@ def _bin_used(root):
 
 
 def bin_check(path, size):
-    """None — файл размера size с этого диска гарантированно попадёт в корзину. Иначе — причина.
-    Windows удаляет НАВСЕГДА, если файл больше свободного места корзины, корзина отключена
-    («удалять сразу») или диск сетевой/съёмный/subst — всё это проверяем заранее."""
+    """None - a file of size `size` from this drive will certainly go to the Recycle Bin. Otherwise - the reason.
+    Windows deletes PERMANENTLY if the file is larger than the free space of the Recycle Bin, the bin is disabled
+    ("delete immediately") or the drive is network/removable/subst - we check all of this in advance."""
     if not has_recycle_bin(path):
         return M("rep.b.no_bin")
     try:
@@ -1882,7 +1882,7 @@ def bin_check(path, size):
                         cap = v * 1024 * 1024
         except OSError:
             pass
-        for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):  # групповые политики
+        for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):  # group policies
             try:
                 with winreg.OpenKey(hive, "Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer") as k:
                     try:
@@ -1900,7 +1900,7 @@ def bin_check(path, size):
         if nuke:
             return M("rep.b.bin_off")
         if cap is None:
-            cap = total * 0.05  # настройки не найдены — считаем осторожно: 5% диска
+            cap = total * 0.05  # settings not found - be careful: 5% of the disk
         used = _bin_used(root)
         if used is None:
             return M("rep.b.no_bin")
@@ -1914,8 +1914,8 @@ def bin_check(path, size):
 
 
 def recycle(path):
-    """Отправить файл в корзину Windows (SHFileOperation + FOF_ALLOWUNDO + FOF_WANTNUKEWARNING:
-    если Windows всё же решит удалить насовсем — она спросит, а не сделает молча)."""
+    """Send a file to the Windows Recycle Bin (SHFileOperation + FOF_ALLOWUNDO + FOF_WANTNUKEWARNING:
+    if Windows still decides to delete permanently, it asks instead of doing it silently)."""
     from ctypes import wintypes
 
     class SHFILEOPSTRUCTW(ctypes.Structure):
@@ -1924,7 +1924,7 @@ def recycle(path):
                     ("hNameMappings", ctypes.c_void_p), ("lpszProgressTitle", wintypes.LPCWSTR)]
     FO_DELETE = 3
     FOF_SILENT, FOF_NOCONFIRMATION, FOF_ALLOWUNDO, FOF_NOERRORUI, FOF_WANTNUKEWARNING = 0x4, 0x10, 0x40, 0x400, 0x4000
-    # по НАСТОЯЩЕМУ пути: через букву subst-диска Windows удалила бы файл мимо корзины
+    # by the REAL path: via a subst drive letter Windows would delete the file bypassing the Recycle Bin
     owner = (_own_windows() or [None])[0]
     op = SHFILEOPSTRUCTW(owner, FO_DELETE, _real_path(path) + "\0", None,
                          FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO | FOF_NOERRORUI | FOF_WANTNUKEWARNING,
@@ -1934,7 +1934,7 @@ def recycle(path):
 
 
 def in_recycle_bin(path, since):
-    """Есть ли в корзине запись об этом файле, удалённом после since (проверяем $I-записи корзины)."""
+    """Whether the Recycle Bin has an entry for this file, deleted after `since` (we check the $I entries of the bin)."""
     import struct
     want = {os.path.normcase(os.path.abspath(str(path))), os.path.normcase(_real_path(path))}
     root = os.path.splitdrive(_real_path(path))[0] + "\\"
@@ -1954,7 +1954,7 @@ def in_recycle_bin(path, since):
             fp = os.path.join(d, f)
             try:
                 b = open(fp, "rb").read()
-                # время удаления — внутри записи (FILETIME), а не дата самого $I-файла
+                # the deletion time is inside the entry (FILETIME), not the date of the $I file itself
                 deleted = (struct.unpack_from("<q", b, 16)[0] - 116444736000000000) / 1e7
                 if deleted < since - 5:
                     continue
@@ -1974,7 +1974,7 @@ _STREAMS_CACHE = {}
 
 
 def stream_counts(path):
-    """Сколько каких дорожек в файле: видео (без обложек), звук, субтитры, данные, вложения."""
+    """How many tracks of each kind are in the file: video (without covers), audio, subtitles, data, attachments."""
     try:
         key = (_norm(path),) + tuple(src_sig(path))
     except OSError:
@@ -1998,7 +1998,7 @@ def stream_counts(path):
 
 
 def _decode_check(out, maps, total, item=None):
-    """Декодирует выбранные дорожки целиком. Возвращает (ошибки_текстом, до_какой_секунды_дошёл)."""
+    """Decodes the chosen tracks completely. Returns (errors_as_text, up_to_which_second_it_got)."""
     p = subprocess.Popen([FFMPEG, "-hide_banner", "-nostdin", "-v", "error", "-i", str(out)] + maps +
                          ["-f", "null", "-", "-progress", "pipe:1", "-nostats"],
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=NO_WINDOW | BELOW_NORMAL)
@@ -2023,15 +2023,15 @@ def _decode_check(out, maps, total, item=None):
 
 
 def verify_output(out, src_info, item, src_path=None):
-    """Полная проверка сжатого файла: читается; длительность и число звуковых дорожек как у оригинала;
-    видео декодируется ЦЕЛИКОМ и доходит до конца (не обрезано); звук декодируется без ошибок.
-    None — всё хорошо, иначе сообщение."""
+    """Full check of the compressed file: it is readable; duration and number of audio tracks as in the original;
+    video decodes COMPLETELY and reaches the end (not truncated); audio decodes without errors.
+    None - all good, otherwise a message."""
     try:
         oi = probe(str(out))
     except Exception as e:
         return M("verify.probe", detail=str(e)[:200])
     sd, od = src_info.get("duration") or 0, oi.get("duration") or 0
-    tol = max(1.0, min(3.0, sd * 0.001))  # перекодирование не меняет длительность больше чем на долю секунды
+    tol = max(1.0, min(3.0, sd * 0.001))  # re-encoding does not change the duration by more than a fraction of a second
     if sd and abs(od - sd) > tol:
         return M("verify.duration", a=round(sd, 1), b=round(od, 1))
     if len(oi["audio"]) != len(src_info.get("audio") or []):
@@ -2046,14 +2046,14 @@ def verify_output(out, src_info, item, src_path=None):
         err, out_a = _decode_check(out, ["-map", "0:a"], total)
         if err:
             return M("verify.decode", detail=err[-300:])
-        _, src_a = _decode_check(src_path, ["-map", "0:a"], total)  # сколько звука в оригинале
+        _, src_a = _decode_check(src_path, ["-map", "0:a"], total)  # how much audio the original has
         if src_a and out_a < src_a - tol:
             return M("verify.audio_short", a=round(src_a, 1), b=round(out_a, 1))
     return None
 
 
 def _documents_dir():
-    """Папка «Документы» пользователя (в т.ч. перенесённая OneDrive)."""
+    """The user's "Documents" folder (including one moved by OneDrive)."""
     if IS_WIN:
         try:
             class GUID(ctypes.Structure):
@@ -2073,7 +2073,7 @@ def _documents_dir():
 
 
 def file_sha256(path, job=None, item=None):
-    """SHA-256 файла (для сжатого — сразу после сжатия; перед заменой сверяем: любое изменение байт видно)."""
+    """SHA-256 of a file (for the compressed one - right after compression; before replacing we compare: any change of bytes is visible)."""
     import hashlib
     h = hashlib.sha256()
     total = os.path.getsize(path) or 1
@@ -2093,7 +2093,7 @@ def file_sha256(path, job=None, item=None):
 
 
 def _replace_target(src):
-    """Куда встанет сжатый файл: та же папка и имя, что у оригинала, расширение .mp4."""
+    """Where the compressed file will go: same folder and name as the original, extension .mp4."""
     return Path(src).with_suffix(".mp4")
 
 
@@ -2102,7 +2102,7 @@ def _tmp_for(src):
 
 
 def _check_entry(h):
-    """Блокировки и предупреждения для одной записи истории (свежая проверка файлов на диске)."""
+    """Blocks and warnings for one history entry (a fresh check of files on disk)."""
     src, o = h.get("src"), h.get("out")
     c = {"key": _hkey(h), "name": h.get("name") or Path(src).name, "src": src, "out": o,
          "size": h.get("size") or 0, "out_size": h.get("out_size") or 0, "warn": [], "block": []}
@@ -2117,9 +2117,9 @@ def _check_entry(h):
         return c
     c["size"], c["out_size"] = os.path.getsize(src), os.path.getsize(o)
     if h.get("imported"):
-        c["block"].append(M("rep.b.imported"))  # из чужого файла истории: подлинность не подтвердить
+        c["block"].append(M("rep.b.imported"))  # from a foreign history file: authenticity cannot be confirmed
     elif not h.get("src_sig") or not h.get("out_sig") or not h.get("out_hash"):
-        c["block"].append(M("rep.b.old_entry"))  # запись старой версии: подлинность не подтвердить
+        c["block"].append(M("rep.b.old_entry"))  # entry of an old version: authenticity cannot be confirmed
     else:
         if src_sig(src) != h["src_sig"]:
             c["block"].append(M("rep.b.src_changed"))
@@ -2127,10 +2127,10 @@ def _check_entry(h):
             c["block"].append(M("rep.b.out_changed"))
     if c["out_size"] >= c["size"]:
         c["block"].append(M("rep.b.not_smaller"))
-    # пути длиннее ~260 символов Windows «удаляет в корзину» мимо корзины — навсегда (проверено)
+    # paths longer than ~260 characters: Windows "deletes to the Recycle Bin" bypassing it - permanently (verified)
     if max(len(_real_path(src)), len(str(_tmp_for(src))), len(str(_replace_target(src)))) >= 250:
         c["block"].append(M("rep.b.long_path"))
-    if c["block"]:  # дальше дорогие проверки (ffprobe, корзина) — для заблокированных не нужны
+    if c["block"]:  # expensive checks follow (ffprobe, Recycle Bin) - not needed for blocked ones
         return c
     with LOCK:
         busy = any(_norm(j["path"]) == _norm(src) and j["status"] in ("queued", "running", "probing") for j in JOBS)
@@ -2169,7 +2169,7 @@ def _check_entry(h):
 
 
 def replace_candidates():
-    """Что можно заменить: из истории (она переживает «Убрать готовые» и перезапуск); один оригинал — одна строка."""
+    """What can be replaced: from history (it survives "Remove finished" and restart); one original - one row."""
     with LOCK:
         items = [dict(h) for h in HISTORY["items"]]
     out, seen = [], set()
@@ -2179,7 +2179,7 @@ def replace_candidates():
         seen.add(_norm(h["src"]))
         try:
             c = _check_entry(h)
-        except Exception as e:  # одна запись не должна ломать всё окно
+        except Exception as e:  # one entry must not break the whole window
             c = {"key": _hkey(h), "name": h.get("name") or "", "src": h.get("src"), "out": h.get("out"),
                  "size": h.get("size") or 0, "out_size": h.get("out_size") or 0, "warn": [],
                  "block": [M("rep.b.check_failed", detail=str(e)[:150])]}
@@ -2189,7 +2189,7 @@ def replace_candidates():
 
 
 def _set_hist(key, **kw):
-    """Обновить запись истории по ключу и сохранить на диск."""
+    """Update a history entry by key and save to disk."""
     with LOCK:
         i = next((n for n, h in enumerate(HISTORY["items"]) if _hkey(h) == key), None)
         if i is None:
@@ -2216,7 +2216,7 @@ def _replace_one(key, item):
         raise _ItemError(c["block"][0])
     src, out = Path(h["src"]), Path(h["out"])
     item["state"] = "verify"
-    if file_sha256(str(out), item=item) != h["out_hash"]:  # любое изменение байт после сжатия
+    if file_sha256(str(out), item=item) != h["out_hash"]:  # any change of bytes after compression
         _set_hist(key, verify_failed=True)
         raise _ItemError(M("verify.hash"))
     item["pct"] = 0
@@ -2225,16 +2225,16 @@ def _replace_one(key, item):
         _set_hist(key, verify_failed=True)
         raise _ItemError(bad)
     item["state"], item["pct"] = "replace", 100
-    # проверка шла долго: всё сверяем ещё раз прямо перед переносом
+    # the check took long: compare everything once more right before the move
     c = _check_entry(h)
     if c["block"]:
         raise _ItemError(c["block"][0])
     target, tmp = _replace_target(src), _tmp_for(src)
     same_vol = os.stat(str(out)).st_dev == os.stat(str(src.parent)).st_dev
-    _set_hist(key, replace_tmp=str(tmp), replace_copy=not same_vol)  # намерение: на случай сбоя посередине
+    _set_hist(key, replace_tmp=str(tmp), replace_copy=not same_vol)  # intent: in case of a failure in the middle
     try:
         if same_vol:
-            os.rename(str(out), str(tmp))  # rename не перезаписывает: если место занято — ошибка
+            os.rename(str(out), str(tmp))  # rename does not overwrite: if the place is taken - an error
         else:
             shutil.copy2(str(out), str(tmp))
             import filecmp
@@ -2252,7 +2252,7 @@ def _replace_one(key, item):
             pass
         _set_hist(key, replace_tmp=None, replace_copy=None)
         raise _ItemError(M("rep.err.move", detail=str(e)[:200]))
-    # оригинал — в корзину; перед этим ещё раз убеждаемся, что он туда поместится
+    # the original goes to the Recycle Bin; first make sure once more that it will fit there
     b = bin_check(src, os.path.getsize(str(src)))
     t0 = time.time()
     if b or not recycle(src):
@@ -2267,18 +2267,18 @@ def _replace_one(key, item):
         _set_hist(key, replace_tmp=None, replace_copy=None)
         raise _ItemError(b or M("rep.err.recycle"))
     binned = False
-    for _ in range(15):  # Windows дописывает запись корзины чуть позже, чем завершается удаление
+    for _ in range(15):  # Windows appends the Recycle Bin entry slightly later than the deletion finishes
         if in_recycle_bin(src, t0):
             binned = True
             break
         time.sleep(0.3)
     try:
-        os.rename(str(tmp), str(target))  # не перезапишет, если имя вдруг занято
+        os.rename(str(tmp), str(target))  # will not overwrite if the name is suddenly taken
     except OSError as e:
         raise _ItemError(M("rep.err.final", tmp=str(tmp), detail=str(e)[:200]), after=True)
     if not same_vol:
         _rm(out)
-    try:  # пустую папку compressed убираем (выбранную тобой папку вывода — никогда)
+    try:  # remove the empty "compressed" folder (never the output folder you chose)
         if out.parent.name.lower() == "compressed" and not any(out.parent.iterdir()):
             out.parent.rmdir()
     except OSError:
@@ -2297,7 +2297,7 @@ def _replace_one(key, item):
 
 
 def replace_recover():
-    """При запуске: доделать или откатить замену, прерванную закрытием программы или сбоем."""
+    """At startup: finish or roll back a replacement interrupted by closing the program or by a failure."""
     with LOCK:
         pending = [dict(h) for h in HISTORY["items"] if h.get("replace_tmp")]
     for h in pending:
@@ -2316,13 +2316,13 @@ def _recover_one(h):
             return
         try:
             if tmp.exists():
-                if src.exists():  # оригинал не тронут — возвращаем как было
+                if src.exists():  # original untouched - restore as it was
                     if h.get("replace_copy"):
                         _rm(tmp)
                     elif not out.exists():
                         os.rename(str(tmp), str(out))
                     _set_hist(key, replace_tmp=None, replace_copy=None)
-                else:  # оригинал уже в корзине — ставим сжатый на его место
+                else:  # original already in the Recycle Bin - put the compressed one in its place
                     target = _replace_target(src)
                     if not target.exists():
                         os.rename(str(tmp), str(target))
@@ -2338,7 +2338,7 @@ def _recover_one(h):
                               replace_copy=None, out_sig=src_sig(str(target)))
                 elif src.exists() and h.get("out_sig") and target == src and \
                         os.path.getsize(str(src)) == h["out_sig"][0] and src_sig(str(src)) != h.get("src_sig"):
-                    # .mp4-оригинал: на его месте уже сжатый файл — замена завершилась
+                    # .mp4 original: the compressed file is already in its place - the replacement was completed
                     _set_hist(key, replaced=True, out=str(src), replaced_t=time.time(), replace_tmp=None,
                               replace_copy=None, out_sig=src_sig(str(src)))
                 elif src.exists():
@@ -2350,11 +2350,11 @@ def _recover_one(h):
 class _ItemError(Exception):
     def __init__(self, m, after=False):
         super().__init__(str(m))
-        self.m, self.after = m, after  # after — оригинал уже в корзине, сжатый файл на месте
+        self.m, self.after = m, after  # after - the original is already in the Recycle Bin, the compressed file is in place
 
 
 def replace_run(keys):
-    """Заменяет выбранные по очереди; каждый файл — сам по себе: ошибка в одном не трогает остальные."""
+    """Replaces the chosen ones in turn; each file on its own: an error in one does not affect the others."""
     with LOCK:
         if REPLACE["running"]:
             raise UserError("rep.err.busy")
@@ -2398,7 +2398,7 @@ def do_test(job, s):
             job["status"] = "cancelled" if err == "cancel" else "error"
             job["error"] = "" if err == "cancel" else err
 
-    # 1) вырезаем кусок без пережатия (через run_ffmpeg: виден прогресс и работает «Стоп»)
+    # 1) cut out a piece without re-encoding (via run_ffmpeg: progress is visible and "Stop" works)
     ok, err, _ = run_ffmpeg(["-ss", "%.3f" % start, "-i", job["path"], "-t", "%.3f" % length,
                              "-map", "0:V:0", "-map", "0:a?", "-c", "copy",
                              "-progress", "pipe:1", "-nostats", str(ref)], job, length, M("phase.test_cut"), s)
@@ -2409,7 +2409,7 @@ def do_test(job, s):
         ref_dur = probe(str(ref))["duration"] or length
     except Exception:
         ref_dur = length
-    # 2) жмём кусок теми же настройками
+    # 2) compress the piece with the same settings
     ok, err, enc_time = encode(job, s, str(ref), str(test), ref_dur, M("phase.test_enc"),
                                ["-movflags", "+faststart"])
     if not ok:
@@ -2417,17 +2417,17 @@ def do_test(job, s):
         return fail(err)
     ts, rs = test.stat().st_size, ref.stat().st_size
     factor = (info["duration"] or ref_dur) / ref_dur
-    res = {"preset": s["preset"], "quality": s["quality"],  # подпись теста собирает страница на своём языке
+    res = {"preset": s["preset"], "quality": s["quality"],  # the page builds the test caption in its own language
            "test_size": ts, "ref_size": rs, "est_size": int(ts * factor), "ratio": ts / rs if rs else 0,
            "est_time": enc_time * factor, "vmaf": None, "test_path": str(test), "ref_path": str(ref)}
-    # 3) VMAF, если есть. Выше 1080p сравниваем в 1080p: модель vmaf_v0.6.1 рассчитана на неё,
-    #    а считается в 2–3 раза быстрее.
-    #    Кадры сопоставляем по НОМЕРУ, а не по времени: у вырезанного MKV метки округлены до 1 мс,
-    #    у MP4 точные, и libvmaf сравнивал каждый 3-й кадр с соседним (VMAF занижался с ~95 до ~75).
+    # 3) VMAF, if available. Above 1080p we compare at 1080p: the vmaf_v0.6.1 model is designed for it,
+    #    and it is computed 2-3 times faster.
+    #    Frames are matched by NUMBER, not by time: in a cut MKV the timestamps are rounded to 1 ms,
+    #    in MP4 they are exact, and libvmaf compared every 3rd frame with its neighbour (VMAF dropped from ~95 to ~75).
     if CAPS["vmaf"]:
         threads = max(1, (os.cpu_count() or 4) - 1)
         sc = ",scale=-2:1080:flags=bicubic" if (info.get("height") or 0) > 1080 else ""
-        rf = "".join(f + "," for f in vfilters(info))  # оригинал приводим к тому же виду, что и результат
+        rf = "".join(f + "," for f in vfilters(info))  # bring the original to the same form as the result
         lav = ("[0:v]setpts=N/(30*TB)%s,format=yuv420p[d];[1:v]%ssetpts=N/(30*TB)%s,format=yuv420p[r];"
                "[d][r]libvmaf=n_subsample=5:n_threads=%d" % (sc, rf, sc, threads))
         ok, err, tail = run_ffmpeg(["-i", str(test), "-i", str(ref), "-lavfi", lav, "-an", "-sn",
@@ -2452,19 +2452,19 @@ def load_history():
     if items is not None:
         HISTORY["items"] = [x for x in items if isinstance(x, dict) and isinstance(x.get("src"), str)
                             and isinstance(x.get("out"), str) and x.get("src") and x.get("out")]
-        if from_bak:  # основной файл пропал или испорчен — сразу возвращаем его на место
+        if from_bak:  # the main file is missing or corrupted - put it back at once
             try:
                 write_json(HISTORY_FILE, json.dumps(HISTORY["items"], ensure_ascii=False, indent=0))
             except Exception:
                 pass
-    with LOCK:  # результаты прошлых сеансов принадлежат своим исходникам
+    with LOCK:  # results of earlier sessions belong to their own sources
         for h in HISTORY["items"]:
             if h.get("out"):
                 OUT_OWNERS.setdefault(_norm(h["out"]), _norm(h["src"]))
 
 
 def add_history(entry):
-    """Журнал всего, что сжато: не зависит от списка задач, «Убрать готовые» его не трогает."""
+    """Log of everything compressed: independent of the job list, "Remove finished" does not touch it."""
     with LOCK:
         HISTORY["items"].append(entry)
         HISTORY["ver"] += 1
@@ -2503,7 +2503,7 @@ def _save_queue(payload=None):
 
 
 def queue_saver():
-    """Раз в 2 секунды сохраняем список, если он изменился: закрыл окно — при следующем запуске всё на месте."""
+    """Every 2 seconds save the list if it changed: close the window and everything is in place at the next start."""
     last = None
     while True:
         time.sleep(2)
@@ -2515,7 +2515,7 @@ def queue_saver():
 
 
 def _restore_job(d):
-    """Одна запись очереди прошлого сеанса → задача (или None, если запись испорчена)."""
+    """One queue entry of the previous session -> a job (or None if the entry is corrupted)."""
     if not isinstance(d, dict):
         return None
     path = d.get("path")
@@ -2527,7 +2527,7 @@ def _restore_job(d):
            "cur_size": 0, "elapsed": 0, "phase": "", "out_path": d.get("out_path") or "",
            "out_size": d.get("out_size") or 0, "test": d.get("test"), "settings": None, "mode": d.get("mode"),
            "fin": None, "replaced": bool(d.get("replaced")), "src_sig": d.get("src_sig")}
-    if d.get("status") == "running" and d.get("part"):  # прошлый сеанс оборвался посреди сжатия
+    if d.get("status") == "running" and d.get("part"):  # the previous session broke off in the middle of compression
         _rm_part(d.get("part"))
     if job["status"] in ("running", "queued", "probing"):
         job["status"] = "cancelled" if job["status"] == "running" else "ready"
@@ -2541,7 +2541,7 @@ def _restore_job(d):
             size = os.path.getsize(path)
         except OSError:
             size = job["size"]
-        if size != job["size"] or not job["info"]:  # файл подменили: перечитаем параметры
+        if size != job["size"] or not job["info"]:  # the file was swapped: re-read the parameters
             job["size"], job["info"] = size, None
             if job["status"] not in ("done", "skipped", "kept"):
                 job["status"] = "probing"
@@ -2549,8 +2549,8 @@ def _restore_job(d):
 
 
 def load_queue():
-    """Восстанавливаем список прошлого сеанса. Что было «в работе» или «в очереди», ждёт «Сжать всё».
-    Испорченная запись пропускается — она не должна мешать запуску."""
+    """Restore the list of the previous session. What was "running" or "queued" waits for "Compress all".
+    A corrupted entry is skipped - it must not prevent startup."""
     saved, _ = read_json(QUEUE_FILE, list)
     if saved is None:
         return 0
@@ -2613,7 +2613,7 @@ def worker():
                                                         else "%s: %s" % (type(e).__name__, e))
         with LOCK:
             job["phase"] = ""
-            if job["status"] == "running":  # на всякий случай: не оставляем «вечно в работе»
+            if job["status"] == "running":  # just in case: do not leave "running forever"
                 job["status"] = "error"
                 job["error"] = job["error"] or M("err.no_result")
 
@@ -2621,7 +2621,7 @@ def worker():
 # ------------------------------------------------------------- Pickers ----
 
 VIDEO_MASK = "*.mp4 *.mkv *.mov *.avi *.webm *.flv *.ts *.m2ts *.m4v *.wmv *.mts"
-WINDOW = {"w": None}  # окно программы (pywebview), если запущено в своём окне
+WINDOW = {"w": None}  # program window (pywebview), if run in its own window
 _PICK_LOCK = threading.Lock()
 
 
@@ -2639,7 +2639,7 @@ def _pick_webview(win, kind):
 
 
 def _pick_tk(kind):
-    """tkinter в отдельном потоке этого же процесса (в exe нельзя запускать sys.executable -c)."""
+    """tkinter in a separate thread of this same process (in an exe we cannot run sys.executable -c)."""
     out, err = [], []
 
     def run():
@@ -2694,7 +2694,7 @@ def pick(kind):
             ["zenity", "--file-selection", "--directory"]
         r = run_quiet(a, timeout=3600)
         return [l for l in r.stdout.splitlines() if l.strip()] if r.returncode == 0 else []
-    with _PICK_LOCK:  # одно окно выбора за раз
+    with _PICK_LOCK:  # one picker window at a time
         win = WINDOW["w"]
         if win is not None:
             try:
@@ -2724,7 +2724,7 @@ _DISK_CACHE = {"key": None, "t": 0, "val": None}
 
 
 def disk_info(target):
-    """Свободное место; кэш на 5 с, и без LOCK: сетевой диск не должен тормозить сжатие."""
+    """Free space; cached for 5 s, and without LOCK: a network drive must not slow compression down."""
     if target is None:
         return None
     key = str(target)
@@ -2784,7 +2784,7 @@ class H(BaseHTTPRequestHandler):
         return host in ("127.0.0.1", "localhost")
 
     def _from_browser(self):
-        """Запрос пришёл со страницы в браузере (а не от второго запуска программы через urllib)."""
+        """The request came from a page in the browser (not from a second launch of the program via urllib)."""
         return bool(self.headers.get("Origin") or self.headers.get("Sec-Fetch-Site") or self.headers.get("Referer"))
 
     def _tok_ok(self, given):
@@ -2793,11 +2793,11 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self._host_ok():
             return self._send(403, {"error": "forbidden"})
-        if self.path == "/api/ping" and not self._from_browser():  # второй запуск: «здесь уже работает Framewring»
+        if self.path == "/api/ping" and not self._from_browser():  # second launch: "Framewring is already running here"
             return self._send(200, {"app": "Framewring"})
         if self.path == "/" or self.path.startswith("/?"):
             m = re.search(r"[?&]t=([0-9a-f]+)", self.path)
-            if not m or not self._tok_ok(m.group(1)):  # страница с ключом — только по ссылке от самой программы
+            if not m or not self._tok_ok(m.group(1)):  # the page with the key - only via a link from the program itself
                 return self._send(403, STALE_HTML.encode("utf-8"), "text/html; charset=utf-8")
             return self._send(200, page_html().encode("utf-8"), "text/html; charset=utf-8")
         if not self._tok_ok(self.headers.get("X-Token")):
@@ -2810,7 +2810,7 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._host_ok():
             return self._send(403, {"error": "forbidden"})
-        if self.path == "/api/show" and not self._from_browser():  # второй запуск просит показать окно
+        if self.path == "/api/show" and not self._from_browser():  # the second launch asks to show the window
             threading.Thread(target=show_self, daemon=True).start()
             return self._send(200, {"ok": True})
         if not self._tok_ok(self.headers.get("X-Token")):
@@ -2828,7 +2828,7 @@ class H(BaseHTTPRequestHandler):
         try:
             res = self.route(self.path, body)
             self._send(200, res if res is not None else {"ok": True})
-        except UserError as e:  # страница покажет на своём языке по ключу, error — запасной текст
+        except UserError as e:  # the page shows it in its own language by key, error is the fallback text
             self._send(400, {"error": str(e), "msg": e.msg()})
         except Exception as e:
             self._send(400, {"error": str(e)})
@@ -2841,7 +2841,7 @@ class H(BaseHTTPRequestHandler):
                 for x in add_path(p):
                     if isinstance(x, dict):
                         errs.append(x["error"])
-            return {"added": len(paths), "errors": errs}  # ошибки: строки или {"k","p"}
+            return {"added": len(paths), "errors": errs}  # errors: strings or {"k","p"}
         if path == "/api/add":
             errs = []
             for p in b.get("paths", []):
@@ -2905,7 +2905,7 @@ class H(BaseHTTPRequestHandler):
                             pass
                 threading.Thread(target=_kill_later, daemon=True).start()
             return None
-        if path == "/api/quit":  # только для режима в браузере: окна нет, а консоли в exe тоже нет
+        if path == "/api/quit":  # only for browser mode: there is no window, and in an exe no console either
             threading.Thread(target=quit_app, daemon=True).start()
             return None
         if path == "/api/drives":
@@ -2968,7 +2968,7 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/open":
             which = b.get("which")
             with LOCK:
-                if "hist" in b:  # строка истории: задачи в списке может уже не быть
+                if "hist" in b:  # a history row: the job may no longer be in the list
                     i = b.get("hist")
                     h = HISTORY["items"][i] if isinstance(i, int) and 0 <= i < len(HISTORY["items"]) else None
                     target = h and (h["src"] if which == "src" else h["out"])
@@ -3012,7 +3012,7 @@ class H(BaseHTTPRequestHandler):
                     raise ValueError
                 items = [x for x in items if isinstance(x, dict) and isinstance(x.get("src"), str)
                          and isinstance(x.get("out"), str) and x.get("src") and x.get("out")]
-                for x in items:  # импортированные записи заменять нельзя, пока файл не пересжат
+                for x in items:  # imported entries cannot be replaced until the file is re-compressed
                     for k in ("replace_tmp", "replace_copy", "src_sig", "out_sig", "out_hash", "verify_failed"):
                         x.pop(k, None)
                     x["imported"] = True
@@ -3204,14 +3204,14 @@ a{color:var(--acc)}:root{color-scheme:dark}.jh .btn{white-space:nowrap}
 <div class="toast" id="toast"></div>
 <script>
 const T="__TOKEN__";let S=null;
-// ---------------- язык: словарь из i18n.py (тот же, что у бэкенда)
+// ---------------- language: dictionary from i18n.py (the same as in the backend)
 const I18N=__I18N__;let LANG="__LANG__";
 const LOCS={ru:"ru-RU",en:"en-US",de:"de-DE",fr:"fr-FR",es:"es-ES",pt:"pt-BR",zh:"zh-CN"};const LOC=()=>LOCS[LANG]||"en-US";
 const nf=(x,d=0)=>Number(x||0).toLocaleString(LOC(),{minimumFractionDigits:d,maximumFractionDigits:d});
 const nfm=(x,m)=>Number(x||0).toLocaleString(LOC(),{maximumFractionDigits:m});
 function tr(k,p){let s=(I18N[LANG]||{})[k];if(s==null&&LANG!=="ru")s=I18N.en[k];if(s==null)s=I18N.ru[k];if(s==null)s=k;return p?s.replace(/\{(\w+)\}/g,(m,n)=>n in p?fmtP(p[n]):m):s}
 function fmtP(v){return v&&typeof v==="object"?msg(v):typeof v==="number"?nfm(v,1):String(v)}
-// сообщение бэкенда: строка (старые записи, сырой текст ffmpeg), {k,p} или список таких
+// backend message: a string (old entries, raw ffmpeg text), {k,p} or a list of those
 function msg(x){if(x==null||x==="")return"";if(typeof x==="string")return x;if(Array.isArray(x))return x.map(msg).filter(Boolean).join(" ");if(x.k)return tr(x.k,x.p||{});return String(x)}
 function applyStatic(){document.documentElement.lang=LANG;
  document.querySelectorAll("[data-t]").forEach(e=>e.textContent=tr(e.dataset.t));
@@ -3225,12 +3225,12 @@ function applyStatic(){document.documentElement.lang=LANG;
 function setLang(l){if(!S||l===LANG)return;LANG=l;histVer=-1;setS("lang",l);applyStatic();if(histOpen)loadHist()}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-// innerHTML только при реальном изменении: иначе каждую секунду пересоздаются кнопки и клик «теряется»
+// innerHTML only on a real change: otherwise buttons are recreated every second and a click gets "lost"
 function setHTML(el,h){if(el._h!==h){el.innerHTML=h;el._h=h}}
 async function api(p,b){try{const r=await fetch(p,{method:"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:JSON.stringify(b||{})});const j=await r.json().catch(()=>({}));if(r.status===403){stale();return {}}if(!r.ok)toast(j.msg?msg(j.msg):(j.error||tr("err.generic")));return j}catch(e){toast(tr("err.no_response"));return {}}}
 function stale(){document.body.innerHTML=`<div style="padding:40px;font-size:16px">${esc(tr("stale.text"))}</div>`}
 function toasts(a){a=(a||[]).map(msg).filter(Boolean);if(a.length)toast(a.slice(0,4).join(" · ")+(a.length>4?` (+${a.length-4})`:""))}
-// перетаскивание: без этого окно открыло бы само видео вместо программы
+// drag and drop: without this the window would open the video itself instead of the program
 ["dragover","drop"].forEach(ev=>window.addEventListener(ev,e=>{e.preventDefault();if(ev==="drop"&&!S?.window)toast(tr("drop.browser"))}));
 function donate(on){const d=$("donate");if(d)d.classList.toggle("on",on)}
 function report(on){const d=$("report");if(d)d.classList.toggle("on",on)}
@@ -3239,13 +3239,13 @@ async function histImport(){const r=await api("/api/hist_import");if(r.added!=nu
 function renderIntro(){const el=$("intro");if(!el)return;if(localStorage.getItem("fw_intro")==="1"){setHTML(el,"");return}
  setHTML(el,`<div class="card intro"><div class="row" style="justify-content:space-between;align-items:center;flex-wrap:nowrap"><h2 style="margin:0">${esc(tr("intro.title"))}</h2><button class="btn sm" onclick="localStorage.setItem('fw_intro','1');renderIntro()">${esc(tr("intro.ok"))}</button></div>
  <ol>${["intro.s1","intro.s2","intro.s3","intro.s4"].map(k=>`<li>${esc(tr(k))}</li>`).join("")}</ol></div>`)}
-// ---------------- замена оригиналов: только то, что человек отметил сам
+// ---------------- replacing originals: only what the person ticked themselves
 let repList=[],repSel=new Set(),repWasRunning=false;
 let repPre=null,repLoading=false,repFailed=false;
 async function openReplace(pre,preOut){repSel.clear();repPre=null;repLoading=true;repFailed=false;repList=[];
  $("replace").classList.add("on");renderReplace();setTimeout(()=>{const b=$("repNone");if(b)b.focus()},0);
  const r=await api("/api/replace_list");repLoading=false;repFailed=!r.items;repList=r.items||[];
- // кнопка у файла: подсвечиваем его строку; отмечаем сами только без предупреждений
+ // button at a file: highlight its row; tick by ourselves only when there are no warnings
  if(pre){const c=repList.find(c=>pk(c.src)===pk(pre)&&(!preOut||pk(c.out)===pk(preOut)));
   if(c){repPre=c.key;if(!c.block.length&&!c.warn.length)repSel.add(c.key)}}
  renderReplace();if(repPre){const el=document.querySelector(`#repList [data-k="${CSS.escape(repPre)}"]`);if(el)el.closest(".rrow").scrollIntoView({block:"center"})}}
@@ -3273,7 +3273,7 @@ function renderReplace(){if(!$("replace").classList.contains("on"))return;
  const g=$("repGo");g.textContent=running?tr("rep.s.replace"):tr("rep.go",{n:sel.length});g.disabled=running||repLoading||!sel.length}
 async function doReplace(){const sel=repList.filter(c=>repSel.has(c.key)&&!c.block.length&&!repDone(c));if(!sel.length)return;
  const warned=sel.filter(c=>c.warn.length);
- // подтверждение обязательно всегда: без отдельного «да» ни один файл не заменяется
+ // confirmation is always required: no file is replaced without a separate "yes"
  const lim=(a,f)=>a.slice(0,12).map(f).join("\n")+(a.length>12?"\n"+tr("rep.confirm_more",{n:a.length-12}):"");
  let q=tr("rep.confirm",{n:sel.length,list:lim(sel,c=>"• "+c.name)});
  if(warned.length)q+="\n\n"+tr("rep.confirm_warn",{list:lim(warned,c=>"• "+c.name+" — "+c.warn.map(msg).join("; "))});
@@ -3305,19 +3305,19 @@ function toast(m){const t=$("toast");if(!t)return;t.textContent=m;t.style.displa
 const gb=b=>{const n=Math.abs(b||0),sg=b<0?"−":"";return sg+(n>=1e9?nf(n/1e9,2)+" "+tr("unit.gb"):n>=1e7?nf(n/1e6,0)+" "+tr("unit.mb"):nf(n/1e6,1)+" "+tr("unit.mb"))};
 const tm=s=>{if(s==null||!isFinite(s))return"—";s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h?tr("time.hm",{h:String(h),m:String(m)}):m?tr("time.ms",{m:String(m),s:String(x)}):tr("time.s",{s:String(x)})};
 const dur=s=>{s=Math.round(s||0);return`${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`};
-const pctS=d=>(d<0?"+":"−")+nf(Math.abs(d),0); // −37 (меньше) / +5 (больше)
+const pctS=d=>(d<0?"+":"−")+nf(Math.abs(d),0); // -37 (smaller) / +5 (bigger)
 const testLabel=tl=>{tl=tl||120;return tl<60?tr("btn.test_sec",{n:String(Math.round(tl))}):tr("btn.test_min",{n:nfm(Math.round(tl/6)/10,1)})};
 const presetTitle=k=>I18N.ru["preset."+k+".title"]!=null?tr("preset."+k+".title"):k;
 let pending=0,sver=0;
 async function setS(k,v){S.settings[k]=v;sver++;pending++;renderSettings();try{await api("/api/settings",{[k]:v})}finally{pending--}}
 async function pick(kind){toast(S.window?tr("pick.opening"):tr("pick.opening_browser"));const r=await api("/api/pick",{kind});toasts(r.errors);refresh()}
 async function addManual(){const el=$("manual");if(!el.value.trim())return;const v=el.value;el.value="";toast(tr("add.adding"));
- const paths=[...v.matchAll(/"([^"]+)"|([^"\r\n]+)/g)].map(m=>(m[1]||m[2]).trim()).filter(Boolean); // «Копировать как путь» из проводника: "a" "b"
+ const paths=[...v.matchAll(/"([^"]+)"|([^"\r\n]+)/g)].map(m=>(m[1]||m[2]).trim()).filter(Boolean); // "Copy as path" from Explorer: "a" "b"
  const r=await api("/api/add",{paths});toasts(r.errors);refresh()}
 $("manual").addEventListener("keydown",e=>{if(e.key==="Enter")addManual()});
 async function start(mode){const r=await api("/api/start",{mode});if(r.queued===0)toast(S.jobs.some(j=>j.status==="probing")?tr("start.probing"):tr("start.nothing"));refresh()}
 async function cancel(){const j=S&&S.jobs.find(x=>x.status==="running");if(j&&j.mode!=="test"&&j.pct>2&&!confirm(tr("stop.confirm",{name:j.name,pct:nf(j.pct,0)})))return;await api("/api/cancel");refresh()}
-// ---------------- история
+// ---------------- history
 let histVer=-1,histOpen=false;
 async function toggleHist(show){const c=$("histCard");histOpen=show==null?c.style.display==="none":show;c.style.display=histOpen?"block":"none";if(histOpen){histVer=-1;await loadHist();c.scrollIntoView({behavior:"smooth",block:"start"})}}
 const fdate=t=>new Date(t*1000).toLocaleString(LOC(),{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
@@ -3348,7 +3348,7 @@ function renderSettings(){
 $("outdir").addEventListener("change",e=>setS("outdir",e.target.value.trim()));
 ["lowprio","nosleep","skip","update_check"].forEach(k=>$(k).addEventListener("change",e=>setS(k,e.target.checked)));
 function vmafCls(v){return v>=95?"g":v>=92?"y":"r"}
-const phk=j=>j.phase&&j.phase.k||""; // этап работы: ключ (phase.save, phase.save_wait, …)
+const phk=j=>j.phase&&j.phase.k||""; // work phase: key (phase.save, phase.save_wait, ...)
 function jobStatic(j){
  const i=j.info;
  const meta=i?`${i.width}×${i.height} · ${esc(nfm(i.fps,2))} fps · ${esc(i.vcodec.toUpperCase())} · ${esc(nf(i.bitrate/1e6,1))} ${esc(tr("unit.mbps"))} · ${dur(i.duration)} · ${gb(j.size)} · ${esc(tr("job.audio",{list:i.audio.map(a=>`${a.codec} ${a.bitrate?Math.round(a.bitrate/1000)+tr("unit.k"):""}`).join(", ")||tr("job.no_audio")}))}`:gb(j.size);
@@ -3396,7 +3396,7 @@ function render(){renderUpd();repTick();renderIntro();
  setHTML($("warn"),!c.ffmpeg||!c.ffprobe?`<div class="warnbox"><b>${esc(tr("warn.ffmpeg_t"))}</b> ${esc(tr("warn.ffmpeg_1"))}<br>Windows: <code>winget install Gyan.FFmpeg</code> · Mac: <code>brew install ffmpeg</code><br>${esc(tr("warn.ffmpeg_2"))}</div>`:c.pagefile_off&&localStorage.getItem("fw_nopf")!=="1"?`<div class="warnbox"><button class="btn sm" style="float:right;margin-left:10px" title="${esc(tr("common.close"))}" onclick="localStorage.setItem('fw_nopf','1');render()">✕</button><b>${esc(tr("warn.pf_t"))}</b> ${esc(tr("warn.pf_1"))}<br>Win+R → <code>sysdm.cpl</code> ${esc(tr("warn.pf_2"))}</div>`:"");
  renderSettings();renderJobs();
  $("btnStop").style.display=S.running?"inline-block":"none";
- // во время работы кнопки не блокируем: новые файлы встают в очередь за текущим
+ // buttons are not blocked while working: new files queue up behind the current one
  $("btnGo").disabled=$("btnTest").disabled=!c.ffmpeg;
  const q=S.jobs.filter(j=>j.status==="queued");
  const left=q.reduce((a,j)=>a+(j.info?j.info.duration:0),0);
@@ -3405,7 +3405,7 @@ function render(){renderUpd();repTick();renderIntro();
  document.title=S.running?`${(S.jobs.find(j=>j.status==="running")||{pct:0}).pct.toFixed(0)}% · Framewring`:tr("app.title");
  if(S.version)$("appver").textContent="v"+S.version;
 }
-// ---------------- поиск тяжёлых видео
+// ---------------- search for heavy videos
 let scanVer=-1,scanRes=[],scanRows=[],drives=null,driveSel=new Set(),minMb=500;
 const sel=new Set(),seenP=new Set(),pk=p=>p.toLowerCase();
 const EDIT_CODECS=new Set(["prores","qtrle","dnxhd","cfhd","ffv1","huffyuv","utvideo","rawvideo","v210","png","mjpeg"]);
@@ -3423,7 +3423,7 @@ async function scanStart(){const roots=[...driveSel];const cp=$("scanPath").valu
  sel.clear();seenP.clear();const r=await api("/api/scan",{roots,min_mb:minMb,everything:$("useEv").checked});if(!r.error)refresh()}
 const pct=(a,b)=>b?Math.round(a/b*100):0;
 function verdict(r){const p=r.save/r.size;return p>=.5?["g",tr("scan.v.g")]:p>=.2?["y",tr("scan.v.y")]:["m",tr("scan.v.m")]}
-const B=(s,st)=>"\u0001"+(st||"")+"\u0004"+s+"\u0002"; // жирное внутри переведённой строки: esc() потом развернёт
+const B=(s,st)=>"\u0001"+(st||"")+"\u0004"+s+"\u0002"; // bold inside a translated string: esc() expands it later
 const unB=h=>h.replace(/\u0001([^\u0004]*)\u0004/g,(m,st)=>st?`<b style="${st}">`:"<b>").replace(/\u0002/g,"</b>");
 function renderScan(sc){
  if(!sc)return;
@@ -3466,7 +3466,7 @@ async function scanAdd(){const inQ=new Set(S.jobs.filter(j=>!["done","skipped"].
 async function refresh(){
  const v=sver;
  try{const r=await fetch("/api/status?sv="+scanVer,{headers:{"X-Token":T}});if(r.status===403){stale();return}const d=await r.json();
-  if(pending||v!==sver)d.settings=S?S.settings:d.settings; // не откатываем только что выбранную настройку
+  if(pending||v!==sver)d.settings=S?S.settings:d.settings; // do not roll back the setting that was just chosen
   S=d;const want=S.settings.lang||S.sys_lang;const lg=I18N[want]?want:"en";
   if(lg!==LANG){LANG=lg;histVer=-1;applyStatic()}else render();
   renderScan(d.scan);if(histOpen&&d.hist_ver!==histVer)loadHist()}
@@ -3480,7 +3480,7 @@ loop();
 
 
 def page_html():
-    """Страница с ключом доступа, текущим языком и словарём обоих языков (переключение без перезагрузки)."""
+    """Page with the access key, the current language and the dictionary of both languages (switching without reload)."""
     cat = json.dumps(i18n.CATALOG, ensure_ascii=False).replace("</", "<\\/")
     opts = "".join('<option value="%s">%s</option>' % (c, i18n.LANG_NAMES[c]) for c in i18n.LANGS)
     return HTML.replace("__TOKEN__", TOKEN).replace("__LANG__", cur_lang()).replace("__LANGOPTS__", opts) \
@@ -3489,8 +3489,8 @@ def page_html():
 
 class Server(ThreadingHTTPServer):
     daemon_threads = True
-    # На Windows SO_REUSEADDR позволяет второму процессу сесть на УЖЕ занятый порт: два Жмыха делили
-    # 8765, и браузер попадал то в один, то в другой. Берём порт эксклюзивно.
+    # On Windows SO_REUSEADDR lets a second process bind an ALREADY used port: two instances shared
+    # 8765, and the browser landed in one or the other. We take the port exclusively.
     allow_reuse_address = not IS_WIN
 
     def server_bind(self):
@@ -3500,7 +3500,7 @@ class Server(ThreadingHTTPServer):
 
 
 def zhmyh_at(port):
-    """Отвечает ли на этом порту уже запущенный Framewring."""
+    """Whether a Framewring is already running on this port."""
     import urllib.request
     try:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -3511,11 +3511,11 @@ def zhmyh_at(port):
 
 
 def ask_show(port):
-    """Второй запуск: просим уже работающий экземпляр показать себя (ключ доступа знает только он)."""
+    """Second launch: ask the already running instance to show itself (only it knows the access key)."""
     import urllib.request
     try:
         if IS_WIN:
-            ctypes.windll.user32.AllowSetForegroundWindow(-1)  # ASFW_ANY: разрешаем ему выйти на передний план
+            ctypes.windll.user32.AllowSetForegroundWindow(-1)  # ASFW_ANY: allow it to come to the foreground
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         req = urllib.request.Request("http://127.0.0.1:%d/api/show" % port, data=b"{}", method="POST")
         opener.open(req, timeout=3).read()
@@ -3532,7 +3532,7 @@ UPDATE = {"latest": "", "notes_url": "", "setup": None, "sums": None, "state": "
 
 
 def install_kind():
-    """Как запущена программа: installer (стоит через установщик), portable или source."""
+    """How the program was launched: installer (installed via the installer), portable or source."""
     if not FROZEN:
         return "source"
     if (BASE_DIR / "portable.txt").exists():
@@ -3553,7 +3553,7 @@ def _http_get(url, timeout=15):
 
 
 def check_update():
-    """Раз за запуск спрашиваем у GitHub номер последней версии. Больше ничего не отправляется."""
+    """Once per launch ask GitHub for the number of the latest version. Nothing else is sent."""
     if not SETTINGS.get("update_check", True):
         return
     try:
@@ -3576,7 +3576,7 @@ def check_update():
 
 
 def _spawn_detached(cmd):
-    """Процесс, который переживёт нас (установщик). Без Job Object, отдельно от нашей консоли."""
+    """A process that will outlive us (the installer). Without a Job Object, detached from our console."""
     flags = NO_WINDOW | 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
     try:
         subprocess.Popen(cmd, creationflags=flags | 0x01000000, close_fds=True)  # CREATE_BREAKAWAY_FROM_JOB
@@ -3585,8 +3585,8 @@ def _spawn_detached(cmd):
 
 
 def install_update():
-    """Скачать установщик новой версии, сверить SHA-256 из SHA256SUMS.txt того же релиза,
-    тихо поставить поверх и перезапуститься. Настройки, очередь и история остаются в %APPDATA%."""
+    """Download the installer of the new version, verify SHA-256 from SHA256SUMS.txt of the same release,
+    install silently over the top and restart. Settings, queue and history stay in %APPDATA%."""
     def run():
         try:
             setup, sums = UPDATE["setup"], UPDATE["sums"]
@@ -3622,9 +3622,9 @@ def install_update():
                 raise RuntimeError("checksum mismatch")
             with LOCK:
                 UPDATE["state"] = "install"
-            # Отпускаем мьютекс (иначе установщик спросит «закройте программу») и сразу выходим: до замены
-            # файлов установщику нужно несколько секунд на распаковку, к тому времени нас уже нет.
-            # /FWUPDATE=1 — после тихой установки запустить новую версию (обычная тихая установка этого не делает).
+            # Release the mutex (otherwise the installer asks to "close the program") and exit at once: before replacing
+            # the files the installer needs a few seconds to unpack, by which time we are already gone.
+            # /FWUPDATE=1 - after a silent install, start the new version (a normal silent install does not do that).
             for h in _MUTEX:
                 try:
                     ctypes.windll.kernel32.CloseHandle(h)
@@ -3640,8 +3640,8 @@ def install_update():
 
 
 def report_url():
-    """Форма «Сообщить об ошибке» на GitHub с уже заполненными версией, Windows, видеокартами и режимом.
-    Ничего не отправляется само: человек видит всё в браузере и решает, отправлять ли."""
+    """The "Report a bug" form on GitHub, with the version, Windows, video cards and mode already filled in.
+    Nothing is sent automatically: the person sees everything in the browser and decides whether to submit."""
     import platform
     import urllib.parse
     try:
@@ -3657,7 +3657,7 @@ def report_url():
 
 
 def _own_windows():
-    """Видимые окна нашего процесса (окно программы pywebview)."""
+    """Visible windows of our process (the pywebview program window)."""
     found = []
     if not IS_WIN:
         return found
@@ -3704,7 +3704,7 @@ def quit_app():
 
 
 def _win_msg(text, title, flags):
-    """Системное окно сообщения (MessageBoxW) поверх всего; возвращает код кнопки."""
+    """System message box (MessageBoxW) on top of everything; returns the button code."""
     try:
         return ctypes.windll.user32.MessageBoxW(None, text, title, flags | 0x40000)  # MB_TOPMOST
     except Exception:
@@ -3715,8 +3715,8 @@ _MUTEX = []
 
 
 def _hold_mutex():
-    """Именованный мьютекс: по нему установщик понимает, что программа запущена (AppMutex), а второй
-    запуск — что первая копия уже работает (даже если она ещё не успела открыть сервер). True — уже есть."""
+    """Named mutex: the installer uses it to know the program is running (AppMutex), and a second
+    launch uses it to know the first copy is already working (even if it has not opened the server yet). True - already exists."""
     if IS_WIN:
         try:
             k32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -3730,7 +3730,7 @@ def _hold_mutex():
 
 
 def _setup_log():
-    """В сборке без консоли print некуда выводить: пишем в framewring.log в папке данных."""
+    """In a build without a console print has nowhere to go: we write to framewring.log in the data folder."""
     if sys.stdout is not None and sys.stderr is not None:
         for st in (sys.stdout, sys.stderr):
             try:
@@ -3750,8 +3750,8 @@ def _setup_log():
 
 
 def _style_titlebar():
-    """Полоса заголовка окна в цвет программы: тёмная тема (Windows 10/11), цвет фона, текста и рамки
-    (Windows 11). Кнопки, прилипание к краям и изменение размера остаются системными."""
+    """Window title bar in the program's colour: dark theme (Windows 10/11), background, text and border colour
+    (Windows 11). Buttons, edge snapping and resizing stay system ones."""
     if not IS_WIN:
         return
     try:
@@ -3765,7 +3765,7 @@ def _style_titlebar():
 
 
 def run_window(url):
-    """Своё окно программы на движке Edge (WebView2). False — не вышло, откроем браузер."""
+    """The program's own window on the Edge engine (WebView2). False - failed, we will open the browser."""
     if "--browser" in sys.argv or not IS_WIN:
         return False
     try:
@@ -3779,7 +3779,7 @@ def run_window(url):
         print(tr("con.window_unavail", e=str(e)))
         return False
 
-    def on_drop(e):  # перетащили файлы или папки в окно
+    def on_drop(e):  # files or folders dragged into the window
         try:
             for f in e.get("dataTransfer", {}).get("files", []):
                 fp = f.get("pywebviewFullPath")
@@ -3822,7 +3822,7 @@ def run_window(url):
 
 def main():
     _setup_log()
-    if _hold_mutex():  # уже запущена другая копия: найти её и показать, а самим выйти
+    if _hold_mutex():  # another copy is already running: find it and show it, and exit ourselves
         for _ in range(20):
             port = next((pt for pt in range(8765, 8800) if zhmyh_at(pt)), None)
             if port:
