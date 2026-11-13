@@ -376,6 +376,7 @@ STRINGS = {
     "api.cant_retry": "Cette tâche ne peut pas être relancée pour le moment",
     "api.unreadable": "Impossible de lire le fichier : {detail}",
     "api.no_info": "pas d'informations vidéo",
+    "api.no_test_result": "aucun résultat de test à partager — relancez le test",
     "api.url_denied": "lien non autorisé",
     "api.open_missing": "Fichier introuvable (supprimé ou déplacé) : {path}",
     # ---- native dialogs and console (translated by Python)

@@ -372,6 +372,7 @@ STRINGS = {
     "api.cant_retry": "此任务目前无法重试",
     "api.unreadable": "无法读取文件：{detail}",
     "api.no_info": "没有视频信息",
+    "api.no_test_result": "没有可分享的测试结果——请重新运行测试",
     "api.url_denied": "不允许打开此链接",
     "api.open_missing": "未找到文件（已删除或已移动）：{path}",
     # ---- native dialogs and console (translated by Python)

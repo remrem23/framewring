@@ -380,6 +380,7 @@ STRINGS = {
     "api.cant_retry": "Esta tarefa não pode ser repetida agora",
     "api.unreadable": "Não foi possível ler o arquivo: {detail}",
     "api.no_info": "sem detalhes do vídeo",
+    "api.no_test_result": "não há resultado de teste para compartilhar — faça o teste de novo",
     "api.url_denied": "link não permitido",
     "api.open_missing": "Arquivo não encontrado (excluído ou movido): {path}",
     # ---- native dialogs and console (translated by Python)

@@ -2429,7 +2429,8 @@ def do_test(job, s):
         return fail(err)
     ts, rs = test.stat().st_size, ref.stat().st_size
     factor = (info["duration"] or ref_dur) / ref_dur
-    res = {"preset": s["preset"], "quality": s["quality"], "speed": s["speed"],  # the page builds the caption itself
+    res = {"preset": s["preset"], "quality": s["quality"], "speed": s["speed"], "version": __version__,
+           # the page builds the caption itself; speed/version/clip numbers are for "Share result"
            "clip_dur": ref_dur, "enc_time": enc_time,
            "test_size": ts, "ref_size": rs, "est_size": int(ts * factor), "ratio": ts / rs if rs else 0,
            "est_time": enc_time * factor, "vmaf": None, "test_path": str(test), "ref_path": str(ref)}
@@ -2456,6 +2457,7 @@ def do_test(job, s):
         job["test"], job["status"], job["pct"] = res, "tested", 100
 
 
+SHARE_PENDING = {}  # job id -> the "Share result" fields last shown to the person (opened only as shown)
 HISTORY_FILE = DATA_DIR / "history.json"
 HISTORY = {"items": [], "ver": 0}
 
@@ -2958,16 +2960,24 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/report":
             webbrowser.open(report_url())
             return None
-        if path in ("/api/share_preview", "/api/share"):  # "Share result" of a Test (test_result.yml)
+        if path == "/api/share_preview":  # "Share result" of a Test (test_result.yml): step 1, show the fields
             with LOCK:
                 j = next((x for x in JOBS if x["id"] == b.get("id")), None)
-                fields = j and share_fields(j)
+                data = j and (dict(j["test"] or {}), dict(j["info"] or {}), j["size"])
+            fields = data and share_fields(*data)  # registry reads: outside the lock
             if not fields:
-                raise UserError("api.no_info")
-            if path == "/api/share":
-                webbrowser.open(share_url(fields))
-                return {"ok": True}
+                raise UserError("api.no_test_result")
+            with LOCK:
+                SHARE_PENDING.clear()
+                SHARE_PENDING[b.get("id")] = fields
             return {"fields": fields, "url": share_url(fields)}
+        if path == "/api/share":  # step 2: open exactly the fields the person saw
+            with LOCK:
+                fields = SHARE_PENDING.pop(b.get("id"), None)
+            if not fields:
+                raise UserError("api.no_test_result")
+            webbrowser.open(share_url(fields))
+            return {"ok": True}
         if path == "/api/open_log":
             log = DATA_DIR / "framewring.log"
             if not log.exists():
@@ -3333,7 +3343,7 @@ let shareId=null;
 async function share(id){const r=await api("/api/share_preview",{id});if(!r.fields)return;shareId=id;
  $("shareBody").textContent=r.fields.map(([k,v])=>k+":"+(v.includes("\n")?"\n":" ")+v).join("\n\n");$("share").classList.add("on")}
 function shareClose(){const d=$("share");if(d)d.classList.remove("on");shareId=null}
-async function shareGo(){if(shareId!=null)await api("/api/share",{id:shareId});shareClose()}
+async function shareGo(){const id=shareId;shareClose();if(id!=null)await api("/api/share",{id})} // closed first: a double click can't open two tabs
 async function openUrl(u){if(u)await api("/api/url",{url:u})}
 function toast(m){const t=$("toast");if(!t)return;t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",5000)}
 const gb=b=>{const n=Math.abs(b||0),sg=b<0?"−":"";return sg+(n>=1e9?nf(n/1e9,2)+" "+tr("unit.gb"):n>=1e7?nf(n/1e6,0)+" "+tr("unit.mb"):nf(n/1e6,1)+" "+tr("unit.mb"))};
@@ -3372,7 +3382,7 @@ function renderSettings(){
  const st=S.settings,caps=S.caps;
  const ord=k=>{const c=caps.presets[k]||{};return (caps.checked&&!c.ok?100:0)+S.presets.indexOf(k)};
  setHTML($("presets"),S.presets.filter(k=>{const c=caps.presets[k];return c?c.show!==false:(k==="x265"||k==="av1")}).sort((a,b)=>ord(a)-ord(b)).map(k=>{const c=caps.presets[k]||{};const off=caps.checked&&!c.ok;
-  return `<label class="opt ${st.preset===k?"on":""} ${off?"off":""}" ${off?"":`onclick="setS('preset','${k}')"`}><b>${esc(presetTitle(k))}${k===caps.recommended?esc(tr("preset.recommended")):""}${isExp(k)?esc(tr("preset.experimental")):""}</b><small>${esc(tr("preset."+k+".desc"))}${isExp(k)?` <br><span class="exp">${esc(tr("preset.experimental_hint"))}</span>`:""}${off?` <br>${esc(tr("preset.unavailable",{why:msg(c.why)}))}`:""}</small></label>`}).join(""));
+  return `<label class="opt ${st.preset===k?"on":""} ${off?"off":""}" ${off?"":`onclick="setS('preset','${k}')"`}><b>${esc(presetTitle(k))}${k===caps.recommended?esc(tr("preset.recommended")):""}${isExp(k)?esc(tr("preset.experimental")):""}</b><small>${esc(tr("preset."+k+".desc"))}${isExp(k)&&!off?` <br><span class="exp">${esc(tr("preset.experimental_hint"))}</span>`:""}${off?` <br>${esc(tr("preset.unavailable",{why:msg(c.why)}))}`:""}</small></label>`}).join(""));
  for(const [id,key] of [["q","quality"],["sp","speed"],["au","audio"]]){document.querySelectorAll(`#${id} button`).forEach(b=>{b.classList.toggle("on",b.dataset.v===st[key]);b.onclick=()=>setS(key,b.dataset.v)})}
  const qv=S.quality[st.preset]||{};const unit=st.preset==="vt_hevc"?"q":st.preset.startsWith("nvenc")?"CQ":st.preset.startsWith("amf")?"QP":st.preset.startsWith("qsv")?"ICQ":"CRF";
  $("qhint").textContent=tr("set.qhint",{unit,high:String(qv.high),balanced:String(qv.balanced),compact:String(qv.compact)});
@@ -3396,7 +3406,7 @@ function jobStatic(j){
    .replace("\u0001",`<i>${esc(label)}</i>`)}<br>${esc(tr("test.clip",{a:gb(x.ref_size),b:gb(x.test_size),pct:pctS((1-x.ratio)*100)}))} <b>${esc(tr("test.forecast",{size:gb(x.est_size)}))}</b>${esc(tr("test.time",{t:tm(x.est_time)}))}
   ${x.vmaf!=null?`<br>VMAF: <span class="vm ${vmafCls(x.vmaf)}">${esc(nf(x.vmaf,1))}</span> ${esc(tr("test.vmaf_scale"))}`:`<br>${esc(tr("test.eyes"))}`}
   ${tb?`<div class="note">${esc(tr("test.not_smaller"))}</div>`:""}
-  <br><button class="btn sm" style="margin-top:6px" onclick="api('/api/open',{id:${j.id},which:'test'})">${esc(tr("test.open"))}</button>${x.preset?` <button class="btn sm${isExp(x.preset)?" pri":""}" style="margin-top:6px" title="${esc(tr("test.share_title"))}" onclick="share(${j.id})">${esc(tr("test.share"))}</button>${isExp(x.preset)?`<div class="note">${esc(tr("test.share_exp"))}</div>`:""}`:""}</div>`}
+  <br><button class="btn sm" style="margin-top:6px" onclick="api('/api/open',{id:${j.id},which:'test'})">${esc(tr("test.open"))}</button>${x.preset&&x.version&&x.enc_time!=null?` <button class="btn sm${isExp(x.preset)?" pri":""}" style="margin-top:6px" title="${esc(tr("test.share_title"))}" onclick="share(${j.id})">${esc(tr("test.share"))}</button>${isExp(x.preset)?`<div class="note">${esc(tr("test.share_exp"))}</div>`:""}`:""}</div>`}
  const note=msg(j.note),err=msg(j.error);
  if(note)body+=`<div class="note">${esc(note)}</div>`;
  if(err)body+=`<div class="err">${esc(err)}</div>`;
@@ -3706,12 +3716,17 @@ def report_url():
     return ISSUES_NEW + "?" + urllib.parse.urlencode(q)
 
 
-def share_fields(job):
-    """Fields of the "Test result" form (.github/ISSUE_TEMPLATE/test_result.yml) for a tested job.
-    Privacy: only numbers about the video, the mode and the hardware - never a file name, a path
-    or the user name. The page shows exactly these fields before opening the form."""
-    x, i = job.get("test") or {}, job.get("info") or {}
-    if not x.get("preset"):
+def shareable(test):
+    """Only results made by a version that records everything the form needs (and its own version)."""
+    return bool(test and test.get("preset") and "enc_time" in test and test.get("version"))
+
+
+def share_fields(x, i, size):
+    """Fields of the "Test result" form (.github/ISSUE_TEMPLATE/test_result.yml) for a test result x,
+    video info i and file size. Privacy: only numbers about the video, the mode and the hardware - never
+    a file name, a path or the user name. The page shows exactly these fields before opening the form."""
+    x, i = x or {}, i or {}
+    if not shareable(x):
         return None
 
     def mb(n):
@@ -3730,7 +3745,7 @@ def share_fields(job):
         "Frame rate: %s fps" % (i.get("fps") or "?"),
         "Bitrate: %.1f Mb/s" % ((i.get("bitrate") or 0) / 1e6),
         "Duration: %s" % hms(i.get("duration")),
-        "Size: %s" % mb(job.get("size")),
+        "Size: %s" % mb(size),
         "Audio: %s" % (", ".join(a.get("codec") or "?" for a in i.get("audio") or []) or "none")])
     result = "\n".join([
         "Clip: %s, %s -> %s (%+.1f%%)" % (hms(x.get("clip_dur")), mb(x.get("ref_size")), mb(x.get("test_size")),
@@ -3742,7 +3757,7 @@ def share_fields(job):
     dev = (next((g.split(" (driver")[0] for g in gpus if any(w in g.lower() for w in words)), "?") if words
            else "Mac" if p == "vt_hevc" else cpu_name())  # the device that did the encoding
     return [("title", "Test result: %s on %s" % (title, dev)),
-            ("version", "%s (%s)" % (__version__, install_kind())),
+            ("version", "%s (%s)" % (x["version"], install_kind())),  # the version that made the test
             ("mode", "%s (%s)%s · %s · %s" % (p, title, exp, x.get("quality"), x.get("speed") or "?")),
             ("result", result), ("video", video), ("windows", os_name()), ("cpu", cpu_name()),
             ("gpu", ", ".join(gpus) or "?"), ("ffmpeg", (CAPS.get("version") or "").split(" Copyright")[0][:150])]

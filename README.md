@@ -79,7 +79,8 @@ Copies from other sites may be modified.
   modes and *Mac GPU · H.265* have not been tested on real hardware yet: they are marked **experimental** in the mode
   list and are never chosen automatically while a tested mode works (you can still pick one yourself). If you have
   such a card, run a **Test** in that mode and press **📤 Share result** — it opens a ready-filled
-  [Issues](https://github.com/remrem23/framewring/issues) form, and one confirmation is enough to remove the label.
+  [Issues](https://github.com/remrem23/framewring/issues) form. A mode confirmed on real hardware loses the label in
+  a later version.
 
 ## Features
 
@@ -304,7 +305,7 @@ FFmpeg уже внутри, ничего доустанавливать не н�
   не проверялись: в списке режимов они помечены **«экспериментальный»** и не выбираются автоматически, пока работает
   проверенный режим (выбрать их вручную можно). Если у тебя такая карта, сделай **«Тест»** в этом режиме и нажми
   **«📤 Поделиться результатом»** — откроется уже заполненная форма в [Issues](https://github.com/remrem23/framewring/issues);
-  одного подтверждения хватит, чтобы снять пометку.
+  режим, подтверждённый на реальном железе, теряет пометку в одной из следующих версий.
 
 ### Что умеет
 

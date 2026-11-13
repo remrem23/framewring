@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thank you! This helps confirm modes that have not been tested on real hardware yet. English or Russian is fine. / Спасибо! Это помогает проверить режимы, которые ещё не проверены на реальном железе. Можно писать по-русски или по-английски.
-        The fields below were filled in by Framewring: no file names, paths or user name. Edit or remove anything you don't want to share. / Поля ниже заполнила программа: без имён файлов, путей и имени пользователя. Измени или убери то, чем не хочешь делиться.
+        If you came from the “📤 Share result” button, the fields below were filled in by Framewring: no file names, paths or user name. Edit or remove anything you don't want to share. / Если ты пришёл по кнопке «📤 Поделиться результатом», поля ниже заполнила программа: без имён файлов, путей и имени пользователя. Измени или убери то, чем не хочешь делиться.
   - type: input
     id: version
     attributes:
@@ -26,7 +26,7 @@ body:
     id: result
     attributes:
       label: Test result / Результат теста
-      description: Clip size before and after, forecast for the whole file, VMAF, time. / Размер куска до и после, прогноз для всего файла, VMAF, время.
+      description: Clip length, clip size before and after, clip encode time, forecast for the whole file (size and time), VMAF. / Длина куска, размер до и после, время кодирования куска, прогноз для всего файла (размер и время), VMAF.
       render: text
     validations:
       required: true
@@ -34,7 +34,7 @@ body:
     id: video
     attributes:
       label: About the video / О видео
-      description: Codec, resolution, frame rate, bitrate, duration, size. / Кодек, разрешение, частота кадров, битрейт, длительность, размер.
+      description: Codec (and interlacing), resolution, frame rate, bitrate, duration, size, audio codecs. / Кодек (и чересстрочность), разрешение, частота кадров, битрейт, длительность, размер, аудиокодеки.
       render: text
   - type: input
     id: windows

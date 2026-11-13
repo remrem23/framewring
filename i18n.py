@@ -387,6 +387,7 @@ RU = {
     "api.cant_retry": "Эту задачу сейчас нельзя повторить",
     "api.unreadable": "Файл не читается: {detail}",
     "api.no_info": "нет параметров видео",
+    "api.no_test_result": "нет результата «Теста», которым можно поделиться — сделай «Тест» ещё раз",
     "api.url_denied": "ссылка не разрешена",
     "api.open_missing": "Файл не найден (удалён или перемещён): {path}",
     # ---- системные окна и консоль (переводит Python)
@@ -783,6 +784,7 @@ EN = {
     "api.cant_retry": "This task can't be retried right now",
     "api.unreadable": "Can't read the file: {detail}",
     "api.no_info": "no video details",
+    "api.no_test_result": "no Test result to share — run the Test again",
     "api.url_denied": "link not allowed",
     "api.open_missing": "File not found (deleted or moved): {path}",
     # ---- native dialogs and console (translated by Python)
