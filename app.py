@@ -295,6 +295,10 @@ HW_VENDOR = {"nvenc": "nvidia", "amf": "amd", "qsv": "intel"}  # GPU mode -> ven
 # What to recommend: the video card, if present. The CPU compresses slightly tighter, but an order of magnitude slower.
 # AV1 on AMD and Intel is below H.265 until tested on real video cards
 RECOMMEND = ("nvenc_av1", "nvenc_hevc", "amf_hevc", "qsv_hevc", "amf_av1", "qsv_av1", "vt_hevc", "x265", "av1")
+# Modes not yet tested on real hardware: shown as "experimental" and never picked automatically
+# while a tested mode works. When someone confirms a mode works (e.g. a shared "Test" result),
+# remove it from this tuple - that is the only change needed to drop the label.
+UNVERIFIED = ("amf_av1", "qsv_hevc", "qsv_av1", "vt_hevc")
 
 # Quality: high / balanced / compact
 QUALITY = {
@@ -449,7 +453,9 @@ def detect_caps():
         v = HW_VENDOR.get(p.split("_")[0])
         c["show"] = p in ("x265", "av1") or c["ok"] or (v is not None and v in vendors)
     CAPS["presets"] = pres  # whole at once, so /api/status never sees a half-filled dict
-    CAPS["recommended"] = next((p for p in RECOMMEND if CAPS["presets"][p]["ok"]), "")
+    ok = [p for p in RECOMMEND if CAPS["presets"][p]["ok"]]
+    # a tested mode first; an experimental one only if nothing else works
+    CAPS["recommended"] = next((p for p in ok if p not in UNVERIFIED), ok[0] if ok else "")
     with LOCK:
         # first run (mode never chosen yet) or the chosen mode is unavailable -> the recommended one
         if (not PRESET_CHOSEN or not CAPS["presets"].get(SETTINGS["preset"], {}).get("ok")) and CAPS["recommended"]:
@@ -2754,7 +2760,7 @@ def snapshot(scan_ver=None):
         elif settings.get("outdir"):
             target = Path(os.path.expanduser(settings["outdir"]))
     return {"caps": caps, "jobs": jobs, "running": running, "settings": settings, "disk": disk_info(target),
-            "presets": list(PRESETS), "sys_lang": SYS_LANG,
+            "presets": list(PRESETS), "unverified": list(UNVERIFIED), "sys_lang": SYS_LANG,
             "quality": QUALITY, "scan": scan_public(scan_ver), "hist_ver": HISTORY["ver"],
             "replace": {"running": REPLACE["running"], "ver": REPLACE["ver"],
                         "items": dict(REPLACE["items"])}, "version": __version__, "update": {k: UPDATE[k] for k in ("latest", "state", "pct", "err")},
@@ -3063,7 +3069,7 @@ h1{margin:0;font-size:22px;letter-spacing:.2px}h1 span{color:var(--acc)}
 .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:0 0 10px}
 .opt{display:block;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
 .opt:hover{border-color:#3a4152}.opt.on{border-color:var(--acc);background:#7c5cff14}
-.opt.off{opacity:.45;cursor:not-allowed}.opt b{display:block}.opt small{color:var(--mut)}
+.opt.off{opacity:.45;cursor:not-allowed}.opt b{display:block}.opt small{color:var(--mut)}.opt small .exp{color:var(--warn)}
 .opt input{display:none}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:6px}
 .seg button{flex:1;background:none;border:0;color:var(--fg);padding:8px 4px;cursor:pointer;font:inherit;border-right:1px solid var(--line)}
@@ -3307,6 +3313,7 @@ const tm=s=>{if(s==null||!isFinite(s))return"—";s=Math.round(s);const h=Math.f
 const dur=s=>{s=Math.round(s||0);return`${Math.floor(s/3600)}:${String(Math.floor(s%3600/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`};
 const pctS=d=>(d<0?"+":"−")+nf(Math.abs(d),0); // -37 (smaller) / +5 (bigger)
 const testLabel=tl=>{tl=tl||120;return tl<60?tr("btn.test_sec",{n:String(Math.round(tl))}):tr("btn.test_min",{n:nfm(Math.round(tl/6)/10,1)})};
+const isExp=k=>!!(S&&S.unverified&&S.unverified.includes(k)); // mode not yet tested on real hardware (UNVERIFIED)
 const presetTitle=k=>I18N.ru["preset."+k+".title"]!=null?tr("preset."+k+".title"):k;
 let pending=0,sver=0;
 async function setS(k,v){S.settings[k]=v;sver++;pending++;renderSettings();try{await api("/api/settings",{[k]:v})}finally{pending--}}
@@ -3337,7 +3344,7 @@ function renderSettings(){
  const st=S.settings,caps=S.caps;
  const ord=k=>{const c=caps.presets[k]||{};return (caps.checked&&!c.ok?100:0)+S.presets.indexOf(k)};
  setHTML($("presets"),S.presets.filter(k=>{const c=caps.presets[k];return c?c.show!==false:(k==="x265"||k==="av1")}).sort((a,b)=>ord(a)-ord(b)).map(k=>{const c=caps.presets[k]||{};const off=caps.checked&&!c.ok;
-  return `<label class="opt ${st.preset===k?"on":""} ${off?"off":""}" ${off?"":`onclick="setS('preset','${k}')"`}><b>${esc(presetTitle(k))}${k===caps.recommended?esc(tr("preset.recommended")):""}</b><small>${esc(tr("preset."+k+".desc"))}${off?` <br>${esc(tr("preset.unavailable",{why:msg(c.why)}))}`:""}</small></label>`}).join(""));
+  return `<label class="opt ${st.preset===k?"on":""} ${off?"off":""}" ${off?"":`onclick="setS('preset','${k}')"`}><b>${esc(presetTitle(k))}${k===caps.recommended?esc(tr("preset.recommended")):""}${isExp(k)?esc(tr("preset.experimental")):""}</b><small>${esc(tr("preset."+k+".desc"))}${isExp(k)?` <br><span class="exp">${esc(tr("preset.experimental_hint"))}</span>`:""}${off?` <br>${esc(tr("preset.unavailable",{why:msg(c.why)}))}`:""}</small></label>`}).join(""));
  for(const [id,key] of [["q","quality"],["sp","speed"],["au","audio"]]){document.querySelectorAll(`#${id} button`).forEach(b=>{b.classList.toggle("on",b.dataset.v===st[key]);b.onclick=()=>setS(key,b.dataset.v)})}
  const qv=S.quality[st.preset]||{};const unit=st.preset==="vt_hevc"?"q":st.preset.startsWith("nvenc")?"CQ":st.preset.startsWith("amf")?"QP":st.preset.startsWith("qsv")?"ICQ":"CRF";
  $("qhint").textContent=tr("set.qhint",{unit,high:String(qv.high),balanced:String(qv.balanced),compact:String(qv.compact)});

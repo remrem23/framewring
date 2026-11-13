@@ -59,6 +59,8 @@ STRINGS = {
     "audio.aac": "重新编码为 AAC 192",
     "preset.recommended": " · 推荐",
     "preset.unavailable": "不可用：{why}",
+    "preset.experimental": " · 实验性",
+    "preset.experimental_hint": "尚未在真实硬件上测试——请分享你的结果：运行“测试”后点击“📤 分享结果”。",
     "preset.nvenc_av1.title": "Nvidia 显卡 · AV1",
     "preset.nvenc_av1.desc": "RTX 40xx/50xx。比处理器快 5–7 倍，文件比 H.265 更小。"
                              "最适合大型视频存档。可在电脑、较新的手机和电视上播放。",

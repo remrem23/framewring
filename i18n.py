@@ -75,6 +75,8 @@ RU = {
     "audio.aac": "Пережать AAC 192",
     "preset.recommended": " · рекомендую",
     "preset.unavailable": "Недоступно: {why}",
+    "preset.experimental": " · экспериментальный",
+    "preset.experimental_hint": "Ещё не проверен на реальном железе — поделись результатом: сделай «Тест» и нажми «📤 Поделиться результатом».",
     "preset.nvenc_av1.title": "Видеокарта Nvidia · AV1",
     "preset.nvenc_av1.desc": "RTX 40xx/50xx. В 5–7 раз быстрее процессора и компактнее, чем H.265. "
                              "Лучший выбор для больших архивов. Играется на ПК, новых телефонах и ТВ.",
@@ -462,6 +464,8 @@ EN = {
     "audio.aac": "Re-encode to AAC 192",
     "preset.recommended": " · recommended",
     "preset.unavailable": "Unavailable: {why}",
+    "preset.experimental": " · experimental",
+    "preset.experimental_hint": "Not yet tested on real hardware — please share your result: run a Test and press “📤 Share result”.",
     "preset.nvenc_av1.title": "Nvidia GPU · AV1",
     "preset.nvenc_av1.desc": "RTX 40xx/50xx. 5–7× faster than the CPU and smaller files than H.265. "
                              "Best for large archives. Plays on PCs, recent phones and TVs.",

@@ -6,6 +6,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [Sem
 Detailed development history with measurements: [DEVLOG.md](DEVLOG.md).
 Each version is described in English first, then in Russian.
 
+## [Unreleased]
+
+### English
+
+#### Changed
+- **Experimental modes.** Modes that have not been tested on real hardware yet (*AMD GPU · AV1*, *Intel GPU · H.265*, *Intel GPU · AV1*, *Mac GPU · H.265*) are marked **experimental** in the mode list, with a hint asking to share a Test result. They are no longer chosen automatically while a tested mode works (on a PC with only Intel graphics the CPU mode is now recommended); you can still pick them yourself. The label is removed from a mode as soon as someone confirms it works.
+
+### Русский
+
+#### Изменено
+- **Экспериментальные режимы.** Режимы, ещё не проверенные на реальном железе («Видеокарта AMD · AV1», «Видеокарта Intel · H.265», «Видеокарта Intel · AV1», «Видеокарта Mac · H.265»), помечены в списке режимов как **«экспериментальный»** с подсказкой поделиться результатом «Теста». Пока работает проверенный режим, они больше не выбираются автоматически (на компьютере только с графикой Intel теперь рекомендуется режим на процессоре); выбрать их вручную по-прежнему можно. Пометка снимается, как только кто-то подтвердит, что режим работает.
+
 ## [0.9.3] — 2026-11-12
 
 ### English

@@ -59,6 +59,8 @@ STRINGS = {
     "audio.aac": "Recodificar em AAC 192",
     "preset.recommended": " · recomendado",
     "preset.unavailable": "Indisponível: {why}",
+    "preset.experimental": " · experimental",
+    "preset.experimental_hint": "Ainda não testado em hardware real — compartilhe seu resultado: clique em “Testar” e depois em “📤 Compartilhar resultado”.",
     "preset.nvenc_av1.title": "GPU Nvidia · AV1",
     "preset.nvenc_av1.desc": "RTX 40xx/50xx. 5–7× mais rápido que o processador, com arquivos menores que os do H.265. "
                              "Ideal para grandes acervos. Compatível com PCs, celulares e TVs recentes.",

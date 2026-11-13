@@ -74,11 +74,12 @@ Copies from other sites may be modified.
   Framewring test-encodes every mode on startup and lets you pick only the ones that work. A GPU mode that fails is
   greyed out with the reason if that vendor's GPU is in your PC; modes for vendors you don't have are hidden.
   Without a suitable GPU the CPU modes (x265, SVT-AV1) are used — they work everywhere, just slower.
-  The mode marked *recommended* is chosen in this order: Nvidia AV1 → Nvidia H.265 → AMD H.265 → Intel H.265 →
-  AMD AV1 → Intel AV1 → CPU (AMD AV1 and Intel AV1 stay below H.265 until they are verified on real hardware).
-  *AMD GPU · H.265* has been checked on real hardware (graphics built into a Ryzen 7 9700X); *AMD GPU · AV1* and
-  the Intel modes have not been tested on real hardware yet — if you have such a card, please report how it went in
-  [Issues](https://github.com/remrem23/framewring/issues).
+  The mode marked *recommended* is chosen in this order: Nvidia AV1 → Nvidia H.265 → AMD H.265 → CPU.
+  *AMD GPU · H.265* has been checked on real hardware (graphics built into a Ryzen 7 9700X). *AMD GPU · AV1*, the Intel
+  modes and *Mac GPU · H.265* have not been tested on real hardware yet: they are marked **experimental** in the mode
+  list and are never chosen automatically while a tested mode works (you can still pick one yourself). If you have
+  such a card, run a **Test** in that mode and press **📤 Share result** — it opens a ready-filled
+  [Issues](https://github.com/remrem23/framewring/issues) form, and one confirmation is enough to remove the label.
 
 ## Features
 
@@ -295,10 +296,12 @@ FFmpeg уже внутри, ничего доустанавливать не н�
   который не прошёл проверку, показывается серым с причиной, если видеокарта этого производителя в компьютере есть;
   режимы производителей, которых в компьютере нет, скрыты. Без подходящей видеокарты работают режимы на процессоре
   (x265, SVT-AV1) — везде, просто медленнее. Режим с пометкой «рекомендую» выбирается в таком порядке: Nvidia AV1 →
-  Nvidia H.265 → AMD H.265 → Intel H.265 → AMD AV1 → Intel AV1 → процессор (AMD AV1 и Intel AV1 стоят ниже H.265, пока
-  не проверены на реальном железе). «Видеокарта AMD · H.265» проверена на реальном железе (графика, встроенная
-  в Ryzen 7 9700X); «Видеокарта AMD · AV1» и режимы Intel на реальном железе ещё не проверялись — если у тебя такая карта,
-  напиши, как прошло, в [Issues](https://github.com/remrem23/framewring/issues).
+  Nvidia H.265 → AMD H.265 → процессор. «Видеокарта AMD · H.265» проверена на реальном железе (графика, встроенная
+  в Ryzen 7 9700X). «Видеокарта AMD · AV1», режимы Intel и «Видеокарта Mac · H.265» на реальном железе ещё
+  не проверялись: в списке режимов они помечены **«экспериментальный»** и не выбираются автоматически, пока работает
+  проверенный режим (выбрать их вручную можно). Если у тебя такая карта, сделай **«Тест»** в этом режиме и нажми
+  **«📤 Поделиться результатом»** — откроется уже заполненная форма в [Issues](https://github.com/remrem23/framewring/issues);
+  одного подтверждения хватит, чтобы снять пометку.
 
 ### Что умеет
 
