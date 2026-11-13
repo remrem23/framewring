@@ -25,7 +25,7 @@ from pathlib import Path
 
 import i18n
 
-__version__ = "0.9.4"
+__version__ = "0.9.5"
 APP_NAMES = i18n.APP_NAMES  # window title (Russian name / plain name)
 REPO_URL = "https://github.com/remrem23/framewring"  # official page of the program
 DONATE_URL = REPO_URL + "/blob/main/DONATE.md"

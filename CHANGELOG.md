@@ -6,6 +6,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [Sem
 Detailed development history with measurements: [DEVLOG.md](DEVLOG.md).
 Each version is described in English first, then in Russian.
 
+## [0.9.5] — 2026-11-13
+
+### English
+
+#### Changed
+- The program's launcher (the PyInstaller bootloader inside `Framewring.exe`) is now compiled from source in our own
+  GitHub Actions build, from the PyInstaller 6.22.3 source archive checked by SHA-256, instead of using the ready-made one.
+- Updated documentation: how to run the tests, supported versions, versions of bundled components; new screenshots
+  of 0.9.4/0.9.5 (experimental marks, **📤 Share result**). The *Feature request* and *Bug report* forms ask for the version.
+
+### Русский
+
+#### Изменено
+- Загрузчик программы (загрузчик PyInstaller внутри `Framewring.exe`) теперь собирается из исходников в нашей сборке
+  GitHub Actions — из исходного архива PyInstaller 6.22.3 со сверкой SHA-256, а не берётся готовым.
+- Обновлена документация: как запускать тесты, поддерживаемые версии, версии встроенных компонентов; новые скриншоты
+  (пометка «экспериментальный», **«📤 Поделиться результатом»**). Формы *Feature request* и *Bug report* спрашивают версию.
+
 ## [0.9.4] — 2026-11-13
 
 ### English

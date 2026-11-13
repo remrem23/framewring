@@ -29,4 +29,4 @@ body:
     id: version
     attributes:
       label: Framewring version, if relevant / Версия Framewring, если это важно
-      placeholder: "0.9.4 (installer / portable / source)"
+      placeholder: "0.9.5 (installer / portable / source)"

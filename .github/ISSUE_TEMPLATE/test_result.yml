@@ -12,7 +12,7 @@ body:
     id: version
     attributes:
       label: Framewring version / Версия Framewring
-      placeholder: "0.9.4 (installer)"
+      placeholder: "0.9.5 (installer)"
     validations:
       required: true
   - type: input

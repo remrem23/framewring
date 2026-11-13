@@ -6,8 +6,8 @@
 
 | Version | Supported |
 |---|---|
-| 0.9.4 (latest release) | ✅ |
-| 0.9.3 and older | ❌ — please update |
+| 0.9.5 (latest release) | ✅ |
+| 0.9.4 and older | ❌ — please update |
 
 Only the [latest release](https://github.com/remrem23/framewring/releases/latest) receives fixes.
 
@@ -49,8 +49,8 @@ Earlier releases (0.9.3 and older) were not built by GitHub Actions and have no 
 
 | Версия | Поддерживается |
 |---|---|
-| 0.9.4 (последний релиз) | ✅ |
-| 0.9.3 и более ранние | ❌ — пожалуйста, обнови |
+| 0.9.5 (последний релиз) | ✅ |
+| 0.9.4 и более ранние | ❌ — пожалуйста, обнови |
 
 Исправления выходят только для [последней версии](https://github.com/remrem23/framewring/releases/latest).
 

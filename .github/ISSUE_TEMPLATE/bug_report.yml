@@ -12,7 +12,7 @@ body:
     attributes:
       label: Framewring version / Версия Framewring
       description: Shown in the window header. / Видна в шапке окна.
-      placeholder: "0.9.4"
+      placeholder: "0.9.5"
     validations:
       required: true
   - type: dropdown

@@ -42,6 +42,10 @@ Ideas and requests are welcome in [Issues](https://github.com/remrem23/framewrin
 - A short **How it works** hint on first run.
 - **History export and import** (export to the real *Documents* folder, timestamped name).
 
+## Done in 0.9.5
+
+- The PyInstaller bootloader is compiled from source in the GitHub Actions build; documentation and screenshots updated.
+
 ## Done in 0.9.4
 
 - Modes not yet tested on real hardware are marked **experimental**; a **📤 Share result** button after a Test opens a
@@ -58,6 +62,7 @@ New big features wait until after 1.0.
 |---|---|
 | **0.9.2** ✓ | Done: SVT-AV1 preset 4 for “Thorough”, data backups, `.part.mp4` cleanup, Windows Sandbox tests. |
 | **0.9.3** ✓ | Done: full verification of compressed files and **⇄ Replace originals** (originals go to the Recycle Bin), first-run hint, history export/import. **Still pending:** install via `winget`. |
+| **0.9.5** ✓ | Done: bootloader compiled from source, updated docs and screenshots. |
 | **0.9.4** ✓ | Done: experimental marks, **📤 Share result**, builds and tests in GitHub Actions. |
 | **1.0.0-rc1** | Release candidate for testers (marked as pre-release, so the built-in updater doesn't offer it to everyone). |
 | **1.0.0** | When the criteria below are met. |
@@ -146,6 +151,10 @@ videos and send the result to [Issues](https://github.com/remrem23/framewring/is
 - Короткая подсказка **«Как это работает»** при первом запуске.
 - **Экспорт и импорт истории** (экспорт — в настоящую папку «Документы», имя с датой и временем).
 
+### Сделано в 0.9.5
+
+- Загрузчик PyInstaller собирается из исходников в сборке GitHub Actions; обновлены документация и скриншоты.
+
 ### Сделано в 0.9.4
 
 - Режимы, ещё не проверенные на реальном железе, помечены как **«экспериментальные»**; кнопка **«📤 Поделиться
@@ -162,6 +171,7 @@ videos and send the result to [Issues](https://github.com/remrem23/framewring/is
 |---|---|
 | **0.9.2** ✓ | Сделано: пресет 4 у SVT-AV1 для «Тщательно», резервные копии данных, уборка `.part.mp4`, проверки в «Песочнице Windows». |
 | **0.9.3** ✓ | Сделано: полная проверка сжатых файлов и **«⇄ Заменить оригиналы»** (оригиналы уходят в корзину), подсказка при первом запуске, экспорт и импорт истории. **Ещё не сделано:** установка через `winget`. |
+| **0.9.5** ✓ | Сделано: загрузчик из исходников, обновлённые документы и скриншоты. |
 | **0.9.4** ✓ | Сделано: пометка «экспериментальный», **«📤 Поделиться результатом»**, сборка и тесты в GitHub Actions. |
 | **1.0.0-rc1** | Кандидат в релиз для тестеров (помечен как предварительный, поэтому встроенное обновление не предлагает его всем). |
 | **1.0.0** | Когда выполнены условия ниже. |
