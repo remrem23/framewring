@@ -26,6 +26,7 @@ QUICK START
   2. Pick the mode marked "recommended" and quality "Balanced".
   3. "Test (2 min)": forecast of the final size and time, VMAF quality score.
      To compare by eye, open the files in compressed\_tests full screen.
+     Under the result there is "Share result" (see below).
   4. Happy with it - "Compress all". Results go to the "compressed"
      subfolder next to each original ("Output folder" changes this).
   5. Compression does NOT delete or modify originals. When you have checked
@@ -136,12 +137,29 @@ WHICH MODE
   Every mode is test-encoded on startup; only working ones can be picked.
   Greyed-out modes are not supported by your hardware - try updating the
   driver of your GPU (Nvidia, AMD or Intel). Modes for GPU vendors your PC
-  does not have are hidden. AMD AV1 and the Intel modes have not been
-  tested on real hardware yet - please report how they work for you.
-  "Recommended" order: Nvidia AV1 -> Nvidia H.265 -> AMD H.265 ->
-  Intel H.265 -> AMD AV1 -> Intel AV1 -> CPU (AMD AV1 and Intel AV1 stay
-  below H.265 until they are verified on real hardware).
+  does not have are hidden.
+  EXPERIMENTAL: AMD AV1 and the Intel modes have not been tested on real
+  hardware yet. They are marked "experimental" in the mode list, with a
+  hint to share a Test result, and are never chosen or marked
+  "recommended" while a tested mode works. You can still pick one
+  yourself. A mode confirmed on real hardware loses the label in a later
+  version.
+  "Recommended" order: Nvidia AV1 -> Nvidia H.265 -> AMD H.265 -> CPU.
+  On a PC with only Intel graphics the CPU mode is recommended for new
+  users; if you already saved a mode, it stays.
   VMAF: 95+ practically indistinguishable, 92-95 very good.
+
+SHARE A TEST RESULT
+  Own an AMD Radeon RX 7000, Intel graphics or another setup nobody has
+  checked yet? Run "Test (2 min)" in that mode and press "Share result"
+  under the result. The window shows exactly what will be sent; then your
+  browser opens a ready-filled GitHub form ("Test result"): the test
+  numbers (clip sizes, forecast, VMAF, times), the video's parameters
+  (codec, interlacing, resolution, frame rate, bitrate, duration, size,
+  audio codecs), the mode, quality and speed, Windows, CPU, GPU and
+  driver version, FFmpeg and Framewring versions. No file names, paths or
+  user name. Nothing is sent until you press "Submit" on GitHub (a free
+  GitHub account is needed); you can edit or remove anything first.
 
 DATA AND LOG
   Installed:  %APPDATA%\Framewring
@@ -183,7 +201,8 @@ PRIVACY
   Your files never leave your computer. The only network request is a check
   for a new version on GitHub once per launch (can be turned off in
   settings); nothing about your files is sent. No analytics, no telemetry.
-  Web pages open only when you click a link or button.
+  Web pages open only when you click a link or button. "Share result"
+  only opens a GitHub form in your browser - you decide whether to submit.
 
 LICENSE
   GNU GPL v3 (LICENSE.txt). Third-party components and their licenses:
@@ -220,6 +239,7 @@ Framewring Жмых находит на дисках тяжёлые видео �
   2. Режим с пометкой «рекомендую», качество «Баланс».
   3. «Тест на 2 мин»: прогноз размера и времени, оценка качества VMAF.
      Сравнить глазами: открой файлы из compressed\_tests на полном экране.
+     Под результатом есть «Поделиться результатом» (см. ниже).
   4. Устраивает - «Сжать всё». Результат в подпапке compressed рядом
      с оригиналом (папку меняет настройка «Куда сохранять»).
   5. Сжатие НЕ удаляет и не изменяет оригиналы. Когда проверишь результат,
@@ -331,12 +351,31 @@ Framewring Жмых находит на дисках тяжёлые видео �
   При запуске каждый режим проверяется пробным кодированием, выбрать можно
   только работающие. Серые режимы не поддерживает твоё железо - попробуй
   обновить драйвер своей видеокарты (Nvidia, AMD или Intel). Режимы
-  производителей, чьей видеокарты в компьютере нет, скрыты. AMD AV1 и режимы
-  Intel на реальном железе ещё не проверялись - напиши, как они у тебя
-  работают. Порядок «рекомендую»: Nvidia AV1 -> Nvidia H.265 -> AMD H.265 ->
-  Intel H.265 -> AMD AV1 -> Intel AV1 -> процессор (AMD AV1 и Intel AV1 ниже
-  H.265, пока не проверены на реальном железе).
+  производителей, чьей видеокарты в компьютере нет, скрыты.
+  ЭКСПЕРИМЕНТАЛЬНЫЕ: AMD AV1 и режимы Intel на реальном железе ещё не
+  проверялись. В списке режимов они помечены «экспериментальный» с
+  подсказкой поделиться результатом «Теста», а пока работает проверенный
+  режим, они не выбираются сами и не получают пометку «рекомендую».
+  Выбрать такой режим вручную можно. Режим, подтверждённый на реальном
+  железе, теряет пометку в одной из следующих версий.
+  Порядок «рекомендую»: Nvidia AV1 -> Nvidia H.265 -> AMD H.265 ->
+  процессор. На компьютере только с графикой Intel новым пользователям
+  рекомендуется режим на процессоре; у кого режим уже сохранён - он
+  остаётся.
   VMAF: 95+ - разницу практически не отличить, 92-95 - очень хорошо.
+
+ПОДЕЛИТЬСЯ РЕЗУЛЬТАТОМ ТЕСТА
+  Есть Radeon RX 7000, графика Intel или другое железо, которое ещё никто
+  не проверял? Запусти «Тест на 2 мин» в этом режиме и нажми
+  «Поделиться результатом» под результатом. Окно покажет, что именно
+  отправится; затем в браузере откроется заполненная форма на GitHub
+  («Test result»): цифры теста (размеры куска, прогноз, VMAF, время),
+  параметры видео (кодек, чересстрочность, разрешение, частота кадров,
+  битрейт, длительность, размер, аудиокодеки), режим, качество и скорость,
+  Windows, процессор, видеокарта и версия драйвера, версии FFmpeg и
+  Framewring. Без имён файлов, путей и имени пользователя. Ничего не
+  отправится, пока ты не нажмёшь «Submit» на GitHub (нужен бесплатный
+  аккаунт); перед этим можно что-то изменить или убрать.
 
 ДАННЫЕ И ЖУРНАЛ
   Установленная версия: %APPDATA%\Framewring
@@ -382,7 +421,8 @@ Framewring Жмых находит на дисках тяжёлые видео �
   проверка новой версии на GitHub один раз при запуске (можно отключить
   в настройках); ничего о твоих файлах не передаётся. Аналитики и
   телеметрии нет. Веб-страницы открываются, только когда ты нажимаешь
-  ссылку или кнопку.
+  ссылку или кнопку. «Поделиться результатом» лишь открывает форму GitHub
+  в браузере - отправлять её или нет, решаешь ты.
 
 ЛИЦЕНЗИЯ
   GNU GPL v3 (LICENSE.txt). Сторонние компоненты и их лицензии:
