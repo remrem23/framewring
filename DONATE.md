@@ -4,7 +4,7 @@
 
 **By card (or PayPal):** [ko-fi.com/remrem23](https://ko-fi.com/remrem23) — one-time or monthly, no account needed.
 
-**By USDT:**
+**USDT:**
 
 | Network / Сеть | USDT address / Адрес USDT |
 |---|---|
