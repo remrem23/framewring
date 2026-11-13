@@ -274,6 +274,38 @@ tracks → warned; file in the queue → blocked; crash before the Recycle Bin �
 
 ---
 
+## 2026-11-13 — 0.9.4: experimental modes, Share result, builds in GitHub Actions
+
+### 1. Experimental marks for untested modes
+Only *AMD GPU · H.265* and the Nvidia and CPU modes have been verified on real hardware. *AMD GPU · AV1*, *Intel GPU · H.265*,
+*Intel GPU · AV1* and *Mac GPU · H.265* passed the startup test-encode, but nobody had seen them work on real videos, yet they
+could be marked *recommended* and chosen automatically. Now these modes carry an **experimental** label with a hint asking
+to share a Test result, and they are no longer recommended or chosen automatically while a tested mode works: on a PC with
+only Intel graphics the CPU mode is the recommended one for new users; users who already saved a mode keep it. An experimental
+mode can still be picked by hand. A mode confirmed on real hardware loses the label in a later version.
+
+### 2. 📤 Share result
+Under a **Test** result there is a new button. It first shows exactly what will be sent, then opens a new ready-filled GitHub
+form (*Test result*) with the test numbers (clip length and sizes, forecast, VMAF, times), the video's parameters (codec,
+interlacing, resolution, frame rate, bitrate, duration, size, audio codecs), the mode, quality and speed, Windows, CPU, GPU and
+driver version, and the FFmpeg and Framewring versions. File names, paths and the user name are never included, and nothing
+is sent until the person presses *Submit* on GitHub. This is how the experimental modes get confirmed.
+
+### 3. Builds and tests in GitHub Actions
+Releases are now built by GitHub Actions on a clean Windows machine from the public source code, and the installer and
+the portable zip get a build provenance attestation (`gh attestation verify <file> -R remrem23/framewring`).
+Automatic tests run on every build: safe replacement of originals, history, and real compression on the CPU (x265 and SVT-AV1) —
+without a video card and without Everything. A separate `tests.yml` runs them on pushes to `main` and on pull requests.
+
+### 4. Smaller changes
+- The **♥ Support the author** window mentions Ko-fi (card, PayPal) next to USDT.
+- Housekeeping: the comments in the packaging scripts, the installer script and the CI workflows are translated to English; commit messages are in
+  English from now on (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+- Still open before 1.0: install via `winget`, a release candidate for testers, and confirmation of the experimental modes
+  (see [ROADMAP.md](ROADMAP.md)).
+
+---
+
 <a id="русский"></a>
 ## Русский
 
@@ -547,3 +579,35 @@ ffmpeg останавливается; готовый результат, кот
 - **Запуск и данные:** испорченная запись очереди или истории пропускается и не мешает запуску; записи истории идут по одной
   (обновления из сжатия и замены не теряются); мьютекс единственного экземпляра берётся раньше всего остального; экспорт
   истории — в настоящую папку «Документы» (в т.ч. OneDrive) под именем с датой и временем.
+
+### 2026-11-13 — 0.9.4: экспериментальные режимы, «Поделиться результатом», сборка в GitHub Actions
+
+#### 1. Пометка «экспериментальный» у непроверенных режимов
+На реальном железе проверены только «Видеокарта AMD · H.265», режимы Nvidia и процессора. «Видеокарта AMD · AV1»,
+«Видеокарта Intel · H.265», «Видеокарта Intel · AV1» и «Видеокарта Mac · H.265» проходили пробное кодирование при запуске,
+но на настоящих видео их работу никто не видел, а получать пометку «рекомендую» и выбираться автоматически они могли.
+Теперь у этих режимов стоит пометка **«экспериментальный»** с подсказкой поделиться результатом «Теста», и пока работает
+проверенный режим, они не рекомендуются и не выбираются сами: на компьютере только с графикой Intel новым пользователям
+рекомендуется режим на процессоре; у тех, кто уже сохранил режим, он остаётся. Выбрать экспериментальный режим вручную
+по-прежнему можно. Режим, подтверждённый на реальном железе, теряет пометку в одной из следующих версий.
+
+#### 2. «📤 Поделиться результатом»
+Под результатом «Теста» появилась кнопка. Сначала она показывает, что именно отправится, затем открывает новую заполненную
+форму на GitHub (*Test result*): цифры теста (длина и размеры куска, прогноз, VMAF, время), параметры видео (кодек,
+чересстрочность, разрешение, частота кадров, битрейт, длительность, размер, аудиокодеки), режим, качество и скорость,
+Windows, процессор, видеокарта и версия драйвера, версии FFmpeg и Framewring. Имена файлов, пути и имя пользователя
+не попадают в форму никогда, и ничего не отправится, пока человек не нажмёт *Submit* на GitHub. Так подтверждаются
+экспериментальные режимы.
+
+#### 3. Сборка и тесты в GitHub Actions
+Релизы теперь собирает GitHub Actions на чистой Windows из открытого исходного кода, а установщик и портабл-архив получают
+подтверждение происхождения (`gh attestation verify <файл> -R remrem23/framewring`). При каждой сборке идут автоматические
+тесты: безопасная замена оригиналов, история и настоящее сжатие на процессоре (x265 и SVT-AV1) — без видеокарты
+и без Everything. Отдельный `tests.yml` запускает их при push в `main` и в pull request.
+
+#### 4. Мелочи
+- В окне **«♥ Поддержать автора»** упомянут Ko-fi (карта, PayPal) рядом с USDT.
+- Порядок в репозитории: комментарии в скриптах сборки, установщике и CI-сценариях переведены на английский; сообщения коммитов
+  отныне пишутся по-английски (см. [CONTRIBUTING.md](CONTRIBUTING.md#русский)).
+- До 1.0 остаются: установка через `winget`, релиз-кандидат для тестировщиков и подтверждение экспериментальных режимов
+  (см. [ROADMAP.md](ROADMAP.md#русский)).
