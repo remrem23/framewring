@@ -1,3 +1,5 @@
+# Exact versions of the build tools and the packages bundled into the exe (used by packaging/build.py and the GitHub Actions build). Python 3.12.
+# The FFmpeg build is pinned separately, with its SHA-256, in packaging/ffmpeg.json. Versions listed in THIRD-PARTY-NOTICES.md must match this file.
 # Точные версии для сборки (packaging/build.py). Python 3.12.
 altgraph==0.17.5
 bottle==0.13.4
