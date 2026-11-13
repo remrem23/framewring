@@ -289,6 +289,12 @@ a changed original refused; a failed Recycle Bin step fully rolled back; plus th
 `packaging/build.py` — PyInstaller onedir (`Framewring.exe`, `_internal\`, `ffmpeg\`, license texts);
 `packaging/release.py` — Inno Setup installer (`packaging/framewring.iss`), portable zip, `SHA256SUMS.txt`.
 
+Releases are built by GitHub Actions (`.github/workflows/build.yml`) on a clean `windows-2025` machine: Python 3.12.10,
+exact package versions from `packaging/requirements-build.txt`, FFmpeg from `packaging/ffmpeg.json` (Gyan build, checked by
+SHA-256 in `packaging/get_ffmpeg.py`), then `build.py`, a start check (`/api/ping`), `release.py` and a build provenance
+attestation for the setup and the zip. Run manually, it uploads the files as a workflow artifact; a `vX.Y.Z` tag (must match
+`__version__`) also creates a draft release, which is published by hand. A published release is never overwritten.
+
 ---
 
 <a id="русский"></a>
@@ -583,3 +589,10 @@ a changed original refused; a failed Recycle Bin step fully rolled back; plus th
 
 `packaging/build.py` — PyInstaller onedir (`Framewring.exe`, `_internal\`, `ffmpeg\`, тексты лицензий);
 `packaging/release.py` — установщик Inno Setup (`packaging/framewring.iss`), портабл-zip, `SHA256SUMS.txt`.
+
+Релизы собирает GitHub Actions (`.github/workflows/build.yml`) на чистой машине `windows-2025`: Python 3.12.10, точные
+версии пакетов из `packaging/requirements-build.txt`, FFmpeg из `packaging/ffmpeg.json` (сборка Gyan, сверка SHA-256 в
+`packaging/get_ffmpeg.py`), затем `build.py`, проверка запуска (`/api/ping`), `release.py` и подтверждение происхождения
+(build provenance) для установщика и архива. При ручном запуске файлы выкладываются как артефакт запуска; метка `vX.Y.Z`
+(должна совпадать с `__version__`) вдобавок создаёт черновик релиза, который публикуется вручную. Опубликованный релиз
+никогда не перезаписывается.

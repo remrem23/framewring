@@ -28,6 +28,9 @@ If you find a copy of Framewring distributed elsewhere, especially one showing o
 
 Verify downloads with `SHA256SUMS.txt` from the release (`Get-FileHash <file>` in PowerShell).
 
+Releases after 0.9.3 are built by GitHub Actions from the public source code. You can check that a file was built there
+from this repository: `gh attestation verify <file> -R remrem23/framewring` (needs the GitHub CLI).
+
 ---
 
 <a id="русский"></a>
@@ -60,3 +63,6 @@ Verify downloads with `SHA256SUMS.txt` from the release (`Get-FileHash <file>` i
 Если встретишь копию Framewring в другом месте, особенно с другими реквизитами, — сообщи, пожалуйста.
 
 Проверяй загрузки по `SHA256SUMS.txt` из релиза (`Get-FileHash <файл>` в PowerShell).
+
+Релизы после 0.9.3 собирает GitHub Actions из открытого кода. Проверить, что файл собран там и из этого репозитория:
+`gh attestation verify <файл> -R remrem23/framewring` (нужен GitHub CLI).
