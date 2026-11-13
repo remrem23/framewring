@@ -1,4 +1,4 @@
-# Личные данные пользователя: пути к видео, настройки
+# User's personal data: video paths, settings
 settings.json
 queue.json
 history.json
@@ -9,33 +9,33 @@ probe_cache.json
 __pycache__/
 *.pyc
 
-# Сторонние бинарники (FFmpeg кладут рядом, но в репозиторий не коммитим)
+# Third-party binaries (FFmpeg is placed next to the program, but not committed)
 ffmpeg/
 ffmpeg.exe
 ffprobe.exe
 
-# Результаты и тесты сжатия, если программу запускали на видео внутри проекта
+# Compression results and tests, if the program was run on videos inside the project
 compressed/
 _tests/
 *.part.mp4
 
-# Сборка (PyInstaller, установщик)
+# Build output (PyInstaller, installer)
 build/
 dist/
 *.zip
 
-# Редакторы и ОС
+# Editors and OS
 .vscode/
 .idea/
 Thumbs.db
 desktop.ini
 .DS_Store
 
-# Данные запуска из исходников и портабл-режима
+# Data from source runs and portable mode
 webview/
 data/
 framewring.log
 portable.txt
 *.spec
-# резервные копии данных при запуске из исходников
+# backups of data from source runs
 backup/

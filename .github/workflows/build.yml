@@ -1,8 +1,8 @@
-# Сборка Framewring на чистой Windows-машине GitHub.
-#  - вручную (Actions -> Build -> Run workflow): собирает и выкладывает файлы как артефакт запуска;
-#  - при метке vX.Y.Z: то же + черновик релиза с установщиком, портабл-архивом и SHA256SUMS.txt.
-# Черновик публикуется вручную после проверки. Для каждого файла создаётся подтверждение происхождения
-# (build provenance): gh attestation verify <файл> -R remrem23/framewring
+# Build Framewring on a clean GitHub Windows machine.
+#  - manually (Actions -> Build -> Run workflow): builds and uploads the files as a run artifact;
+#  - on a vX.Y.Z tag: the same + a draft release with the installer, portable archive and SHA256SUMS.txt.
+# The draft is published manually after checking. A provenance attestation
+# (build provenance) is created for each file: gh attestation verify <file> -R remrem23/framewring
 name: Build
 
 on:
@@ -22,8 +22,8 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 60
     permissions:
-      contents: write      # черновик релиза
-      id-token: write      # подтверждение происхождения
+      contents: write      # draft release
+      id-token: write      # provenance attestation
       attestations: write
     env:
       PYTHONUTF8: "1"
@@ -44,7 +44,7 @@ jobs:
           $v = (Select-String -Path app.py -Pattern '^__version__ = "([^"]+)"').Matches[0].Groups[1].Value
           "version=$v" >> $env:GITHUB_OUTPUT
           if ("${{ github.ref_type }}" -eq "tag" -and "${{ github.ref_name }}" -ne "v$v") {
-            throw "Метка ${{ github.ref_name }} не совпадает с версией в app.py ($v)"
+            throw "Tag ${{ github.ref_name }} does not match the version in app.py ($v)"
           }
           "Framewring $v"
 
@@ -79,7 +79,7 @@ jobs:
           }
           if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
           Get-Process Framewring -ErrorAction SilentlyContinue | Stop-Process -Force
-          if (-not $ok) { throw "Framewring.exe не ответил на /api/ping" }
+          if (-not $ok) { throw "Framewring.exe did not answer on /api/ping" }
 
       - name: Installer, portable zip, checksums
         run: python packaging/release.py
@@ -115,8 +115,8 @@ jobs:
           $files = @(Get-ChildItem build\release\Framewring-$env:VER-setup.exe, build\release\Framewring-$env:VER-portable.zip, build\release\SHA256SUMS.txt | ForEach-Object FullName)
           $draft = gh release view $env:TAG -R $env:GITHUB_REPOSITORY --json isDraft -q .isDraft 2>$null
           if ($LASTEXITCODE -eq 0) {
-            # опубликованный релиз не трогаем: его файлы уже скачивают и сверяют
-            if ($draft -ne "true") { throw "Релиз $env:TAG уже опубликован — файлы не заменяю" }
+            # a published release is left alone: its files are already downloaded and verified
+            if ($draft -ne "true") { throw "Release $env:TAG is already published - not replacing its files" }
             gh release upload $env:TAG @files --clobber -R $env:GITHUB_REPOSITORY
           } else {
             gh release create $env:TAG @files --draft --title "Framewring $env:VER" -R $env:GITHUB_REPOSITORY `
