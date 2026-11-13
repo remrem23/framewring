@@ -75,7 +75,7 @@ Intel AV1 → CPU, except that **experimental** modes are skipped while a tested
 
 **Experimental** next to a mode means it has not been tested on real hardware yet (now: AMD GPU · AV1, Intel GPU · H.265,
 Intel GPU · AV1, Mac GPU · H.265). It passed the startup check on your PC and you can use it, but nobody has confirmed
-the result on such a card. Please run a **Test** in that mode and press **📤 Share result** (see section 5) — one
+the result on such a card. Please run a **Test** in that mode and press **📤 Share result** (see section 10) — one
 confirmation is enough to remove the label.
 
 **Quality** — **Maximum / Balanced / Compact**. *Balanced* is the right choice for almost everything.
@@ -288,6 +288,13 @@ Click **🐞 Report a bug** in the header. A small window opens:
 - **📂 Show the log** opens the folder with `framewring.log`. Attach it to the report if you can, removing anything you
   don't want to share, such as file paths. The log exists only in the installed and portable versions.
 
+**Sharing a Test result.** After a **Test**, the result has a **📤 Share result** button (highlighted for experimental
+modes). It first shows exactly what will be filled in: Framewring version, mode, quality and speed, the test numbers
+(clip size before and after, forecast for the whole file, VMAF, time), the video's codec, resolution, frame rate, bitrate,
+duration and size, Windows, CPU, GPU and driver version, FFmpeg version. No file names, paths or user name.
+**Open the form on GitHub** opens the *Test result* form with these fields; nothing is sent until you press *Submit*
+there, and you can edit anything first. Please add whether the clip looked fine to you.
+
 Questions and bug reports: [github.com/remrem23/framewring/issues](https://github.com/remrem23/framewring/issues).
 The only official page of the program is [github.com/remrem23/framewring](https://github.com/remrem23/framewring).
 
@@ -372,7 +379,7 @@ AMD AV1 → Intel AV1 → процессор, но **экспериментал�
 **«Экспериментальный»** у режима значит, что он ещё не проверен на реальном железе (сейчас: Видеокарта AMD · AV1,
 Видеокарта Intel · H.265, Видеокарта Intel · AV1, Видеокарта Mac · H.265). На твоём компьютере он прошёл проверку при
 запуске и им можно пользоваться, но на такой карте результат ещё никто не подтвердил. Пожалуйста, сделай **«Тест»** в этом
-режиме и нажми **«📤 Поделиться результатом»** (см. раздел 5) — одного подтверждения хватит, чтобы снять пометку.
+режиме и нажми **«📤 Поделиться результатом»** (см. раздел 10) — одного подтверждения хватит, чтобы снять пометку.
 
 **Качество** — **Максимальное / Баланс / Компактное**. «Баланс» подходит почти всегда.
 VMAF в тесте: 95+ — разницу практически не отличить, 92–95 — очень хорошо, ниже — уже видно.
@@ -582,6 +589,14 @@ VMAF в тесте: 95+ — разницу практически не отли�
   аккаунт GitHub.
 - **«📂 Показать журнал»** открывает папку с `framewring.log`. Если можешь, приложи его, убрав то, чем не хочешь делиться,
   например пути к файлам. Журнал есть только у установленной и портабл-версии.
+
+**Поделиться результатом «Теста».** После «Теста» у результата есть кнопка **«📤 Поделиться результатом»** (у
+экспериментальных режимов она выделена). Сначала она показывает ровно то, что будет заполнено: версия Framewring, режим,
+качество и скорость, цифры теста (размер куска до и после, прогноз для всего файла, VMAF, время), кодек, разрешение,
+частота кадров, битрейт, длительность и размер видео, Windows, процессор, видеокарта и версия драйвера, версия FFmpeg.
+Без имён файлов, путей и имени пользователя. **«Открыть форму на GitHub»** открывает форму *Test result* с этими полями;
+ничего не отправится, пока ты не нажмёшь там *Submit*, и всё можно сначала исправить. Пожалуйста, добавь, как кусок
+выглядел на глаз.
 
 Вопросы и ошибки: [github.com/remrem23/framewring/issues](https://github.com/remrem23/framewring/issues).
 Официальная страница программы — только [github.com/remrem23/framewring](https://github.com/remrem23/framewring).

@@ -115,6 +115,9 @@ Copies from other sites may be modified.
   queue and history; the portable version opens the release page.
 - **🐞 Report a bug** in the header opens the GitHub bug-report form with the program version, Windows version,
   graphics cards, FFmpeg version and mode already filled in (you see everything before sending), and can show the log file.
+- **📤 Share result** under a **Test** result opens a ready-filled GitHub form with the test numbers (sizes, forecast,
+  VMAF, time), the video's parameters, the mode and your hardware (Windows, CPU, GPU and driver). No file names, paths or
+  user name; you see exactly what will be filled in before the form opens. This is how experimental modes get confirmed.
 
 ## How to use
 
@@ -336,6 +339,10 @@ FFmpeg уже внутри, ничего доустанавливать не н�
   очередь и историю; портабл-версия открывает страницу релиза.
 - **«🐞 Сообщить об ошибке»** в шапке открывает форму на GitHub, где уже заполнены версия программы, Windows, видеокарты,
   версия FFmpeg и режим (всё видно до отправки), и умеет показать файл журнала.
+- **«📤 Поделиться результатом»** под результатом **«Теста»** открывает уже заполненную форму на GitHub: цифры теста
+  (размеры, прогноз, VMAF, время), параметры видео, режим и железо (Windows, процессор, видеокарта и драйвер). Без имён
+  файлов, путей и имени пользователя; до открытия формы видно ровно то, что будет заполнено. Так подтверждаются
+  экспериментальные режимы.
 
 ### Как пользоваться
 

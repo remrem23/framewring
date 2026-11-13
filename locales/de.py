@@ -83,6 +83,8 @@ STRINGS = {
     "report.log": "Hängen Sie nach Möglichkeit die Protokolldatei framewring.log an — das hilft sehr. Entfernen Sie, was Sie nicht teilen möchten, z. B. Dateipfade.",
     "report.open": "Formular auf GitHub öffnen",
     "report.open_log": "📂 Protokoll anzeigen",
+    "share.title": "Testergebnis teilen",
+    "share.text": "Das Formular öffnet sich auf GitHub (ein kostenloses Konto ist nötig). Eingetragen wird genau das, was unten steht: keine Dateinamen, Pfade oder Benutzernamen. Nichts wird gesendet, bevor Sie auf GitHub „Submit“ klicken — dort können Sie alles ändern oder entfernen.",
     "api.no_log": "Noch keine Protokolldatei: Sie wird von der installierten und der portablen Version geschrieben.",
     "upd.available": "Framewring {v} ist verfügbar.",
     "upd.install": "Aktualisieren",
@@ -244,6 +246,9 @@ STRINGS = {
     "test.not_smaller": "Die Komprimierung macht diese Datei nicht kleiner: Die Quelle ist bereits effizient "
                         "komprimiert.",
     "test.open": "Testordner öffnen",
+    "test.share": "📤 Ergebnis teilen",
+    "test.share_title": "Ein ausgefülltes GitHub-Formular mit dem Ergebnis dieses Tests und Angaben zu Ihrer Hardware öffnen",
+    "test.share_exp": "Dieser Modus wurde noch nicht auf echter Hardware getestet — Ihr Ergebnis hilft sehr.",
     "progress.finish": "Datei wird abgeschlossen: Der Index wird an den Anfang verschoben, damit sich das Video "
                        "sofort öffnen und spulen lässt",
     "progress.left_approx": "noch ≈ {t}",

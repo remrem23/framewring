@@ -369,9 +369,10 @@ CAPS = {"ffmpeg": bool(FFMPEG), "ffprobe": bool(FFPROBE), "version": "", "preset
         "checked": False, "recommended": "", "pagefile_off": pagefile_off()}
 
 
-def gpu_names():
+def gpu_names(driver=False):
     """Video card names from the driver descriptions in the registry (no WMI - it can be very slow).
-    Virtual monitors and the like are dropped: only Nvidia / AMD / Intel."""
+    Virtual monitors and the like are dropped: only Nvidia / AMD / Intel.
+    driver=True: "Name (driver X)" - for the shared test result."""
     names = []
     if not IS_WIN:
         return names
@@ -387,6 +388,11 @@ def gpu_names():
                 try:
                     with winreg.OpenKey(k, sub) as sk:
                         desc = str(winreg.QueryValueEx(sk, "DriverDesc")[0]).strip()
+                        if driver:
+                            try:
+                                desc += " (driver %s)" % str(winreg.QueryValueEx(sk, "DriverVersion")[0]).strip()
+                            except OSError:
+                                pass
                 except OSError:
                     continue
                 low = desc.lower()
@@ -2423,7 +2429,8 @@ def do_test(job, s):
         return fail(err)
     ts, rs = test.stat().st_size, ref.stat().st_size
     factor = (info["duration"] or ref_dur) / ref_dur
-    res = {"preset": s["preset"], "quality": s["quality"],  # the page builds the test caption in its own language
+    res = {"preset": s["preset"], "quality": s["quality"], "speed": s["speed"],  # the page builds the caption itself
+           "clip_dur": ref_dur, "enc_time": enc_time,
            "test_size": ts, "ref_size": rs, "est_size": int(ts * factor), "ratio": ts / rs if rs else 0,
            "est_time": enc_time * factor, "vmaf": None, "test_path": str(test), "ref_path": str(ref)}
     # 3) VMAF, if available. Above 1080p we compare at 1080p: the vmaf_v0.6.1 model is designed for it,
@@ -2951,6 +2958,16 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/report":
             webbrowser.open(report_url())
             return None
+        if path in ("/api/share_preview", "/api/share"):  # "Share result" of a Test (test_result.yml)
+            with LOCK:
+                j = next((x for x in JOBS if x["id"] == b.get("id")), None)
+                fields = j and share_fields(j)
+            if not fields:
+                raise UserError("api.no_info")
+            if path == "/api/share":
+                webbrowser.open(share_url(fields))
+                return {"ok": True}
+            return {"fields": fields, "url": share_url(fields)}
         if path == "/api/open_log":
             log = DATA_DIR / "framewring.log"
             if not log.exists():
@@ -3126,7 +3143,7 @@ a{color:var(--acc)}:root{color-scheme:dark}.jh .btn{white-space:nowrap}
 .tag.g{color:var(--acc2);border-color:var(--acc2)}.tag.y{color:var(--warn);border-color:var(--warn)}.tag.m{color:var(--mut)}
 .drv{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:6px 10px;cursor:pointer}
 .drv.on{border-color:var(--acc);background:#7c5cff14}.drv input{margin:0}
-.vm{font-weight:700}.vm.g{color:var(--acc2)}.vm.y{color:var(--warn)}.vm.r{color:var(--err)}
+.sharebody{max-height:46vh;overflow:auto;white-space:pre-wrap;font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;margin:12px 0}.vm{font-weight:700}.vm.g{color:var(--acc2)}.vm.y{color:var(--warn)}.vm.r{color:var(--err)}
 .lng{font-size:12px;font-weight:400;margin-left:10px;vertical-align:middle;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:2px 4px;cursor:pointer}
 .lng:hover{border-color:#3a4152}
 </style></head><body><div class="wrap">
@@ -3206,6 +3223,11 @@ a{color:var(--acc)}:root{color-scheme:dark}.jh .btn{white-space:nowrap}
  <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap"><div><h3 data-t="report.title"></h3><div class="meta" data-t="report.text"></div></div><button class="btn sm" onclick="report(false)" data-ta="common.close">✕</button></div>
  <p style="margin:14px 0 10px" data-t="report.log"></p>
  <div class="row"><button class="btn pri" onclick="api('/api/report')" data-t="report.open"></button><button class="btn" onclick="api('/api/open_log')" data-t="report.open_log"></button></div>
+</div></div>
+<div class="modal" id="share" onclick="if(event.target===this)shareClose()"><div class="mbox" role="dialog" aria-modal="true" data-ta="share.title">
+ <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap"><div><h3 data-t="share.title"></h3><div class="meta" data-t="share.text"></div></div><button class="btn sm" onclick="shareClose()" data-ta="common.close">✕</button></div>
+ <pre id="shareBody" class="sharebody"></pre>
+ <div class="row"><button class="btn pri" onclick="shareGo()" data-t="report.open"></button><button class="btn" onclick="shareClose()" data-t="common.close"></button></div>
 </div></div>
 <div class="toast" id="toast"></div>
 <script>
@@ -3303,9 +3325,15 @@ function renderUpd(){const u=S.update||{};let h="";
    `<button class="btn sm" onclick="api('/api/update_page')">${esc(tr("upd.notes"))}</button><button class="btn sm" onclick="localStorage.setItem('fw_upd_skip','${esc(u.latest)}');renderUpd()">${esc(tr("upd.later"))}</button>`;
   h=`<div class="updbox"><b>${esc(tr("upd.available",{v:u.latest}))}</b><div class="row" style="align-items:center">${act}</div></div>`}
  setHTML($("upd"),h)}
-document.addEventListener("keydown",e=>{if(e.key==="Escape"){donate(false);report(false);closeReplace()}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){donate(false);report(false);closeReplace();shareClose()}});
 $("repList").addEventListener("change",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k==null)return;e.target.checked?repSel.add(k):repSel.delete(k);renderReplace()});
 $("lng").addEventListener("change",e=>setLang(e.target.value));
+// "Share result" of a Test: show exactly what goes into the GitHub form, open it only on request
+let shareId=null;
+async function share(id){const r=await api("/api/share_preview",{id});if(!r.fields)return;shareId=id;
+ $("shareBody").textContent=r.fields.map(([k,v])=>k+":"+(v.includes("\n")?"\n":" ")+v).join("\n\n");$("share").classList.add("on")}
+function shareClose(){const d=$("share");if(d)d.classList.remove("on");shareId=null}
+async function shareGo(){if(shareId!=null)await api("/api/share",{id:shareId});shareClose()}
 async function openUrl(u){if(u)await api("/api/url",{url:u})}
 function toast(m){const t=$("toast");if(!t)return;t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",5000)}
 const gb=b=>{const n=Math.abs(b||0),sg=b<0?"−":"";return sg+(n>=1e9?nf(n/1e9,2)+" "+tr("unit.gb"):n>=1e7?nf(n/1e6,0)+" "+tr("unit.mb"):nf(n/1e6,1)+" "+tr("unit.mb"))};
@@ -3368,7 +3396,7 @@ function jobStatic(j){
    .replace("\u0001",`<i>${esc(label)}</i>`)}<br>${esc(tr("test.clip",{a:gb(x.ref_size),b:gb(x.test_size),pct:pctS((1-x.ratio)*100)}))} <b>${esc(tr("test.forecast",{size:gb(x.est_size)}))}</b>${esc(tr("test.time",{t:tm(x.est_time)}))}
   ${x.vmaf!=null?`<br>VMAF: <span class="vm ${vmafCls(x.vmaf)}">${esc(nf(x.vmaf,1))}</span> ${esc(tr("test.vmaf_scale"))}`:`<br>${esc(tr("test.eyes"))}`}
   ${tb?`<div class="note">${esc(tr("test.not_smaller"))}</div>`:""}
-  <br><button class="btn sm" style="margin-top:6px" onclick="api('/api/open',{id:${j.id},which:'test'})">${esc(tr("test.open"))}</button></div>`}
+  <br><button class="btn sm" style="margin-top:6px" onclick="api('/api/open',{id:${j.id},which:'test'})">${esc(tr("test.open"))}</button>${x.preset?` <button class="btn sm${isExp(x.preset)?" pri":""}" style="margin-top:6px" title="${esc(tr("test.share_title"))}" onclick="share(${j.id})">${esc(tr("test.share"))}</button>${isExp(x.preset)?`<div class="note">${esc(tr("test.share_exp"))}</div>`:""}`:""}</div>`}
  const note=msg(j.note),err=msg(j.error);
  if(note)body+=`<div class="note">${esc(note)}</div>`;
  if(err)body+=`<div class="err">${esc(err)}</div>`;
@@ -3646,21 +3674,83 @@ def install_update():
     threading.Thread(target=run, daemon=True).start()
 
 
+def os_name():
+    import platform
+    try:
+        build = sys.getwindowsversion().build if IS_WIN else 0
+        return ("Windows %s (build %d)" % ("11" if build >= 22000 else "10", build)) if IS_WIN else platform.platform()
+    except Exception:
+        return platform.platform()
+
+
+def cpu_name():
+    import platform
+    if IS_WIN:
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as k:
+                return " ".join(str(winreg.QueryValueEx(k, "ProcessorNameString")[0]).split())
+        except OSError:
+            pass
+    return platform.processor() or platform.machine() or "?"
+
+
 def report_url():
     """The "Report a bug" form on GitHub, with the version, Windows, video cards and mode already filled in.
     Nothing is sent automatically: the person sees everything in the browser and decides whether to submit."""
-    import platform
     import urllib.parse
-    try:
-        build = sys.getwindowsversion().build if IS_WIN else 0
-        win = ("Windows %s (build %d)" % ("11" if build >= 22000 else "10", build)) if IS_WIN else platform.platform()
-    except Exception:
-        win = platform.platform()
     s = SETTINGS
-    q = {"template": "bug_report.yml", "version": "%s (%s)" % (__version__, install_kind()), "windows": win,
+    q = {"template": "bug_report.yml", "version": "%s (%s)" % (__version__, install_kind()), "windows": os_name(),
          "gpu": ", ".join(gpu_names()) or "?", "ffmpeg": (CAPS.get("version") or "")[:150],
          "mode": "%s · %s · %s" % (s.get("preset"), s.get("quality"), s.get("speed"))}
     return ISSUES_NEW + "?" + urllib.parse.urlencode(q)
+
+
+def share_fields(job):
+    """Fields of the "Test result" form (.github/ISSUE_TEMPLATE/test_result.yml) for a tested job.
+    Privacy: only numbers about the video, the mode and the hardware - never a file name, a path
+    or the user name. The page shows exactly these fields before opening the form."""
+    x, i = job.get("test") or {}, job.get("info") or {}
+    if not x.get("preset"):
+        return None
+
+    def mb(n):
+        return "%.1f MB" % ((n or 0) / 1e6)
+
+    def hms(t):
+        t = int(round(t or 0))
+        return "%d:%02d:%02d" % (t // 3600, t // 60 % 60, t % 60) if t >= 3600 else "%d:%02d" % (t // 60, t % 60)
+    p = x["preset"]
+    title = i18n.t("en", "preset.%s.title" % p)
+    exp = " [experimental]" if p in UNVERIFIED else ""
+    gpus = gpu_names(driver=True)
+    video = "\n".join([
+        "Codec: %s%s" % ((i.get("vcodec") or "?").upper(), ", interlaced" if i.get("interlaced") else ""),
+        "Resolution: %sx%s" % (i.get("width") or "?", i.get("height") or "?"),
+        "Frame rate: %s fps" % (i.get("fps") or "?"),
+        "Bitrate: %.1f Mb/s" % ((i.get("bitrate") or 0) / 1e6),
+        "Duration: %s" % hms(i.get("duration")),
+        "Size: %s" % mb(job.get("size")),
+        "Audio: %s" % (", ".join(a.get("codec") or "?" for a in i.get("audio") or []) or "none")])
+    result = "\n".join([
+        "Clip: %s, %s -> %s (%+.1f%%)" % (hms(x.get("clip_dur")), mb(x.get("ref_size")), mb(x.get("test_size")),
+                                         ((x.get("ratio") or 0) - 1) * 100),
+        "Clip encode time: %s" % (hms(x["enc_time"]) if x.get("enc_time") is not None else "?"),
+        "Forecast for the whole file: %s, time %s" % (mb(x.get("est_size")), hms(x.get("est_time"))),
+        "VMAF: %s" % ("%.2f" % x["vmaf"] if x.get("vmaf") is not None else "not measured")])
+    words = {"nvidia": ("nvidia",), "amd": ("amd", "radeon"), "intel": ("intel",)}.get(HW_VENDOR.get(p.split("_")[0]))
+    dev = (next((g.split(" (driver")[0] for g in gpus if any(w in g.lower() for w in words)), "?") if words
+           else "Mac" if p == "vt_hevc" else cpu_name())  # the device that did the encoding
+    return [("title", "Test result: %s on %s" % (title, dev)),
+            ("version", "%s (%s)" % (__version__, install_kind())),
+            ("mode", "%s (%s)%s · %s · %s" % (p, title, exp, x.get("quality"), x.get("speed") or "?")),
+            ("result", result), ("video", video), ("windows", os_name()), ("cpu", cpu_name()),
+            ("gpu", ", ".join(gpus) or "?"), ("ffmpeg", (CAPS.get("version") or "").split(" Copyright")[0][:150])]
+
+
+def share_url(fields):
+    import urllib.parse
+    return ISSUES_NEW + "?" + urllib.parse.urlencode([("template", "test_result.yml")] + list(fields))
 
 
 def _own_windows():

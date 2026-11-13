@@ -1,0 +1,72 @@
+name: Test result / Результат теста
+description: Share how a mode worked on your hardware (from the “📤 Share result” button after a Test). / Расскажи, как режим сработал на твоём железе (кнопка «📤 Поделиться результатом» после «Теста»).
+title: "Test result: "
+labels: ["test-result"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you! This helps confirm modes that have not been tested on real hardware yet. English or Russian is fine. / Спасибо! Это помогает проверить режимы, которые ещё не проверены на реальном железе. Можно писать по-русски или по-английски.
+        The fields below were filled in by Framewring: no file names, paths or user name. Edit or remove anything you don't want to share. / Поля ниже заполнила программа: без имён файлов, путей и имени пользователя. Измени или убери то, чем не хочешь делиться.
+  - type: input
+    id: version
+    attributes:
+      label: Framewring version / Версия Framewring
+      placeholder: "0.9.4 (installer)"
+    validations:
+      required: true
+  - type: input
+    id: mode
+    attributes:
+      label: Mode, quality and speed / Режим, качество и скорость
+      placeholder: "amf_av1 (AMD GPU · AV1) · balanced · normal"
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Test result / Результат теста
+      description: Clip size before and after, forecast for the whole file, VMAF, time. / Размер куска до и после, прогноз для всего файла, VMAF, время.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: video
+    attributes:
+      label: About the video / О видео
+      description: Codec, resolution, frame rate, bitrate, duration, size. / Кодек, разрешение, частота кадров, битрейт, длительность, размер.
+      render: text
+  - type: input
+    id: windows
+    attributes:
+      label: Operating system / Операционная система
+      placeholder: "Windows 11 (build 26100)"
+  - type: input
+    id: cpu
+    attributes:
+      label: CPU / Процессор
+      placeholder: "AMD Ryzen 7 9700X 8-Core Processor"
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver version / Видеокарта и версия драйвера
+      placeholder: "AMD Radeon RX 7800 XT (driver 32.0.21025.1024)"
+  - type: input
+    id: ffmpeg
+    attributes:
+      label: FFmpeg version / Версия FFmpeg
+      placeholder: "ffmpeg version 8.1.1-full_build-www.gyan.dev"
+  - type: dropdown
+    id: looks
+    attributes:
+      label: How does the compressed clip look? / Как выглядит сжатый кусок?
+      description: Open both files from the _tests folder in full screen. / Открой оба файла из папки _tests на полном экране.
+      options:
+        - Looks fine / Всё хорошо
+        - Visible problems (describe below) / Есть заметные проблемы (опиши ниже)
+        - Did not check / Не смотрел
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else? / Что-то ещё?
+      description: Errors, artefacts, playback problems, how fast it felt. Do not attach private videos. / Ошибки, артефакты, проблемы с воспроизведением, скорость. Личные видео не прикладывай.

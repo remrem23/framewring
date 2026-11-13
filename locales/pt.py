@@ -82,6 +82,8 @@ STRINGS = {
     "report.log": "Se puder, anexe o arquivo de log framewring.log — ajuda muito. Remova o que não quiser compartilhar, como caminhos de arquivos.",
     "report.open": "Abrir o formulário no GitHub",
     "report.open_log": "📂 Mostrar o log",
+    "share.title": "Compartilhar o resultado do teste",
+    "share.text": "O formulário abre no GitHub (é preciso uma conta gratuita). Será preenchido exatamente o que aparece abaixo: sem nomes de arquivos, caminhos ou nome de usuário. Nada é enviado até você clicar em “Submit” no GitHub — lá você pode alterar ou remover qualquer coisa.",
     "api.no_log": "Ainda não há log: ele é gravado pela versão instalada e pela portátil.",
     "upd.available": "Framewring {v} está disponível.",
     "upd.install": "Atualizar",
@@ -241,6 +243,9 @@ STRINGS = {
     "test.eyes": "Compare visualmente: abra os dois arquivos da pasta _tests em tela cheia.",
     "test.not_smaller": "A compressão não reduz este arquivo: o arquivo de origem já está bem comprimido.",
     "test.open": "Abrir pasta do teste",
+    "test.share": "📤 Compartilhar resultado",
+    "test.share_title": "Abrir no GitHub um formulário já preenchido com o resultado deste teste e os dados do seu hardware",
+    "test.share_exp": "Este modo ainda não foi testado em hardware real — seu resultado vai ajudar muito.",
     "progress.finish": "Finalizando o arquivo: movendo o índice para o início para que o vídeo abra na hora "
                        "e a navegação seja instantânea",
     "progress.left_approx": "faltam ≈ {t}",
