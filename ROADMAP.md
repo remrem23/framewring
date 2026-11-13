@@ -42,6 +42,13 @@ Ideas and requests are welcome in [Issues](https://github.com/remrem23/framewrin
 - A short **How it works** hint on first run.
 - **History export and import** (export to the real *Documents* folder, timestamped name).
 
+## Done in 0.9.4
+
+- Modes not yet tested on real hardware are marked **experimental**; a **📤 Share result** button after a Test opens a
+  ready-filled GitHub form (no file names or paths).
+- Releases are built by GitHub Actions with build provenance; automated tests run on every build.
+- Ko-fi in the support window.
+
 ## Road to 1.0
 
 1.0 is about being **reliable on other people's computers** and finishing the main promise — actually freeing the space.
@@ -51,6 +58,7 @@ New big features wait until after 1.0.
 |---|---|
 | **0.9.2** ✓ | Done: SVT-AV1 preset 4 for “Thorough”, data backups, `.part.mp4` cleanup, Windows Sandbox tests. |
 | **0.9.3** ✓ | Done: full verification of compressed files and **⇄ Replace originals** (originals go to the Recycle Bin), first-run hint, history export/import. **Still pending:** install via `winget`. |
+| **0.9.4** ✓ | Done: experimental marks, **📤 Share result**, builds and tests in GitHub Actions. |
 | **1.0.0-rc1** | Release candidate for testers (marked as pre-release, so the built-in updater doesn't offer it to everyone). |
 | **1.0.0** | When the criteria below are met. |
 
@@ -138,6 +146,13 @@ videos and send the result to [Issues](https://github.com/remrem23/framewring/is
 - Короткая подсказка **«Как это работает»** при первом запуске.
 - **Экспорт и импорт истории** (экспорт — в настоящую папку «Документы», имя с датой и временем).
 
+### Сделано в 0.9.4
+
+- Режимы, ещё не проверенные на реальном железе, помечены как **«экспериментальные»**; кнопка **«📤 Поделиться
+  результатом»** после «Теста» открывает заполненную форму на GitHub (без имён файлов и путей).
+- Релизы собирает GitHub Actions с подтверждением происхождения; при каждой сборке проходят автотесты.
+- Ko-fi в окне поддержки.
+
 ### Путь к 1.0
 
 1.0 — это **надёжность на чужих компьютерах** и выполненное до конца главное обещание: реально освобождать место.
@@ -147,6 +162,7 @@ videos and send the result to [Issues](https://github.com/remrem23/framewring/is
 |---|---|
 | **0.9.2** ✓ | Сделано: пресет 4 у SVT-AV1 для «Тщательно», резервные копии данных, уборка `.part.mp4`, проверки в «Песочнице Windows». |
 | **0.9.3** ✓ | Сделано: полная проверка сжатых файлов и **«⇄ Заменить оригиналы»** (оригиналы уходят в корзину), подсказка при первом запуске, экспорт и импорт истории. **Ещё не сделано:** установка через `winget`. |
+| **0.9.4** ✓ | Сделано: пометка «экспериментальный», **«📤 Поделиться результатом»**, сборка и тесты в GitHub Actions. |
 | **1.0.0-rc1** | Кандидат в релиз для тестеров (помечен как предварительный, поэтому встроенное обновление не предлагает его всем). |
 | **1.0.0** | Когда выполнены условия ниже. |
 

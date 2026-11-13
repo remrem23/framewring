@@ -6,7 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions: [Sem
 Detailed development history with measurements: [DEVLOG.md](DEVLOG.md).
 Each version is described in English first, then in Russian.
 
-## [Unreleased]
+## [0.9.4] — 2026-11-13
 
 ### English
 
@@ -14,6 +14,10 @@ Each version is described in English first, then in Russian.
 - **📤 Share result** button under a Test result. It shows exactly what will be sent, then opens a new ready-filled GitHub form (*Test result*) with the test numbers (clip length and sizes, forecast, VMAF, times), the video's parameters (codec, interlacing, resolution, frame rate, bitrate, duration, size, audio codecs), the mode, quality and speed, Windows, CPU, GPU and driver version, FFmpeg and Framewring versions. No file names, paths or user name; nothing is sent until you press *Submit* on GitHub.
 
 #### Changed
+- The **♥ Support the author** window mentions Ko-fi (card, PayPal) next to USDT.
+- **Releases are built by GitHub Actions** on a clean Windows machine from the public source code, with a build provenance
+  attestation for the installer and the portable zip (`gh attestation verify <file> -R remrem23/framewring`).
+  Automated tests (safe replacement of originals, history, real compression on the CPU) run on every build.
 - **Experimental modes.** Modes that have not been tested on real hardware yet (*AMD GPU · AV1*, *Intel GPU · H.265*, *Intel GPU · AV1*, *Mac GPU · H.265*) are marked **experimental** in the mode list, with a hint asking to share a Test result. They are no longer marked *recommended* or chosen automatically while a tested mode works: on a PC with only Intel graphics the CPU mode is now the recommended one for new users, while users who already saved a mode keep it. You can still pick an experimental mode yourself. A mode confirmed on real hardware loses the label in a later version.
 
 ### Русский
@@ -22,6 +26,10 @@ Each version is described in English first, then in Russian.
 - Кнопка **«📤 Поделиться результатом»** под результатом «Теста». Она показывает, что именно отправится, и открывает новую заполненную форму на GitHub (*Test result*): цифры теста (длина и размеры куска, прогноз, VMAF, время), параметры видео (кодек, чересстрочность, разрешение, частота кадров, битрейт, длительность, размер, аудиокодеки), режим, качество и скорость, Windows, процессор, видеокарта и версия драйвера, версии FFmpeg и Framewring. Без имён файлов, путей и имени пользователя; ничего не отправится, пока ты не нажмёшь *Submit* на GitHub.
 
 #### Изменено
+- В окне **«♥ Поддержать автора»** упомянут Ko-fi (карта, PayPal) рядом с USDT.
+- **Релизы собирает GitHub Actions** на чистой Windows из открытого исходного кода, с подтверждением происхождения
+  установщика и портабл-архива (`gh attestation verify <файл> -R remrem23/framewring`). При каждой сборке проходят
+  автоматические тесты (безопасная замена оригиналов, история, настоящее сжатие на процессоре).
 - **Экспериментальные режимы.** Режимы, ещё не проверенные на реальном железе («Видеокарта AMD · AV1», «Видеокарта Intel · H.265», «Видеокарта Intel · AV1», «Видеокарта Mac · H.265»), помечены в списке режимов как **«экспериментальный»** с подсказкой поделиться результатом «Теста». Пока работает проверенный режим, они больше не получают пометку «рекомендую» и не выбираются автоматически: на компьютере только с графикой Intel новым пользователям теперь рекомендуется режим на процессоре, а у тех, кто уже сохранил режим, он остаётся. Выбрать экспериментальный режим вручную по-прежнему можно. Режим, подтверждённый на реальном железе, теряет пометку в одной из следующих версий.
 
 ## [0.9.3] — 2026-11-12
